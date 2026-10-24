@@ -38,6 +38,7 @@ class GameMap {
     this.genRoad();
     this.genHamlet();
     this.genTrees();
+    this.elevBase = randInt(8, 60) * 5; // height above sea level of the lowest ground
   }
 
   genElevation() {

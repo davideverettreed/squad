@@ -269,6 +269,8 @@ kbd { font: 600 12px/1 var(--mono); border: 1px solid var(--line); border-bottom
         <p><b>Suppress</b> puts fire on an area, seen enemy or not. <b>Bound</b> sends the squad forward one fire team at a time while the others cover it (a fire team bounds in buddy pairs). <b>Assault</b> walks forward firing and throwing grenades. Tap a visible enemy to make the selection engage that target.</p>
         <h3>Reading the map</h3>
         <p>Blue circles are your Marines and red circles are enemy you can see. A dashed red diamond marks where an enemy was last seen. The orange ring is suppression: red means pinned, and a pinned man will not move except by crawling. The bar to the left of a symbol shows posture: tall for standing, short for kneeling, flat for prone. The numeral is the fire team.</p>
+        <h3>Map key</h3>
+        <p>The map is read like a military topographic map. White is open ground. Light green with small tufts is tall grass, which hides a man lying prone. Green is woods and hedgerows. Brown lines are contours, one meter apart, with a heavier, numbered index contour every five meters; numbers with a dot are hilltop heights. Solid black blocks are buildings. A black line with ticks is a stone wall, which gives hard cover to a kneeling or prone man. The double line is a dirt road. Grid lines are 100 meters apart; point at the map to read the 8-digit grid reference.</p>
         <h3>Camera</h3>
         <p>Drag to pan. Use the wheel or pinch to zoom. <kbd>Space</kbd> pauses; you can give orders while paused.</p>
       </div>
@@ -540,6 +542,7 @@ class GameMap {
     this.genRoad();
     this.genHamlet();
     this.genTrees();
+    this.elevBase = randInt(8, 60) * 5; // height above sea level of the lowest ground
   }
 
   genElevation() {
@@ -1978,12 +1981,11 @@ function symbolCanvas(billet, side, size) {
 
 // ---- src/render.js
 'use strict';
-// Drawing: a pre-rendered 2.5D terrain sheet (hill shading, contours, extruded
-// buildings, walls and trees), with units, fire and orders drawn over it each frame.
+// Drawing: a pre-rendered map sheet in the style of a military topographic map,
+// seen straight down, with units, fire and orders drawn over it each frame.
 
 const R = { canvas: null, ctx: null, w: 0, h: 0, dpr: 1, cam: { x: MAP_W / 2, y: MAP_H / 2, zoom: 4 }, terrain: null, minZoom: 1 };
-const PXM = 5;     // terrain sheet pixels per meter
-const TILT = 0.55; // screen rise per meter of height, for the oblique 2.5D look
+const PXM = 5; // map sheet pixels per meter
 
 function initRender(canvas) {
   R.canvas = canvas;
@@ -2024,15 +2026,25 @@ function toWorld(sx, sy) {
 }
 
 // ---------------------------------------------------------------- terrain sheet
-const GROUND = [
-  [126, 144, 86],  // open
-  [152, 156, 84],  // tall grass
-  [70, 88, 54],    // woods floor
-  [178, 160, 122], // road
-  [96, 92, 86],    // building footprint
-  [128, 140, 90],  // under a wall
-  [124, 100, 72],  // plowed
-];
+// Drawn flat, straight down, as a military topographic map: white paper, green
+// vegetation tint, brown contours with index contours every 5 m, black man-made
+// features and a black 100 m grid.
+const MAPC = {
+  paper: [250, 249, 243],
+  plowed: [244, 240, 228],
+  grass: [228, 240, 206],
+  woods: [190, 220, 164],
+  woodsEdge: [128, 172, 104],
+  contour: [156, 96, 44],
+};
+const CONTOUR_INTERVAL = 1, INDEX_EVERY = 5;
+
+// Smoothed share of the cells around a point that are of one terrain kind.
+function terrainShare(map, mask, x, y) {
+  const fx = clamp(x / CELL - 0.5, 0, GW - 1.001), fy = clamp(y / CELL - 0.5, 0, GH - 1.001);
+  const x0 = Math.floor(fx), y0 = Math.floor(fy), tx = fx - x0, ty = fy - y0, i = y0 * GW + x0;
+  return (mask[i] * (1 - tx) + mask[i + 1] * tx) * (1 - ty) + (mask[i + GW] * (1 - tx) + mask[i + GW + 1] * tx) * ty;
+}
 
 function buildTerrain(map) {
   const W = MAP_W * PXM, H = MAP_H * PXM;
@@ -2040,112 +2052,186 @@ function buildTerrain(map) {
   c.width = W; c.height = H;
   const ctx = c.getContext('2d');
   const img = ctx.createImageData(W, H), px = img.data;
+  const mask = (k) => { const a = new Float32Array(GW * GH); for (let i = 0; i < a.length; i++) a[i] = map.ter[i] === k ? 1 : 0; return a; };
+  const woods = mask(TER.WOODS), grass = mask(TER.GRASS), plowed = mask(TER.PLOWED);
   const elev = new Float32Array(W * H);
   for (let y = 0; y < H; y++) for (let x = 0; x < W; x++) elev[y * W + x] = map.elevAt((x + 0.5) / PXM, (y + 0.5) / PXM);
-  const L = [-0.55, -0.6, 0.58];
+  const level = (e, step) => Math.floor(e / step);
+
   for (let y = 0; y < H; y++) {
     for (let x = 0; x < W; x++) {
       const i = y * W + x, wx = (x + 0.5) / PXM, wy = (y + 0.5) / PXM;
-      const k = map.terAt(wx, wy);
-      let [r, g, b] = GROUND[k];
-      const n = ((Math.sin(x * 12.9898 + y * 78.233) * 43758.5453) % 1) * 10;
-      r += n; g += n; b += n * 0.6;
-      if (k === TER.PLOWED && (wx * 0.9 + wy * 0.2) % 1.4 < 0.45) { r -= 16; g -= 14; b -= 10; }
-      if (k === TER.GRASS && (x * 7 + y * 3) % 11 === 0) { r += 14; g += 12; }
-      if (k === TER.ROAD) { const e = Math.abs(((wy - map.roadY[Math.floor(wx / CELL)] || 0)) - 2); if (e > 1.6) { r -= 14; g -= 14; b -= 12; } }
-      const xl = Math.max(0, x - 1), xr = Math.min(W - 1, x + 1), yu = Math.max(0, y - 1), yd = Math.min(H - 1, y + 1);
-      const ex = (elev[y * W + xr] - elev[y * W + xl]) * PXM / 2, ey = (elev[yd * W + x] - elev[yu * W + x]) * PXM / 2;
-      const nl = Math.hypot(ex, ey, 1);
-      const shade = 0.82 + 0.45 * ((-ex * L[0] - ey * L[1] + L[2]) / nl - 0.58);
-      r *= shade; g *= shade; b *= shade;
-      // Contour every meter of elevation, heavier every five.
-      const e0 = elev[i], f0 = Math.floor(e0);
-      if (Math.floor(elev[y * W + xr]) !== f0 || Math.floor(elev[yd * W + x]) !== f0) {
-        const heavy = Math.floor(Math.max(elev[y * W + xr], elev[yd * W + x])) % 5 === 0;
-        const a = heavy ? 0.55 : 0.3;
-        r = r * (1 - a) + 92 * a; g = g * (1 - a) + 64 * a; b = b * (1 - a) + 34 * a;
+      let col = MAPC.paper;
+      if (terrainShare(map, plowed, wx, wy) > 0.5) col = MAPC.plowed;
+      if (terrainShare(map, grass, wx, wy) > 0.5) col = MAPC.grass;
+      const w = terrainShare(map, woods, wx, wy);
+      if (w > 0.36) col = w < 0.46 ? MAPC.woodsEdge : MAPC.woods;
+      let [r, g, b] = col;
+      // Contours: ordinary lines one pixel wide, index lines two.
+      const e = elev[i];
+      const xr = Math.min(W - 1, x + 1), yd = Math.min(H - 1, y + 1);
+      const xr2 = Math.min(W - 1, x + 2), yd2 = Math.min(H - 1, y + 2);
+      const idx = INDEX_EVERY * CONTOUR_INTERVAL;
+      const onIndex = level(e, idx) !== level(elev[y * W + xr2], idx) || level(e, idx) !== level(elev[yd2 * W + x], idx);
+      const onLine = level(e, CONTOUR_INTERVAL) !== level(elev[y * W + xr], CONTOUR_INTERVAL) || level(e, CONTOUR_INTERVAL) !== level(elev[yd * W + x], CONTOUR_INTERVAL);
+      if (onIndex || onLine) {
+        const a = onIndex ? 0.95 : 0.6;
+        r = r * (1 - a) + MAPC.contour[0] * a; g = g * (1 - a) + MAPC.contour[1] * a; b = b * (1 - a) + MAPC.contour[2] * a;
       }
       px[i * 4] = r; px[i * 4 + 1] = g; px[i * 4 + 2] = b; px[i * 4 + 3] = 255;
     }
   }
   ctx.putImageData(img, 0, 0);
   ctx.scale(PXM, PXM);
+  ctx.lineCap = 'round'; ctx.lineJoin = 'round';
 
-  // 50 m grid
-  ctx.strokeStyle = 'rgba(20,24,16,0.22)';
-  ctx.lineWidth = 0.25;
-  for (let x = 50; x < MAP_W; x += 50) { ctx.beginPath(); ctx.moveTo(x, 0); ctx.lineTo(x, MAP_H); ctx.stroke(); }
-  for (let y = 50; y < MAP_H; y += 50) { ctx.beginPath(); ctx.moveTo(0, y); ctx.lineTo(MAP_W, y); ctx.stroke(); }
-
-  // Extruded features, drawn back to front.
-  const items = [];
-  const isWall = (cx, cy) => map.inGrid(cx, cy) && map.ter[cy * GW + cx] === TER.WALL;
+  // Tall grass: scattered tufts, the scrub symbol.
+  ctx.strokeStyle = '#6f9a52'; ctx.lineWidth = 0.18;
   for (let cy = 0; cy < GH; cy++) for (let cx = 0; cx < GW; cx++) {
-    if (!isWall(cx, cy)) continue;
-    // Join each wall cell to its neighbors; a diagonal only where no corner cell already joins them.
-    const links = [];
-    if (isWall(cx + 1, cy)) links.push([1, 0]);
-    if (isWall(cx, cy + 1)) links.push([0, 1]);
-    if (isWall(cx + 1, cy + 1) && !isWall(cx + 1, cy) && !isWall(cx, cy + 1)) links.push([1, 1]);
-    if (isWall(cx - 1, cy + 1) && !isWall(cx - 1, cy) && !isWall(cx, cy + 1)) links.push([-1, 1]);
-    const lone = !links.length && !isWall(cx - 1, cy) && !isWall(cx, cy - 1) && !isWall(cx - 1, cy - 1) && !isWall(cx + 1, cy - 1);
+    if (map.ter[cy * GW + cx] !== TER.GRASS || (cx * 7 + cy * 13) % 9 !== 0) continue;
     const x = (cx + 0.5) * CELL, y = (cy + 0.5) * CELL;
-    for (const [dx, dy] of links) items.push({ y: y + dy * CELL, kind: 'wall', x1: x, y1: y, x2: x + dx * CELL, y2: y + dy * CELL });
-    if (lone) items.push({ y, kind: 'wall', x1: x - 0.5, y1: y, x2: x + 0.5, y2: y });
+    ctx.beginPath();
+    ctx.moveTo(x - 0.5, y - 0.6); ctx.lineTo(x, y); ctx.lineTo(x + 0.5, y - 0.6);
+    ctx.moveTo(x, y - 0.8); ctx.lineTo(x, y);
+    ctx.moveTo(x - 0.7, y); ctx.lineTo(x + 0.7, y);
+    ctx.stroke();
   }
-  for (const b of map.buildings) items.push({ y: b.y1, kind: 'building', b });
-  for (const t of map.trees) items.push({ y: t.y, kind: 'tree', t });
-  items.sort((a, b) => a.y - b.y);
 
-  // Shadows first so they never fall across a roof.
-  for (const it of items) {
-    if (it.kind === 'building') {
-      const b = it.b, s = b.height * 0.45;
-      ctx.fillStyle = 'rgba(18,20,14,0.35)';
-      ctx.beginPath();
-      ctx.moveTo(b.x1, b.y0); ctx.lineTo(b.x1 + s, b.y0 + s * 0.7); ctx.lineTo(b.x1 + s, b.y1 + s * 0.7);
-      ctx.lineTo(b.x0 + s, b.y1 + s * 0.7); ctx.lineTo(b.x0, b.y1); ctx.closePath(); ctx.fill();
-    } else if (it.kind === 'tree') {
-      const t = it.t;
-      ctx.fillStyle = 'rgba(18,24,12,0.32)';
-      ctx.beginPath(); ctx.ellipse(t.x + t.h * 0.22, t.y + t.h * 0.12, t.r * 1.05, t.r * 0.8, 0, 0, Math.PI * 2); ctx.fill();
-    }
+  // Unimproved road: black double line.
+  const pts = [];
+  for (let cx = 0; cx < GW; cx++) {
+    let s = 0, n = 0;
+    for (let k = -3; k <= 3; k++) { const v = map.roadY[clamp(cx + k, 0, GW - 1)]; s += v; n++; }
+    pts.push({ x: (cx + 0.5) * CELL, y: Math.floor(s / n / CELL) * CELL + CELL });
   }
-  for (const it of items) {
-    if (it.kind === 'wall') {
-      const h = 1.0 * TILT;
-      ctx.lineCap = 'round';
-      ctx.strokeStyle = 'rgba(18,20,14,0.3)'; ctx.lineWidth = 1.5;
-      ctx.beginPath(); ctx.moveTo(it.x1 + 0.5, it.y1 + 0.4); ctx.lineTo(it.x2 + 0.5, it.y2 + 0.4); ctx.stroke();
-      ctx.strokeStyle = '#6c665b'; ctx.lineWidth = 1.1;
-      ctx.beginPath(); ctx.moveTo(it.x1, it.y1); ctx.lineTo(it.x2, it.y2); ctx.stroke();
-      ctx.strokeStyle = '#b4ad9c'; ctx.lineWidth = 0.9;
-      ctx.beginPath(); ctx.moveTo(it.x1, it.y1 - h); ctx.lineTo(it.x2, it.y2 - h); ctx.stroke();
-      ctx.strokeStyle = 'rgba(90,84,72,0.6)'; ctx.lineWidth = 0.25; ctx.setLineDash([0.5, 0.9]);
-      ctx.beginPath(); ctx.moveTo(it.x1, it.y1 - h); ctx.lineTo(it.x2, it.y2 - h); ctx.stroke();
-      ctx.setLineDash([]);
-    } else if (it.kind === 'building') {
-      const b = it.b, h = b.height * TILT, w = b.x1 - b.x0, d = b.y1 - b.y0;
-      ctx.fillStyle = '#b3a993'; ctx.fillRect(b.x0, b.y1 - h, w, h);
-      ctx.fillStyle = 'rgba(40,36,30,0.55)';
-      for (let x = b.x0 + 2; x < b.x1 - 1.5; x += 3.2) ctx.fillRect(x, b.y1 - h * 0.62, 1.1, h * 0.3);
-      ctx.fillStyle = b.roof; ctx.fillRect(b.x0, b.y0 - h, w, d);
-      ctx.strokeStyle = 'rgba(20,16,12,0.5)'; ctx.lineWidth = 0.25;
-      if (w >= d) { ctx.beginPath(); ctx.moveTo(b.x0 + 0.5, b.y0 - h + d / 2); ctx.lineTo(b.x1 - 0.5, b.y0 - h + d / 2); ctx.stroke(); }
-      else { ctx.beginPath(); ctx.moveTo(b.x0 + w / 2, b.y0 - h + 0.5); ctx.lineTo(b.x0 + w / 2, b.y1 - h - 0.5); ctx.stroke(); }
-      ctx.fillStyle = 'rgba(255,255,255,0.08)'; ctx.fillRect(b.x0, b.y0 - h, w, w >= d ? d / 2 : d);
-      ctx.strokeStyle = 'rgba(20,16,12,0.7)'; ctx.lineWidth = 0.3;
-      ctx.strokeRect(b.x0, b.y0 - h, w, d + h);
-    } else {
-      const t = it.t, cy = t.y - t.h * TILT * 0.55;
-      const g = 70 + t.tone * 12;
-      ctx.fillStyle = 'rgb(' + (g * 0.55 | 0) + ',' + (g + 18 | 0) + ',' + (g * 0.45 | 0) + ')';
-      ctx.beginPath(); ctx.arc(t.x, cy, t.r, 0, Math.PI * 2); ctx.fill();
-      ctx.fillStyle = 'rgba(190,220,140,0.16)';
-      ctx.beginPath(); ctx.arc(t.x - t.r * 0.3, cy - t.r * 0.3, t.r * 0.55, 0, Math.PI * 2); ctx.fill();
+  pts.unshift({ x: 0, y: pts[0].y }); pts.push({ x: MAP_W, y: pts[pts.length - 1].y });
+  const road = () => { ctx.beginPath(); pts.forEach((p, i) => i ? ctx.lineTo(p.x, p.y) : ctx.moveTo(p.x, p.y)); ctx.stroke(); };
+  ctx.strokeStyle = '#1b1b1b'; ctx.lineWidth = 4.4; road();
+  ctx.strokeStyle = '#fbf6e6'; ctx.lineWidth = 3.6; road();
+
+  // Stone walls: black line with ticks on one side, traced cell to cell and straightened.
+  ctx.strokeStyle = '#1b1b1b';
+  for (const line of wallLines(map)) {
+    ctx.lineWidth = 0.45;
+    ctx.beginPath(); line.forEach((p, i) => i ? ctx.lineTo(p.x, p.y) : ctx.moveTo(p.x, p.y)); ctx.stroke();
+    ctx.lineWidth = 0.22;
+    ctx.beginPath();
+    for (let i = 1; i < line.length; i++) {
+      const a = line[i - 1], b = line[i], len = dist(a.x, a.y, b.x, b.y);
+      const nx = -(b.y - a.y) / len, ny = (b.x - a.x) / len;
+      for (let d = 0.6; d < len; d += 1.2) {
+        const tx = a.x + (b.x - a.x) * d / len, ty = a.y + (b.y - a.y) * d / len;
+        ctx.moveTo(tx, ty); ctx.lineTo(tx + nx * 0.7, ty + ny * 0.7);
+      }
     }
+    ctx.stroke();
+  }
+
+  // Buildings: solid black.
+  ctx.fillStyle = '#161616';
+  for (const bd of map.buildings) ctx.fillRect(bd.x0 + 0.2, bd.y0 + 0.2, bd.x1 - bd.x0 - 0.4, bd.y1 - bd.y0 - 0.4);
+
+  // Grid: 100 m lines heavy, 50 m lines light. Northing lines are counted from the south edge.
+  for (let x = 0; x <= MAP_W; x += 50) {
+    ctx.strokeStyle = x % 100 === 0 ? 'rgba(10,10,10,0.75)' : 'rgba(10,10,10,0.25)';
+    ctx.lineWidth = x % 100 === 0 ? 0.32 : 0.16;
+    ctx.beginPath(); ctx.moveTo(x, 0); ctx.lineTo(x, MAP_H); ctx.stroke();
+  }
+  for (let n = 0; n <= MAP_H; n += 50) {
+    const y = MAP_H - n;
+    ctx.strokeStyle = n % 100 === 0 ? 'rgba(10,10,10,0.75)' : 'rgba(10,10,10,0.25)';
+    ctx.lineWidth = n % 100 === 0 ? 0.32 : 0.16;
+    ctx.beginPath(); ctx.moveTo(0, y); ctx.lineTo(MAP_W, y); ctx.stroke();
+  }
+
+  // Elevation figures: index contour values and spot heights at hilltops, in meters.
+  const base = map.elevBase;
+  const halo = (text, x, y, color, size) => {
+    ctx.font = '600 ' + size + 'px "IBM Plex Mono", ui-monospace, monospace';
+    ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+    ctx.lineWidth = 0.6; ctx.strokeStyle = 'rgba(250,249,243,0.95)';
+    ctx.strokeText(text, x, y);
+    ctx.fillStyle = color; ctx.fillText(text, x, y);
+  };
+  const labels = [];
+  const idxStep = INDEX_EVERY * CONTOUR_INTERVAL;
+  for (let y = 12; y < MAP_H - 6; y += 7) for (let x = 10; x < MAP_W - 10; x += 7) {
+    const e = map.elevAt(x, y), lv = Math.round(e / idxStep) * idxStep;
+    if (lv <= 0 || Math.abs(e - lv) > 0.06) continue;
+    if (labels.some(l => dist(l.x, l.y, x, y) < 45) || map.terAt(x, y) === TER.BUILDING) continue;
+    labels.push({ x, y });
+    halo(String(Math.round(base + lv)), x, y, 'rgb(' + MAPC.contour.join(',') + ')', 2.6);
+  }
+  const peaks = [];
+  for (let cy = 4; cy < GH - 4; cy += 2) for (let cx = 4; cx < GW - 4; cx += 2) {
+    const e = map.elev[cy * GW + cx];
+    let top = true;
+    for (let j = -8; j <= 8 && top; j++) for (let i = -8; i <= 8; i++) {
+      if (!map.inGrid(cx + i, cy + j) || (!i && !j)) continue;
+      if (map.elev[(cy + j) * GW + cx + i] > e) { top = false; break; }
+    }
+    if (top && !peaks.some(p => dist(p.x, p.y, (cx + 0.5) * CELL, (cy + 0.5) * CELL) < 30)) peaks.push({ x: (cx + 0.5) * CELL, y: (cy + 0.5) * CELL, e });
+  }
+  for (const p of peaks.slice(0, 4)) {
+    ctx.fillStyle = '#161616';
+    ctx.beginPath(); ctx.arc(p.x, p.y, 0.45, 0, Math.PI * 2); ctx.fill();
+    halo(String(Math.round(base + p.e)), p.x + 3.2, p.y - 1.8, '#161616', 2.4);
   }
   R.terrain = c;
+}
+
+// Wall cells joined into chains, then simplified so diagonal walls draw straight.
+function wallLines(map) {
+  const isWall = (cx, cy) => map.inGrid(cx, cy) && map.ter[cy * GW + cx] === TER.WALL;
+  const nbrs = (cx, cy) => {
+    const out = [];
+    for (let j = -1; j <= 1; j++) for (let i = -1; i <= 1; i++) if ((i || j) && isWall(cx + i, cy + j)) out.push([cx + i, cy + j]);
+    return out;
+  };
+  const seen = new Set(), key = (cx, cy) => cy * GW + cx, lines = [];
+  const trace = (cx, cy) => {
+    const pts = [[cx, cy]];
+    seen.add(key(cx, cy));
+    for (;;) {
+      const [x, y] = pts[pts.length - 1];
+      const next = nbrs(x, y).filter(([a, b]) => !seen.has(key(a, b)))
+        .sort((p, q) => (Math.abs(p[0] - x) + Math.abs(p[1] - y)) - (Math.abs(q[0] - x) + Math.abs(q[1] - y)))[0];
+      if (!next) break;
+      seen.add(key(next[0], next[1]));
+      pts.push(next);
+    }
+    return pts.map(([x, y]) => ({ x: (x + 0.5) * CELL, y: (y + 0.5) * CELL }));
+  };
+  // Start at chain ends first so each wall traces in one piece.
+  for (const pass of [1, 0]) {
+    for (let cy = 0; cy < GH; cy++) for (let cx = 0; cx < GW; cx++) {
+      if (!isWall(cx, cy) || seen.has(key(cx, cy))) continue;
+      if (pass && nbrs(cx, cy).length > 1) continue;
+      const pts = trace(cx, cy);
+      lines.push(pts.length > 1 ? simplifyLine(pts, 2.2) : [{ x: pts[0].x - 0.6, y: pts[0].y }, { x: pts[0].x + 0.6, y: pts[0].y }]);
+    }
+  }
+  return lines;
+}
+
+// Douglas-Peucker line simplification.
+function simplifyLine(pts, tol) {
+  if (pts.length < 3) return pts;
+  const a = pts[0], b = pts[pts.length - 1], len = Math.max(1e-6, dist(a.x, a.y, b.x, b.y));
+  let worst = 0, wi = 0;
+  for (let i = 1; i < pts.length - 1; i++) {
+    const d = Math.abs((b.x - a.x) * (a.y - pts[i].y) - (a.x - pts[i].x) * (b.y - a.y)) / len;
+    if (d > worst) { worst = d; wi = i; }
+  }
+  if (worst <= tol) return [a, b];
+  return simplifyLine(pts.slice(0, wi + 1), tol).slice(0, -1).concat(simplifyLine(pts.slice(wi), tol));
+}
+
+// 8-digit grid reference (10 m precision) for a map point.
+function gridRef(x, y) {
+  const e = Math.floor((G.grid.e * 1000 + x) / 10) % 10000;
+  const n = Math.floor((G.grid.n * 1000 + (MAP_H - y)) / 10) % 10000;
+  return String(e).padStart(4, '0') + ' ' + String(n).padStart(4, '0');
 }
 
 // ---------------------------------------------------------------- frame
@@ -2170,34 +2256,51 @@ function render() {
   drawScale(ctx);
 }
 
+// Grid line numbers along the top and left edges, as printed in a map's margin.
 function drawEdgeLabels(ctx) {
-  ctx.font = '600 11px "IBM Plex Mono", ui-monospace, monospace';
-  ctx.fillStyle = 'rgba(240,236,220,0.75)';
-  ctx.textAlign = 'center'; ctx.textBaseline = 'top';
-  for (let x = 0; x <= MAP_W; x += 50) {
-    const p = toScreen(x, 0);
-    if (p.x > 20 && p.x < R.w - 20) ctx.fillText(String(G.grid.e + x / 50).padStart(2, '0'), p.x, Math.max(4, p.y + 4));
+  ctx.font = '600 12px "IBM Plex Mono", ui-monospace, monospace';
+  ctx.lineWidth = 3; ctx.strokeStyle = 'rgba(250,249,243,0.95)'; ctx.fillStyle = '#161616';
+  const top = 52 + 4;
+  ctx.textAlign = 'left'; ctx.textBaseline = 'top';
+  for (let x = 0; x <= MAP_W; x += 100) {
+    const p = toScreen(x, 0), t = String(G.grid.e * 10 + x / 100).padStart(3, '0');
+    if (p.x < 4 || p.x > R.w - 30) continue;
+    const y = Math.max(top, p.y + 3);
+    ctx.strokeText(t, p.x + 3, y); ctx.fillText(t, p.x + 3, y);
   }
-  ctx.textAlign = 'left'; ctx.textBaseline = 'middle';
-  for (let y = 0; y <= MAP_H; y += 50) {
-    const p = toScreen(0, y);
-    if (p.y > 40 && p.y < R.h - 20) ctx.fillText(String(G.grid.n - y / 50).padStart(2, '0'), Math.max(4, p.x + 4), p.y);
+  ctx.textBaseline = 'bottom';
+  const left = document.body.classList.contains('roster-open') || R.w > 760 ? 310 : 4;
+  for (let n = 0; n <= MAP_H; n += 100) {
+    const p = toScreen(0, MAP_H - n), t = String(G.grid.n * 10 + n / 100).padStart(3, '0');
+    if (p.y < top + 16 || p.y > R.h - 10) continue;
+    const x = Math.max(left, p.x + 3);
+    ctx.strokeText(t, x, p.y - 2); ctx.fillText(t, x, p.y - 2);
   }
 }
 
+// Scale bar and marginal data, with the grid reference under the cursor.
 function drawScale(ctx) {
   const z = R.cam.zoom, len = 50 * z;
-  const x = 14, y = R.h - (G.ui.panelH || 0) - 22;
-  ctx.fillStyle = 'rgba(16,18,14,0.6)';
-  ctx.fillRect(x - 6, y - 16, len + 50, 28);
-  ctx.strokeStyle = '#f0ecdc'; ctx.lineWidth = 2;
-  ctx.beginPath(); ctx.moveTo(x, y); ctx.lineTo(x + len, y); ctx.moveTo(x, y - 4); ctx.lineTo(x, y + 4);
-  ctx.moveTo(x + len / 2, y - 3); ctx.lineTo(x + len / 2, y + 3); ctx.moveTo(x + len, y - 4); ctx.lineTo(x + len, y + 4); ctx.stroke();
-  ctx.fillStyle = '#f0ecdc'; ctx.font = '600 11px "IBM Plex Mono", ui-monospace, monospace';
+  const hv = G.ui.hover && G.ui.hoverIsPointer ? G.ui.hover : null;
+  const w = Math.max(len + 50, 230);
+  const x = Math.max(14, R.w - w - 6), y = R.h - (G.ui.panelH || 0) - (hv ? 52 : 40);
+  ctx.fillStyle = 'rgba(250,249,243,0.92)';
+  ctx.strokeStyle = '#161616'; ctx.lineWidth = 1;
+  ctx.fillRect(x - 8, y - 18, w, hv ? 58 : 46);
+  ctx.strokeRect(x - 8, y - 18, w, hv ? 58 : 46);
+  ctx.fillStyle = '#161616';
+  ctx.fillRect(x, y - 3, len / 2, 5);
+  ctx.strokeStyle = '#161616'; ctx.lineWidth = 1;
+  ctx.strokeRect(x, y - 3, len, 5);
+  ctx.font = '600 11px "IBM Plex Mono", ui-monospace, monospace';
   ctx.textAlign = 'left'; ctx.textBaseline = 'bottom';
-  ctx.fillText('50 m', x + len + 6, y + 5);
-  ctx.textBaseline = 'alphabetic';
-  ctx.fillText('N ↑', x, y - 6);
+  ctx.fillText('0', x - 3, y - 5);
+  ctx.fillText('50 METERS', x + len - 30, y - 5);
+  ctx.textBaseline = 'top';
+  ctx.fillText('GRID 100 M · CONTOUR INTERVAL ' + CONTOUR_INTERVAL + ' M', x, y + 8);
+  if (hv && hv.x >= 0 && hv.y >= 0 && hv.x <= MAP_W && hv.y <= MAP_H) {
+    ctx.fillText('GR ' + gridRef(hv.x, hv.y) + '  ELEV ' + Math.round(G.map.elevBase + G.map.elevAt(hv.x, hv.y)) + ' M', x, y + 22);
+  }
 }
 
 function unitRadius() { return clamp(R.cam.zoom * 1.5, 9, 15); }
@@ -2217,7 +2320,9 @@ function drawUnits(ctx) {
     if (p.x < -30 || p.y < -30 || p.x > R.w + 30 || p.y > R.h + 30) continue;
     const down = !s.active;
     if (sel.has(s)) {
-      ctx.strokeStyle = '#ffe066'; ctx.lineWidth = 2.5;
+      ctx.strokeStyle = '#161616'; ctx.lineWidth = 5;
+      ctx.beginPath(); ctx.arc(p.x, p.y, r + 6, 0, Math.PI * 2); ctx.stroke();
+      ctx.strokeStyle = '#ffd60a'; ctx.lineWidth = 2.5;
       ctx.beginPath(); ctx.arc(p.x, p.y, r + 6, 0, Math.PI * 2); ctx.stroke();
     }
     if (!down) {
@@ -2280,10 +2385,10 @@ function drawContacts(ctx) {
     ctx.save();
     ctx.globalAlpha = a;
     ctx.setLineDash([4, 3]);
-    ctx.strokeStyle = '#ff6b6b'; ctx.lineWidth = 2;
+    ctx.strokeStyle = '#c62828'; ctx.lineWidth = 2;
     ctx.beginPath(); ctx.moveTo(p.x, p.y - r); ctx.lineTo(p.x + r, p.y); ctx.lineTo(p.x, p.y + r); ctx.lineTo(p.x - r, p.y); ctx.closePath(); ctx.stroke();
     ctx.setLineDash([]);
-    ctx.fillStyle = '#ffd6d6'; ctx.font = '700 ' + Math.round(r) + 'px "IBM Plex Mono", monospace';
+    ctx.fillStyle = '#b91c1c'; ctx.font = '700 ' + Math.round(r) + 'px "IBM Plex Mono", monospace';
     ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
     ctx.fillText('?', p.x, p.y + 1);
     ctx.restore();
@@ -2297,7 +2402,7 @@ function drawOrdersOverlay(ctx) {
   ctx.lineWidth = 1.5;
   for (const s of selMembers(sel)) {
     if (!s.active || !s.path.length) continue;
-    ctx.strokeStyle = s.moveMode === 'rush' ? 'rgba(255,224,102,0.9)' : s.moveMode === 'crawl' ? 'rgba(160,220,255,0.9)' : 'rgba(255,255,255,0.85)';
+    ctx.strokeStyle = s.moveMode === 'rush' ? 'rgba(194,65,12,0.95)' : s.moveMode === 'crawl' ? 'rgba(14,116,144,0.95)' : 'rgba(29,78,216,0.9)';
     ctx.beginPath();
     let p = toScreen(s.x, s.y); ctx.moveTo(p.x, p.y);
     for (const w of s.path) { p = toScreen(w.x, w.y); ctx.lineTo(p.x, p.y); }
@@ -2308,9 +2413,9 @@ function drawOrdersOverlay(ctx) {
   for (const s of selMembers(sel)) {
     if (!s.active || !s.suppressPt) continue;
     const a = toScreen(s.x, s.y), b = toScreen(s.suppressPt.x, s.suppressPt.y);
-    ctx.strokeStyle = 'rgba(255,120,60,0.55)'; ctx.lineWidth = 1;
+    ctx.strokeStyle = 'rgba(220,80,20,0.6)'; ctx.lineWidth = 1;
     ctx.beginPath(); ctx.moveTo(a.x, a.y); ctx.lineTo(b.x, b.y); ctx.stroke();
-    ctx.strokeStyle = 'rgba(255,120,60,0.9)'; ctx.lineWidth = 1.5;
+    ctx.strokeStyle = 'rgba(220,80,20,0.95)'; ctx.lineWidth = 2;
     ctx.beginPath(); ctx.arc(b.x, b.y, 7 * R.cam.zoom / 2, 0, Math.PI * 2); ctx.stroke();
   }
   // Pending order: line to the cursor with range and bearing.
@@ -2324,12 +2429,12 @@ function drawOrdersOverlay(ctx) {
       for (const s of gs.slice(0, 3)) {
         const sp = toScreen(s.x, s.y);
         const max = pend === 'launcher' ? s.launcher.range : s.grenade.range;
-        ctx.strokeStyle = 'rgba(255,224,102,0.5)'; ctx.lineWidth = 1;
+        ctx.strokeStyle = 'rgba(194,65,12,0.6)'; ctx.lineWidth = 1.5;
         ctx.beginPath(); ctx.arc(sp.x, sp.y, max * R.cam.zoom, 0, Math.PI * 2); ctx.stroke();
       }
     }
     if (!pend && !G.ui.hoverIsPointer) return;
-    ctx.strokeStyle = pend ? 'rgba(255,224,102,0.9)' : 'rgba(255,255,255,0.4)';
+    ctx.strokeStyle = pend ? 'rgba(194,65,12,0.95)' : 'rgba(22,22,22,0.45)';
     ctx.lineWidth = 1.5;
     ctx.setLineDash([3, 4]);
     ctx.beginPath(); ctx.moveTo(a.x, a.y); ctx.lineTo(b.x, b.y); ctx.stroke();
@@ -2349,14 +2454,13 @@ function drawProjectiles(ctx) {
   for (const p of G.projectiles) {
     const f = Math.min(1, p.t / p.flight);
     const x = lerp(p.x0, p.x1, f), y = lerp(p.y0, p.y1, f);
-    const arc = p.kind === 'rpg' ? 0 : Math.sin(f * Math.PI) * (p.kind === 'frag' ? 4 : 10);
-    const s = toScreen(x, y - arc * TILT);
+    const s = toScreen(x, y);
     ctx.fillStyle = p.kind === 'frag' ? '#2c3a22' : '#1a1a1a';
     ctx.strokeStyle = '#f4f1e4'; ctx.lineWidth = 1;
     ctx.beginPath(); ctx.arc(s.x, s.y, p.kind === 'frag' ? 3 : 2.5, 0, Math.PI * 2); ctx.fill(); ctx.stroke();
     if (p.kind === 'rpg' && f < 1) {
       const t = toScreen(lerp(p.x0, p.x1, Math.max(0, f - 0.15)), lerp(p.y0, p.y1, Math.max(0, f - 0.15)));
-      ctx.strokeStyle = 'rgba(230,230,220,0.6)'; ctx.lineWidth = 3;
+      ctx.strokeStyle = 'rgba(90,90,90,0.5)'; ctx.lineWidth = 3;
       ctx.beginPath(); ctx.moveTo(t.x, t.y); ctx.lineTo(s.x, s.y); ctx.stroke();
     }
   }
@@ -2371,20 +2475,20 @@ function drawEffects(ctx) {
     if (e.type === 'tracer') {
       const h = clamp(f * 1.3, 0, 1), tl = clamp(f * 1.3 - 0.35, 0, 1);
       const a = toScreen(lerp(e.x1, e.x2, tl), lerp(e.y1, e.y2, tl)), b = toScreen(lerp(e.x1, e.x2, h), lerp(e.y1, e.y2, h));
-      ctx.strokeStyle = e.side === 'blue' ? 'rgba(255,120,70,0.95)' : 'rgba(140,255,120,0.95)';
-      ctx.lineWidth = 1.6;
+      ctx.strokeStyle = e.side === 'blue' ? 'rgba(220,38,38,0.95)' : 'rgba(22,163,74,0.95)';
+      ctx.lineWidth = 1.8;
       ctx.beginPath(); ctx.moveTo(a.x, a.y); ctx.lineTo(b.x, b.y); ctx.stroke();
     } else if (e.type === 'flash') {
       const p = toScreen(e.x, e.y);
-      ctx.fillStyle = 'rgba(255,230,150,' + (1 - f) + ')';
+      ctx.fillStyle = 'rgba(245,158,11,' + (1 - f) + ')';
       ctx.beginPath(); ctx.arc(p.x, p.y, 5 + 6 * f, 0, Math.PI * 2); ctx.fill();
     } else if (e.type === 'blast') {
       const p = toScreen(e.x, e.y);
       const rr = (2 + e.r * 0.6 * Math.sqrt(f)) * z;
       ctx.fillStyle = 'rgba(255,' + (180 - 120 * f | 0) + ',60,' + (0.85 * (1 - f)) + ')';
       ctx.beginPath(); ctx.arc(p.x, p.y, rr * 0.55, 0, Math.PI * 2); ctx.fill();
-      ctx.fillStyle = 'rgba(70,64,56,' + (0.55 * (1 - f)) + ')';
-      ctx.beginPath(); ctx.arc(p.x, p.y - f * 8, rr, 0, Math.PI * 2); ctx.fill();
+      ctx.fillStyle = 'rgba(70,64,56,' + (0.45 * (1 - f)) + ')';
+      ctx.beginPath(); ctx.arc(p.x, p.y, rr, 0, Math.PI * 2); ctx.fill();
     }
   }
 }

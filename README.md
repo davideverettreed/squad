@@ -2,7 +2,8 @@
 
 Real-time squad tactics in the browser. You command a 13-man Marine rifle squad
 (squad leader and three four-man fire teams) against an enemy squad, using fire
-and maneuver on a 240 × 180 m map seen from overhead in 2.5D.
+and maneuver on a 240 × 180 m map seen straight down, drawn as a military
+topographic map.
 
 Units are drawn with the billet symbols from the Marine rifle squad organization
 figure: squad leader, fire team leader, automatic rifleman, grenadier, rifleman.
@@ -46,7 +47,7 @@ src/            game code (plain JavaScript, loaded in order)
   orders.js     orders and movement
   ai.js         enemy AI
   symbols.js    billet symbols
-  render.js     2.5D drawing
+  render.js     topographic map and unit drawing
   ui.js         panels, roster, briefing, debrief
   input.js      mouse, touch, keyboard
   main.js       mission setup and main loop
