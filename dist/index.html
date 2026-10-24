@@ -1,0 +1,3122 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover, user-scalable=no">
+<title>Squad Fire and Maneuver</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<meta name="theme-color" content="#1d2119">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@500;600&family=Saira+Condensed:wght@500;600;700&display=swap">
+<style>
+/* Layout: full-screen map; header bar on top, roster at left, orders panel along the bottom.
+   One committed look: a field map board at night, paper-colored text, selection yellow. */
+:root {
+  --ground: #1d2119;
+  --panel: rgba(22, 26, 19, 0.93);
+  --panel-solid: #191d16;
+  --line: #3a4130;
+  --ink: #ece7d6;
+  --muted: #a6a894;
+  --accent: #ffe066;
+  --blue: #80e0ff;
+  --red: #ff8080;
+  --warn: #ffb347;
+  --bad: #ff5a4f;
+  --ok: #9fd68a;
+  --display: "Saira Condensed", "Arial Narrow", "Roboto Condensed", sans-serif;
+  --mono: "IBM Plex Mono", ui-monospace, "SFMono-Regular", Menlo, monospace;
+  color-scheme: dark;
+}
+
+* { box-sizing: border-box; }
+html, body { height: 100%; margin: 0; overflow: hidden; }
+body { background: var(--ground); color: var(--ink); font: 14px/1.4 var(--display); -webkit-tap-highlight-color: transparent; }
+
+#app {
+  position: fixed; inset: 0;
+  padding: env(safe-area-inset-top, 0px) env(safe-area-inset-right, 0px) env(safe-area-inset-bottom, 0px) env(safe-area-inset-left, 0px);
+}
+#view { position: absolute; inset: 0; width: 100%; height: 100%; display: block; touch-action: none; cursor: crosshair; }
+
+button { font: inherit; color: inherit; }
+.obtn {
+  background: #262b21; border: 1px solid var(--line); color: var(--ink);
+  font: 600 14px/1 var(--display); letter-spacing: 0.04em; text-transform: uppercase;
+  padding: 8px 11px; border-radius: 3px; cursor: pointer; white-space: nowrap; min-height: 34px;
+}
+.obtn:hover:not(:disabled) { border-color: #5b6449; background: #2d3327; }
+.obtn:focus-visible, .chip:focus-visible, .rrow:focus-visible, .rhead:focus-visible { outline: 2px solid var(--accent); outline-offset: 1px; }
+.obtn.on { background: var(--accent); color: #1b1a10; border-color: var(--accent); }
+.obtn:disabled { opacity: 0.35; cursor: default; }
+.obtn.primary { background: var(--accent); color: #1b1a10; border-color: var(--accent); }
+
+/* ---------------- header */
+#bar {
+  position: absolute; top: env(safe-area-inset-top, 0px); left: 0; right: 0; z-index: 5;
+  display: flex; align-items: center; gap: 12px;
+  padding: 6px max(12px, env(safe-area-inset-right, 0px)) 6px max(12px, env(safe-area-inset-left, 0px));
+  background: linear-gradient(var(--panel), rgba(22, 26, 19, 0.75));
+  border-bottom: 1px solid var(--line);
+}
+.brand { display: flex; align-items: baseline; gap: 8px; }
+.brand b { font: 700 20px/1 var(--display); letter-spacing: 0.18em; }
+.brand span { color: var(--muted); font-size: 13px; letter-spacing: 0.06em; text-transform: uppercase; }
+#clock { font: 600 16px/1 var(--mono); color: var(--accent); font-variant-numeric: tabular-nums; }
+.barbtns { margin-left: auto; display: flex; gap: 6px; }
+#btnRoster { display: none; }
+
+/* ---------------- roster */
+#roster {
+  position: absolute; z-index: 4; left: max(8px, env(safe-area-inset-left, 0px)); top: calc(env(safe-area-inset-top, 0px) + 56px);
+  width: 290px; max-height: calc(100% - 56px - var(--orders-h, 150px) - 16px); overflow-y: auto;
+  background: var(--panel); border: 1px solid var(--line); border-radius: 4px;
+}
+.rteam { border-bottom: 1px solid var(--line); }
+.rteam:last-child { border-bottom: 0; }
+.rhead {
+  width: 100%; display: flex; align-items: center; gap: 8px; padding: 6px 10px; background: rgba(255,255,255,0.03);
+  border: 0; cursor: pointer; text-align: left;
+}
+.rname { font: 700 13px/1 var(--display); letter-spacing: 0.08em; text-transform: uppercase; }
+.rmorale { margin-left: auto; width: 60px; height: 5px; background: #33392a; border-radius: 3px; overflow: hidden; }
+.rmorale i { display: block; height: 100%; background: var(--ok); }
+.rmorale i[data-state="warn"] { background: var(--warn); }
+.rmorale i[data-state="bad"] { background: var(--bad); }
+.rrow {
+  width: 100%; display: grid; grid-template-columns: 24px 1fr auto; grid-template-rows: auto auto; column-gap: 8px;
+  align-items: center; padding: 4px 10px; border: 0; background: none; cursor: pointer; text-align: left;
+}
+.rrow canvas { grid-row: span 2; }
+.rrow.sel { background: rgba(255, 224, 102, 0.12); box-shadow: inset 3px 0 0 var(--accent); }
+.rrow.dead { opacity: 0.45; }
+.rwho { min-width: 0; display: flex; flex-direction: column; grid-row: span 2; }
+.rwho b { font-weight: 600; font-size: 14px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.rwho small { color: var(--muted); font-size: 12px; }
+.rstat { font: 600 11px/1.2 var(--mono); text-align: right; color: var(--ok); }
+.rstat[data-state="warn"] { color: var(--warn); }
+.rstat[data-state="bad"] { color: var(--bad); }
+.rstat[data-state="down"] { color: var(--muted); }
+.rammo { font: 500 11px/1.2 var(--mono); color: var(--muted); text-align: right; font-variant-numeric: tabular-nums; }
+
+/* ---------------- radio log and toast */
+#log {
+  position: absolute; z-index: 3; right: max(8px, env(safe-area-inset-right, 0px)); top: calc(env(safe-area-inset-top, 0px) + 56px);
+  width: min(400px, calc(100% - 320px)); display: flex; flex-direction: column; gap: 3px; pointer-events: none;
+}
+.lline {
+  display: flex; gap: 8px; padding: 4px 8px; background: rgba(16, 19, 14, 0.82); border-left: 3px solid var(--muted);
+  font: 500 12px/1.35 var(--mono); border-radius: 2px;
+}
+.lline:nth-last-child(n+4) { opacity: 0.6; }
+.ltime { color: var(--muted); font-variant-numeric: tabular-nums; }
+.lline.contact { border-left-color: var(--red); }
+.lline.fire { border-left-color: var(--warn); }
+.lline.loss { border-left-color: var(--bad); color: #ffd2cc; }
+.lline.kill { border-left-color: var(--ok); }
+.lline.warn { border-left-color: var(--accent); }
+#toast {
+  position: absolute; z-index: 6; left: 50%; transform: translateX(-50%); bottom: calc(var(--orders-h, 150px) + 12px);
+  background: var(--accent); color: #1b1a10; font: 600 15px/1.2 var(--display); letter-spacing: 0.02em;
+  padding: 8px 14px; border-radius: 3px; max-width: calc(100% - 32px); text-align: center; pointer-events: none;
+}
+
+/* ---------------- orders */
+#orders {
+  position: absolute; z-index: 5; left: 0; right: 0; bottom: 0;
+  background: var(--panel); border-top: 1px solid var(--line);
+  padding: 8px max(12px, env(safe-area-inset-right, 0px)) calc(8px + env(safe-area-inset-bottom, 0px)) max(12px, env(safe-area-inset-left, 0px));
+}
+#selbar { display: flex; align-items: center; gap: 12px; margin-bottom: 8px; min-width: 0; }
+#selChips { display: flex; gap: 4px; flex: none; }
+.chip {
+  background: #262b21; border: 1px solid var(--line); border-radius: 14px; padding: 4px 11px; cursor: pointer;
+  font: 600 13px/1.2 var(--display); letter-spacing: 0.04em; text-transform: uppercase; color: var(--blue);
+}
+.chip.on { background: var(--blue); color: #0d1418; border-color: var(--blue); }
+.chip:disabled { opacity: 0.35; }
+#selText { color: var(--muted); font-size: 14px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; min-width: 0; }
+#orderGrid { display: flex; flex-wrap: wrap; gap: 8px 18px; }
+.ogroup { display: flex; flex-direction: column; gap: 4px; }
+.olabel { color: var(--muted); font: 600 11px/1 var(--display); letter-spacing: 0.14em; text-transform: uppercase; }
+.obuttons { display: flex; gap: 4px; }
+
+/* ---------------- modals */
+.modal {
+  position: fixed; inset: 0; z-index: 20; background: rgba(10, 12, 8, 0.72);
+  display: flex; align-items: flex-start; justify-content: center; overflow-y: auto;
+  padding: max(24px, env(safe-area-inset-top, 0px)) max(16px, env(safe-area-inset-right, 0px)) 24px max(16px, env(safe-area-inset-left, 0px));
+}
+.modal[hidden] { display: none !important; }
+.card {
+  width: min(880px, 100%); background: var(--panel-solid); border: 1px solid var(--line); border-radius: 4px;
+  box-shadow: 0 20px 60px rgba(0, 0, 0, 0.5);
+}
+.card.small { width: min(620px, 100%); }
+.cardhead { padding: 18px 22px 12px; border-bottom: 1px solid var(--line); display: flex; flex-direction: column; gap: 2px; }
+.cardhead h2 { margin: 0; font: 700 30px/1.05 var(--display); letter-spacing: 0.04em; text-transform: uppercase; text-wrap: balance; }
+.eyebrow { color: var(--muted); font: 600 12px/1.2 var(--display); letter-spacing: 0.14em; text-transform: uppercase; }
+.cardfoot { padding: 14px 22px; border-top: 1px solid var(--line); display: flex; gap: 10px; align-items: center; justify-content: flex-end; flex-wrap: wrap; }
+.cardfoot .bnote { margin-right: auto; }
+#briefBody { padding: 8px 22px 16px; display: grid; gap: 4px 28px; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); }
+#briefBody h3, .helpbody h3 { margin: 12px 0 4px; font: 700 14px/1.2 var(--display); letter-spacing: 0.14em; text-transform: uppercase; color: var(--accent); }
+#briefBody p, .helpbody p { margin: 0 0 6px; font: 400 15px/1.45 var(--display); max-width: 62ch; }
+.bdesc { display: block; margin-top: 6px; color: var(--muted); }
+.bnote { color: var(--muted); font-size: 13px; }
+.bseed { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+select, input[type="number"] {
+  background: #262b21; color: var(--ink); border: 1px solid var(--line); border-radius: 3px;
+  font: 500 13px/1.2 var(--mono); padding: 6px 6px; min-height: 32px;
+}
+input[type="number"] { width: 56px; }
+#missionSeed { width: 90px; }
+.tablewrap { overflow-x: auto; margin-bottom: 8px; }
+.ltable { border-collapse: collapse; width: 100%; font: 500 13px/1.2 var(--mono); }
+.ltable th { text-align: left; color: var(--muted); font: 600 11px/1 var(--display); letter-spacing: 0.12em; text-transform: uppercase; padding: 4px 6px; border-bottom: 1px solid var(--line); }
+.ltable td { padding: 5px 6px; border-bottom: 1px solid rgba(58, 65, 48, 0.5); vertical-align: middle; }
+.ltable td.bname { font: 600 14px/1.2 var(--display); white-space: nowrap; }
+.ltable td.kg { font-variant-numeric: tabular-nums; white-space: nowrap; text-align: right; }
+.ltable td.cellrow { display: flex; gap: 4px; align-items: center; border-bottom: 0; }
+.bload { grid-column: 1 / -1; }
+.helpbody { padding: 6px 22px 14px; }
+kbd { font: 600 12px/1 var(--mono); border: 1px solid var(--line); border-bottom-width: 2px; padding: 2px 5px; border-radius: 3px; background: #262b21; }
+#debriefBody { padding: 12px 22px; }
+.dsub { margin: 0 0 12px; font-size: 16px; }
+.dtable {
+  margin: 0; padding: 12px 14px; background: #f6f7f9; color: #1c2026; border-radius: 3px;
+  font: 500 13px/1.55 var(--mono); overflow-x: auto; font-variant-numeric: tabular-nums;
+}
+
+/* ---------------- narrow screens: phones */
+@media (max-width: 760px) {
+  .brand span { display: none; }
+  #btnRoster { display: inline-block; }
+  #btnHelp { display: none; }
+  .obtn { padding: 7px 9px; font-size: 13px; min-height: 36px; }
+  #bar { gap: 8px; }
+  #roster { display: none; width: min(320px, calc(100% - 16px)); }
+  body.roster-open #roster { display: block; }
+  #log { left: max(8px, env(safe-area-inset-left, 0px)); width: auto; top: calc(env(safe-area-inset-top, 0px) + 54px); }
+  .lline:nth-last-child(n+3) { display: none; }
+  #orderGrid { flex-wrap: nowrap; overflow-x: auto; padding-bottom: 4px; scrollbar-width: thin; }
+  .ogroup { flex: none; }
+  #selbar { flex-wrap: wrap; gap: 6px; }
+  #selText { width: 100%; font-size: 13px; }
+  #briefBody { grid-template-columns: minmax(0, 1fr); }
+  .cardhead h2 { font-size: 24px; }
+  .cardfoot .bnote { width: 100%; }
+  .dtable { font-size: 12px; padding: 10px; }
+}
+@media (prefers-reduced-motion: reduce) { * { scroll-behavior: auto !important; } }
+</style>
+</head>
+<body>
+<div id="app">
+  <canvas id="view" aria-label="Tactical map"></canvas>
+
+  <header id="bar">
+    <div class="brand"><b>SQUAD</b><span>Fire and maneuver</span></div>
+    <div id="clock" aria-label="Mission time">00:00</div>
+    <div class="barbtns">
+      <button id="btnPause" class="obtn">Resume</button>
+      <button id="btnSpeed" class="obtn" title="Game speed">1×</button>
+      <button id="btnRoster" class="obtn">Roster</button>
+      <button id="btnHelp" class="obtn" title="Controls">Help</button>
+      <button id="btnMenu" class="obtn">Mission</button>
+    </div>
+  </header>
+
+  <aside id="roster" aria-label="Squad roster"></aside>
+  <div id="log" aria-live="polite"></div>
+  <div id="toast" hidden></div>
+
+  <section id="orders" aria-label="Orders">
+    <div id="selbar">
+      <div id="selChips"></div>
+      <div id="selText"></div>
+    </div>
+    <div id="orderGrid"></div>
+  </section>
+
+  <div id="briefing" class="modal" hidden>
+    <div class="card">
+      <div class="cardhead">
+        <h2>Operation order</h2>
+        <span class="eyebrow">1st Squad · Marine rifle squad, 13 men</span>
+      </div>
+      <div id="briefBody"></div>
+      <div class="cardfoot">
+        <span class="bnote">The mission starts paused. Give your orders, then press Resume.</span>
+        <button id="btnBegin" class="obtn primary">Begin mission</button>
+      </div>
+    </div>
+  </div>
+
+  <div id="debrief" class="modal" hidden>
+    <div class="card small">
+      <div class="cardhead"><h2 id="debriefTitle">Debrief</h2><span class="eyebrow">After-action report</span></div>
+      <div id="debriefBody"></div>
+      <div class="cardfoot">
+        <button id="btnAgain" class="obtn">Same map again</button>
+        <button id="btnNext" class="obtn primary">New mission</button>
+      </div>
+    </div>
+  </div>
+
+  <div id="help" class="modal" hidden>
+    <div class="card small">
+      <div class="cardhead"><h2>Controls</h2><span class="eyebrow">Mouse, touch and keyboard</span></div>
+      <div class="helpbody">
+        <h3>Selecting</h3>
+        <p>Tap a Marine to select that Marine. Tap again to select the fire team, and again for the whole squad. The Squad and fire team buttons above the orders do the same. Keys: <kbd>1</kbd> <kbd>2</kbd> <kbd>3</kbd> fire teams, <kbd>0</kbd> squad, <kbd>Esc</kbd> cancel.</p>
+        <h3>Moving</h3>
+        <p>Pick Walk, Rush or Crawl, then tap the ground. Right-click also moves. Teams and the squad move in their formation. Rushing is fast but tiring and easy to spot. Crawling is slow but men can crawl while pinned.</p>
+        <h3>Fire and maneuver</h3>
+        <p><b>Suppress</b> puts fire on an area, seen enemy or not. <b>Bound</b> sends the squad forward one fire team at a time while the others cover it (a fire team bounds in buddy pairs). <b>Assault</b> walks forward firing and throwing grenades. Tap a visible enemy to make the selection engage that target.</p>
+        <h3>Reading the map</h3>
+        <p>Blue circles are your Marines and red circles are enemy you can see. A dashed red diamond marks where an enemy was last seen. The orange ring is suppression: red means pinned, and a pinned man will not move except by crawling. The bar to the left of a symbol shows posture: tall for standing, short for kneeling, flat for prone. The numeral is the fire team.</p>
+        <h3>Camera</h3>
+        <p>Drag to pan. Use the wheel or pinch to zoom. <kbd>Space</kbd> pauses; you can give orders while paused.</p>
+      </div>
+      <div class="cardfoot"><button class="obtn primary" data-close="help">Close</button></div>
+    </div>
+  </div>
+</div>
+
+<script>
+// ---- src/util.js
+'use strict';
+// Shared helpers: seeded random numbers, math and geometry.
+// All game randomness goes through RNG so a mission seed reproduces the same map.
+
+function mulberry32(seed) {
+  let a = seed >>> 0;
+  return function () {
+    a = (a + 0x6D2B79F5) | 0;
+    let t = Math.imul(a ^ (a >>> 15), 1 | a);
+    t = (t + Math.imul(t ^ (t >>> 7), 61 | t)) ^ t;
+    return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
+  };
+}
+
+let RNG = Math.random;
+function setSeed(seed) { RNG = mulberry32(seed); }
+function rand() { return RNG(); }
+function randRange(a, b) { return a + (b - a) * RNG(); }
+function randInt(a, b) { return Math.floor(a + (b - a + 1) * RNG()); }
+function pick(arr) { return arr[Math.floor(RNG() * arr.length)]; }
+function chance(p) { return RNG() < p; }
+function gauss() {
+  const u = Math.max(1e-9, RNG()), v = RNG();
+  return Math.sqrt(-2 * Math.log(u)) * Math.cos(2 * Math.PI * v);
+}
+function shuffle(arr) {
+  for (let i = arr.length - 1; i > 0; i--) {
+    const j = Math.floor(RNG() * (i + 1));
+    [arr[i], arr[j]] = [arr[j], arr[i]];
+  }
+  return arr;
+}
+
+function clamp(v, lo, hi) { return v < lo ? lo : v > hi ? hi : v; }
+function lerp(a, b, t) { return a + (b - a) * t; }
+function smooth(t) { return t * t * (3 - 2 * t); }
+function dist(ax, ay, bx, by) { return Math.hypot(bx - ax, by - ay); }
+function angleTo(ax, ay, bx, by) { return Math.atan2(by - ay, bx - ax); }
+function angleDiff(a, b) {
+  let d = b - a;
+  while (d > Math.PI) d -= 2 * Math.PI;
+  while (d < -Math.PI) d += 2 * Math.PI;
+  return d;
+}
+
+// Rotate a formation offset (ox = right of travel, oy = ahead) to world space.
+// World y grows southward (down the screen); heading is the direction of travel.
+function rotateOffset(ox, oy, heading) {
+  const fx = Math.cos(heading), fy = Math.sin(heading);
+  const rx = -fy, ry = fx;
+  return { x: rx * ox + fx * oy, y: ry * ox + fy * oy };
+}
+
+function centroid(list) {
+  if (!list.length) return null;
+  let x = 0, y = 0;
+  for (const p of list) { x += p.x; y += p.y; }
+  return { x: x / list.length, y: y / list.length };
+}
+
+// Compass bearing in degrees (north up), as a Marine would call it.
+function bearing(ax, ay, bx, by) {
+  const deg = Math.atan2(bx - ax, -(by - ay)) * 180 / Math.PI;
+  return Math.round((deg + 360) % 360);
+}
+function pad3(n) { return String(n).padStart(3, '0'); }
+
+function fmtClock(t) {
+  const m = Math.floor(t / 60), s = Math.floor(t % 60);
+  return String(m).padStart(2, '0') + ':' + String(s).padStart(2, '0');
+}
+
+// ---- src/data.js
+'use strict';
+// Static game data: map scale, terrain, postures, weapons, billets, formations.
+// Weapon figures are game abstractions tuned for play, loosely scaled from
+// published effective ranges and rates of fire; they are not ballistic tables.
+
+const CELL = 2;                 // meters per grid cell
+const MAP_W = 240, MAP_H = 180; // meters
+const GW = MAP_W / CELL, GH = MAP_H / CELL;
+
+const TER = { OPEN: 0, GRASS: 1, WOODS: 2, ROAD: 3, BUILDING: 4, WALL: 5, PLOWED: 6 };
+
+// losH: height above ground the feature blocks sight to.
+// density: share of sight blocked per cell crossed (vegetation).
+// cover: share of rounds stopped for a man inside or behind it.
+const TERRAIN = [
+  { name: 'Open field',   speed: 1.0,  losH: 0,   density: 0,    cover: 0,   conceal: 0 },
+  { name: 'Tall grass',   speed: 0.8,  losH: 0.9, density: 0.2,  cover: 0,   conceal: 0.5 },
+  { name: 'Woods',        speed: 0.6,  losH: 10,  density: 0.28, cover: 0.3, conceal: 0.6 },
+  { name: 'Dirt road',    speed: 1.15, losH: 0,   density: 0,    cover: 0,   conceal: 0 },
+  { name: 'Building',     speed: 0,    losH: 6.5, solid: true,   cover: 1,   conceal: 1 },
+  { name: 'Stone wall',   speed: 0.3,  losH: 1.0, solid: true,   cover: 0.9, conceal: 0.3 },
+  { name: 'Plowed field', speed: 0.85, losH: 0,   density: 0,    cover: 0,   conceal: 0.1 },
+];
+
+// eye: sight height. center: center of mass. size: relative target size.
+const POSTURE = {
+  stand: { label: 'Standing', short: 'STD', eye: 1.7,  center: 1.1,  size: 1.0,  acc: 0.85 },
+  kneel: { label: 'Kneeling', short: 'KNL', eye: 1.2,  center: 0.75, size: 0.6,  acc: 1.0 },
+  prone: { label: 'Prone',    short: 'PRN', eye: 0.35, center: 0.2,  size: 0.3,  acc: 1.2 },
+};
+// Seconds to change posture.
+const POSTURE_TIME = {
+  stand: { kneel: 0.5, prone: 1.2 },
+  kneel: { stand: 0.5, prone: 0.8 },
+  prone: { stand: 1.4, kneel: 0.9 },
+};
+
+// speed in m/s; fatigue gained per second.
+const MOVE = {
+  walk:  { label: 'Walk',  speed: 1.5, posture: 'stand', fatigue: 0.4 },
+  rush:  { label: 'Rush',  speed: 3.8, posture: 'stand', fatigue: 7 },
+  crawl: { label: 'Crawl', speed: 0.45, posture: 'prone', fatigue: 2.5 },
+};
+
+// rounds: rounds per trigger pull. cycle: seconds between pulls at a steady rate.
+// acc: chance per round to hit a standing, exposed man at 100 m or less.
+const WEAPONS = {
+  M27:    { name: 'M27 IAR (rifle)', rounds: 1, cycle: 1.7, acc: 0.42, range: 600, supp: 6,  mag: 30,  mags: 7,  reload: 3, kg: 3.6 },
+  M27IAR: { name: 'M27 IAR (auto)',  rounds: 3, cycle: 1.3, acc: 0.30, range: 600, supp: 8,  mag: 30,  mags: 21, reload: 3, kg: 3.6 },
+  M16A4:  { name: 'M16A4',           rounds: 1, cycle: 1.8, acc: 0.40, range: 550, supp: 6,  mag: 30,  mags: 7,  reload: 3, kg: 3.4 },
+  M4:     { name: 'M4 carbine',      rounds: 1, cycle: 1.7, acc: 0.37, range: 500, supp: 6,  mag: 30,  mags: 7,  reload: 3, kg: 3.0 },
+  M249:   { name: 'M249 SAW',        rounds: 6, cycle: 1.6, acc: 0.18, range: 800, supp: 11, mag: 200, mags: 3,  reload: 7, kg: 7.5 },
+  AK74:   { name: 'AK-74M',          rounds: 1, cycle: 1.9, acc: 0.34, range: 500, supp: 6,  mag: 30,  mags: 7,  reload: 3, kg: 3.4 },
+  AKM:    { name: 'AKM',             rounds: 1, cycle: 1.9, acc: 0.30, range: 400, supp: 7,  mag: 30,  mags: 6,  reload: 3, kg: 3.6 },
+  AKS74U: { name: 'AKS-74U',         rounds: 1, cycle: 1.8, acc: 0.28, range: 300, supp: 6,  mag: 30,  mags: 5,  reload: 3, kg: 2.7 },
+  RPK74:  { name: 'RPK-74',          rounds: 4, cycle: 1.6, acc: 0.24, range: 600, supp: 9,  mag: 45,  mags: 9,  reload: 4, kg: 5.0 },
+  PKM:    { name: 'PKM',             rounds: 6, cycle: 1.6, acc: 0.19, range: 1000, supp: 13, mag: 100, mags: 4,  reload: 8, kg: 7.5 },
+  SVD:    { name: 'SVD',             rounds: 1, cycle: 3.0, acc: 0.70, range: 800, supp: 7,  mag: 10,  mags: 8,  reload: 3, kg: 4.3 },
+};
+// Magazine weight (kg) for the loadout weight figure.
+const MAG_KG = { 30: 0.5, 200: 3.2, 45: 0.8, 100: 3.0, 10: 0.3 };
+
+// scatter: miss distance per meter of range. lethal/casualty: radii in meters.
+const LAUNCHERS = {
+  M203: { name: 'M203 40mm', range: 350, min: 31, cycle: 6, scatter: 0.035, lethal: 5, casualty: 12, rounds: 12, vel: 76,  kg: 0.23 },
+  M320: { name: 'M320 40mm', range: 350, min: 31, cycle: 6, scatter: 0.03,  lethal: 5, casualty: 12, rounds: 12, vel: 76,  kg: 0.23 },
+  GP25: { name: 'GP-25 40mm', range: 400, min: 40, cycle: 7, scatter: 0.04, lethal: 5, casualty: 11, rounds: 10, vel: 76,  kg: 0.25 },
+  RPG7: { name: 'RPG-7 (OG-7V)', range: 300, min: 25, cycle: 12, scatter: 0.03, lethal: 6, casualty: 14, rounds: 3, vel: 120, kg: 2.0 },
+};
+const GRENADES = {
+  M67:  { name: 'M67 frag', range: 32, lethal: 5, casualty: 15, fuse: 1.6, kg: 0.4 },
+  RGD5: { name: 'RGD-5 frag', range: 35, lethal: 4, casualty: 13, fuse: 1.6, kg: 0.31 },
+};
+
+// The 13-man Marine rifle squad: squad leader and three four-man fire teams.
+const USMC_BILLETS = {
+  SL: { title: 'Squad Leader',       rank: 'Sgt',  weapons: ['M4', 'M16A4', 'M27'],  weapon: 'M4' },
+  TL: { title: 'Fire Team Leader',   rank: 'Cpl',  weapons: ['M4', 'M16A4', 'M27'],  weapon: 'M4' },
+  AR: { title: 'Automatic Rifleman', rank: 'LCpl', weapons: ['M27IAR', 'M249'],      weapon: 'M27IAR' },
+  G:  { title: 'Grenadier',          rank: 'LCpl', weapons: ['M16A4', 'M4'],         weapon: 'M16A4', launchers: ['M203', 'M320'], launcher: 'M203' },
+  R:  { title: 'Rifleman',           rank: 'PFC',  weapons: ['M27', 'M16A4', 'M4'],  weapon: 'M27' },
+};
+const TEAM_ORDER = ['TL', 'AR', 'G', 'R'];
+
+// Opposing force billets. Organization is randomized for now; specific
+// foreign squad organizations come later.
+const OPFOR_BILLETS = {
+  SL:  { title: 'Squad Leader',       weapon: 'AK74' },
+  TL:  { title: 'Team Leader',        weapon: 'AK74' },
+  R:   { title: 'Rifleman',           weapon: 'AK74', alt: 'AKM' },
+  AR:  { title: 'Automatic Rifleman', weapon: 'RPK74' },
+  MG:  { title: 'Machine Gunner',     weapon: 'PKM' },
+  G:   { title: 'Grenadier',          weapon: 'AK74', launcher: 'GP25' },
+  RPG: { title: 'Antitank Grenadier', weapon: 'AKS74U', launcher: 'RPG7' },
+  MM:  { title: 'Marksman',           weapon: 'SVD' },
+};
+const OPFOR_POOL = ['R', 'R', 'R', 'R', 'AR', 'MG', 'G', 'RPG', 'MM'];
+
+const SURNAMES = ['Hayes', 'Ortiz', 'Brennan', 'Kowalski', 'Whitfield', 'Duarte', 'McAllister', 'Pruitt',
+  'Okafor', 'Lindqvist', 'Calloway', 'Reyes', 'Thibodeaux', 'Hargrove', 'Nakamura', 'Sutton', 'Boone',
+  'Castillo', 'Delaney', 'Ferris', 'Gaines', 'Holloway', 'Ingram', 'Jett', 'Keller', 'Lowery', 'Mercer',
+  'Novak', 'Overstreet', 'Pittman', 'Quarles', 'Rourke', 'Stroud', 'Tolliver', 'Vance', 'Wilder', 'Yates'];
+
+// Team formations: offsets in meters for member slot i (x = right, y = ahead),
+// before the interval multiplier. Slot 0 is the team leader.
+const FORMATIONS = {
+  wedge:  { label: 'Wedge' },
+  column: { label: 'Column' },
+  line:   { label: 'Line' },
+  echL:   { label: 'Echelon L' },
+  echR:   { label: 'Echelon R' },
+};
+const FORMATION_KEYS = Object.keys(FORMATIONS);
+
+function teamSlot(form, i) {
+  const side = i % 2 === 1 ? -1 : 1, rank = Math.ceil(i / 2);
+  switch (form) {
+    case 'column': return { x: 0, y: -6 * i };
+    case 'line':   return { x: side * 7 * rank, y: 0 };
+    case 'echL':   return { x: -6 * i, y: -6 * i };
+    case 'echR':   return { x: 6 * i, y: -6 * i };
+    default:       return { x: side * 7 * rank, y: -7 * rank };
+  }
+}
+
+// Squad formations: anchor for team k of n, and the squad leader's position.
+function squadSlot(form, k, n) {
+  switch (form) {
+    case 'column': return { x: 0, y: -30 * k };
+    case 'line':   return { x: (k - (n - 1) / 2) * 32, y: 0 };
+    case 'echL':   return { x: -24 * k, y: -24 * k };
+    case 'echR':   return { x: 24 * k, y: -24 * k };
+    default:
+      if (k === 0) return { x: 0, y: 0 };
+      return { x: (k % 2 === 1 ? -1 : 1) * 30 * Math.ceil(k / 2), y: -24 * Math.ceil(k / 2) };
+  }
+}
+function squadLeaderSlot(form) {
+  switch (form) {
+    case 'column': return { x: 4, y: -15 };
+    case 'line':   return { x: 0, y: -14 };
+    case 'echL':   return { x: -8, y: -20 };
+    case 'echR':   return { x: 8, y: -20 };
+    default:       return { x: 0, y: -16 };
+  }
+}
+
+// ---- src/map.js
+'use strict';
+// Terrain grid, procedural generation, line of sight, pathfinding and cover search.
+
+class GameMap {
+  constructor(seed) {
+    this.ter = new Uint8Array(GW * GH);
+    this.elev = new Float32Array(GW * GH);
+    this.buildings = [];
+    this.trees = [];
+    setSeed(seed);
+    this.generate();
+  }
+
+  idx(cx, cy) { return cy * GW + cx; }
+  inGrid(cx, cy) { return cx >= 0 && cy >= 0 && cx < GW && cy < GH; }
+  cellOf(x, y) { return { cx: clamp(Math.floor(x / CELL), 0, GW - 1), cy: clamp(Math.floor(y / CELL), 0, GH - 1) }; }
+  terAt(x, y) {
+    const cx = Math.floor(x / CELL), cy = Math.floor(y / CELL);
+    if (!this.inGrid(cx, cy)) return TER.OPEN;
+    return this.ter[cy * GW + cx];
+  }
+  passableCell(cx, cy) { return this.inGrid(cx, cy) && this.ter[cy * GW + cx] !== TER.BUILDING; }
+
+  // Ground elevation in meters, interpolated between cell centers.
+  elevAt(x, y) {
+    const fx = clamp(x / CELL - 0.5, 0, GW - 1.001), fy = clamp(y / CELL - 0.5, 0, GH - 1.001);
+    const x0 = Math.floor(fx), y0 = Math.floor(fy), tx = fx - x0, ty = fy - y0;
+    const e = this.elev, i = y0 * GW + x0;
+    const a = e[i], b = e[i + 1], c = e[i + GW], d = e[i + GW + 1];
+    return (a * (1 - tx) + b * tx) * (1 - ty) + (c * (1 - tx) + d * tx) * ty;
+  }
+
+  // ---------------------------------------------------------------- generation
+  generate() {
+    this.genElevation();
+    this.genFields();
+    this.genWoods();
+    this.genRoad();
+    this.genHamlet();
+    this.genTrees();
+  }
+
+  genElevation() {
+    const octave = (nx, ny, amp) => {
+      const grid = [];
+      for (let j = 0; j <= ny; j++) { grid.push([]); for (let i = 0; i <= nx; i++) grid[j].push(rand()); }
+      return (u, v) => {
+        const fx = u * nx, fy = v * ny, i = Math.min(nx - 1, Math.floor(fx)), j = Math.min(ny - 1, Math.floor(fy));
+        const tx = smooth(fx - i), ty = smooth(fy - j);
+        const top = lerp(grid[j][i], grid[j][i + 1], tx), bot = lerp(grid[j + 1][i], grid[j + 1][i + 1], tx);
+        return lerp(top, bot, ty) * amp;
+      };
+    };
+    const o1 = octave(4, 3, 7), o2 = octave(9, 7, 2.2), o3 = octave(18, 14, 0.6);
+    for (let cy = 0; cy < GH; cy++) for (let cx = 0; cx < GW; cx++) {
+      const u = (cx + 0.5) / GW, v = (cy + 0.5) / GH;
+      this.elev[cy * GW + cx] = o1(u, v) + o2(u, v) + o3(u, v);
+    }
+  }
+
+  // Farm fields as Voronoi patches, bounded by tree lines, stone walls or nothing.
+  genFields() {
+    const kinds = [TER.OPEN, TER.OPEN, TER.PLOWED, TER.GRASS, TER.GRASS];
+    const seeds = [];
+    const n = randInt(9, 13);
+    for (let i = 0; i < n; i++) seeds.push({ x: randRange(0, MAP_W), y: randRange(0, MAP_H), k: pick(kinds) });
+    const owner = new Int16Array(GW * GH);
+    for (let cy = 0; cy < GH; cy++) for (let cx = 0; cx < GW; cx++) {
+      const x = (cx + 0.5) * CELL, y = (cy + 0.5) * CELL;
+      let best = 0, bd = Infinity;
+      for (let i = 0; i < n; i++) { const d = (seeds[i].x - x) ** 2 + (seeds[i].y - y) ** 2; if (d < bd) { bd = d; best = i; } }
+      owner[cy * GW + cx] = best;
+      this.ter[cy * GW + cx] = seeds[best].k;
+    }
+    const edgeKind = new Map();
+    const edgeFor = (a, b) => {
+      const key = Math.min(a, b) * 100 + Math.max(a, b);
+      if (!edgeKind.has(key)) {
+        const r = rand();
+        edgeKind.set(key, { kind: r < 0.4 ? TER.WOODS : r < 0.68 ? TER.WALL : -1, phase: randInt(0, 20) });
+      }
+      return edgeKind.get(key);
+    };
+    for (let cy = 0; cy < GH - 1; cy++) for (let cx = 0; cx < GW - 1; cx++) {
+      const a = owner[cy * GW + cx];
+      const b = owner[cy * GW + cx + 1] !== a ? owner[cy * GW + cx + 1] : owner[(cy + 1) * GW + cx] !== a ? owner[(cy + 1) * GW + cx] : -1;
+      if (b < 0) continue;
+      const e = edgeFor(a, b);
+      if (e.kind < 0) continue;
+      // Gaps let men pass walls and hedgerows without climbing.
+      if (e.kind === TER.WALL && (cx + cy + e.phase) % 16 < 2) continue;
+      if (e.kind === TER.WOODS && (cx * 3 + cy + e.phase) % 23 < 2) continue;
+      this.ter[cy * GW + cx] = e.kind;
+    }
+  }
+
+  genWoods() {
+    const n = randInt(2, 3);
+    for (let k = 0; k < n; k++) {
+      const wx = randRange(20, MAP_W - 20), wy = randRange(30, MAP_H - 40), r = randRange(12, 24);
+      const lobes = [0, 1, 2, 3].map(() => ({ a: randRange(0, Math.PI * 2), s: randRange(0.15, 0.35) }));
+      for (let cy = 0; cy < GH; cy++) for (let cx = 0; cx < GW; cx++) {
+        const x = (cx + 0.5) * CELL, y = (cy + 0.5) * CELL;
+        const a = Math.atan2(y - wy, x - wx);
+        let rr = r;
+        for (const l of lobes) rr += r * l.s * Math.cos(a * 2 - l.a);
+        if (dist(x, y, wx, wy) < rr) this.ter[cy * GW + cx] = TER.WOODS;
+      }
+    }
+  }
+
+  genRoad() {
+    let y = randRange(65, 115);
+    this.roadY = [];
+    for (let cx = 0; cx < GW; cx++) {
+      y = clamp(y + gauss() * 0.5, 50, 130);
+      this.roadY.push(y);
+      const cy = Math.floor(y / CELL);
+      for (let d = 0; d < 2; d++) if (this.inGrid(cx, cy + d)) this.ter[(cy + d) * GW + cx] = TER.ROAD;
+    }
+  }
+
+  genHamlet() {
+    const center = randRange(50, MAP_W - 50);
+    const want = randInt(3, 6);
+    const roofs = ['#8a4b3a', '#6f6a63', '#7d5a44', '#5c5f66'];
+    for (let tries = 0; tries < 80 && this.buildings.length < want; tries++) {
+      const w = randInt(4, 7), h = randInt(3, 5);
+      const cx0 = Math.floor((center + randRange(-40, 40)) / CELL);
+      const roadCy = Math.floor(this.roadY[clamp(cx0, 0, GW - 1)] / CELL);
+      const north = chance(0.5);
+      const off = randInt(2, 4);
+      const cy0 = north ? roadCy - off - h : roadCy + 2 + off;
+      if (!this.footprintFree(cx0 - 1, cy0 - 1, w + 2, h + 2)) continue;
+      for (let j = 0; j < h; j++) for (let i = 0; i < w; i++) this.ter[(cy0 + j) * GW + cx0 + i] = TER.BUILDING;
+      const b = { cx: cx0, cy: cy0, w, h, x0: cx0 * CELL, y0: cy0 * CELL, x1: (cx0 + w) * CELL, y1: (cy0 + h) * CELL,
+        height: randRange(4.5, 7), roof: pick(roofs) };
+      this.buildings.push(b);
+      if (chance(0.4)) this.yardWall(b, north);
+    }
+  }
+
+  footprintFree(cx, cy, w, h) {
+    for (let j = 0; j < h; j++) for (let i = 0; i < w; i++) {
+      if (!this.inGrid(cx + i, cy + j)) return false;
+      const t = this.ter[(cy + j) * GW + cx + i];
+      if (t === TER.BUILDING || t === TER.ROAD) return false;
+    }
+    return true;
+  }
+
+  yardWall(b, north) {
+    const m = 3, x0 = b.cx - m, y0 = b.cy - m, x1 = b.cx + b.w + m - 1, y1 = b.cy + b.h + m - 1;
+    const gateX = b.cx + Math.floor(b.w / 2);
+    for (let cy = y0; cy <= y1; cy++) for (let cx = x0; cx <= x1; cx++) {
+      if (!this.inGrid(cx, cy)) continue;
+      const edge = cx === x0 || cx === x1 || cy === y0 || cy === y1;
+      if (!edge) continue;
+      const roadSide = north ? cy === y1 : cy === y0;
+      if (roadSide && Math.abs(cx - gateX) <= 1) continue;
+      const i = cy * GW + cx;
+      if (this.ter[i] !== TER.ROAD && this.ter[i] !== TER.BUILDING) this.ter[i] = TER.WALL;
+    }
+  }
+
+  genTrees() {
+    for (let cy = 0; cy < GH; cy++) for (let cx = 0; cx < GW; cx++) {
+      if (this.ter[cy * GW + cx] !== TER.WOODS || !chance(0.8)) continue;
+      this.trees.push({ x: (cx + randRange(0.1, 0.9)) * CELL, y: (cy + randRange(0.1, 0.9)) * CELL,
+        r: randRange(1.6, 2.9), h: randRange(6, 10), tone: randRange(-1, 1) });
+    }
+  }
+
+  // ---------------------------------------------------------------- line of sight
+  // Returns how much of the line is unobstructed, 0 (blocked) to 1 (clear).
+  // za and zb are heights above the ground at each end.
+  los(ax, ay, za, bx, by, zb) {
+    const d = dist(ax, ay, bx, by);
+    if (d < 0.75) return 1;
+    const ga = this.elevAt(ax, ay) + za, gb = this.elevAt(bx, by) + zb;
+    const n = Math.ceil(d / 0.8);
+    let dens = 0, last = -1;
+    for (let i = 1; i < n; i++) {
+      const t = i / n, x = ax + (bx - ax) * t, y = ay + (by - ay) * t;
+      const h = ga + (gb - ga) * t;
+      const ground = this.elevAt(x, y);
+      if (ground > h) return 0;
+      const cx = Math.floor(x / CELL), cy = Math.floor(y / CELL);
+      if (!this.inGrid(cx, cy)) continue;
+      const ci = cy * GW + cx;
+      if (ci === last) continue;
+      last = ci;
+      const T = TERRAIN[this.ter[ci]];
+      if (h >= ground + T.losH) continue;
+      const fromA = t * d, fromB = d - fromA;
+      if (T.solid) return 0;
+      if (T.density) {
+        // A man at the edge of cover can see out of it; his own cell counts less.
+        const w = fromA < 1.5 ? 0.25 : fromB < 1.5 ? 0.5 : 1;
+        dens += T.density * w;
+        if (dens >= 1) return 0;
+      }
+    }
+    return 1 - dens;
+  }
+
+  // ---------------------------------------------------------------- pathfinding
+  nearestPassable(cx, cy) {
+    if (this.passableCell(cx, cy) && this.ter[cy * GW + cx] !== TER.WALL) return { cx, cy };
+    for (let r = 1; r < 12; r++) {
+      for (let j = -r; j <= r; j++) for (let i = -r; i <= r; i++) {
+        if (Math.max(Math.abs(i), Math.abs(j)) !== r) continue;
+        const x = cx + i, y = cy + j;
+        if (this.passableCell(x, y) && this.ter[y * GW + x] !== TER.WALL) return { cx: x, cy: y };
+      }
+    }
+    return { cx, cy };
+  }
+
+  straightWalkable(ax, ay, bx, by) {
+    const d = dist(ax, ay, bx, by), n = Math.ceil(d / 0.7);
+    for (let i = 0; i <= n; i++) {
+      const t = i / n, x = ax + (bx - ax) * t, y = ay + (by - ay) * t;
+      const k = this.terAt(x, y);
+      if (k === TER.BUILDING || k === TER.WALL) return false;
+      // Keep clear of building corners so men do not clip through them.
+      if (this.terAt(x + 0.6, y) === TER.BUILDING || this.terAt(x - 0.6, y) === TER.BUILDING ||
+          this.terAt(x, y + 0.6) === TER.BUILDING || this.terAt(x, y - 0.6) === TER.BUILDING) return false;
+    }
+    return true;
+  }
+
+  // A* over the grid; cost is travel time. Returns waypoints in meters, or null.
+  findPath(sx, sy, tx, ty) {
+    tx = clamp(tx, 1, MAP_W - 1); ty = clamp(ty, 1, MAP_H - 1);
+    const s = this.cellOf(sx, sy), t0 = this.cellOf(tx, ty);
+    const t = this.nearestPassable(t0.cx, t0.cy);
+    const exact = t.cx === t0.cx && t.cy === t0.cy;
+    const goal = exact ? { x: tx, y: ty } : { x: (t.cx + 0.5) * CELL, y: (t.cy + 0.5) * CELL };
+    if (s.cx === t.cx && s.cy === t.cy) return [goal];
+    if (this.straightWalkable(sx, sy, goal.x, goal.y) && dist(sx, sy, goal.x, goal.y) < 40) return [goal];
+
+    const N = GW * GH, start = s.cy * GW + s.cx, end = t.cy * GW + t.cx;
+    const g = this._g || (this._g = new Float32Array(N));
+    const came = this._came || (this._came = new Int32Array(N));
+    const closed = this._closed || (this._closed = new Uint8Array(N));
+    g.fill(Infinity); came.fill(-1); closed.fill(0);
+    const heap = new MinHeap();
+    const h = (i) => {
+      const dx = Math.abs((i % GW) - t.cx), dy = Math.abs(Math.floor(i / GW) - t.cy);
+      return (Math.max(dx, dy) + 0.414 * Math.min(dx, dy)) * CELL / 1.15;
+    };
+    g[start] = 0;
+    heap.push(start, h(start));
+    let found = false;
+    while (heap.size) {
+      const cur = heap.pop();
+      if (cur === end) { found = true; break; }
+      if (closed[cur]) continue;
+      closed[cur] = 1;
+      const cx = cur % GW, cy = Math.floor(cur / GW);
+      for (let dy = -1; dy <= 1; dy++) for (let dx = -1; dx <= 1; dx++) {
+        if (!dx && !dy) continue;
+        const nx = cx + dx, ny = cy + dy;
+        if (!this.passableCell(nx, ny)) continue;
+        if (dx && dy && (!this.passableCell(cx + dx, cy) || !this.passableCell(cx, cy + dy))) continue;
+        const ni = ny * GW + nx;
+        if (closed[ni]) continue;
+        const sp = TERRAIN[this.ter[ni]].speed;
+        const cost = g[cur] + (dx && dy ? 1.414 : 1) * CELL / sp;
+        if (cost < g[ni]) { g[ni] = cost; came[ni] = cur; heap.push(ni, cost + h(ni)); }
+      }
+    }
+    if (!found) return null;
+    const cells = [];
+    for (let i = end; i !== -1; i = came[i]) cells.push({ x: (i % GW + 0.5) * CELL, y: (Math.floor(i / GW) + 0.5) * CELL });
+    cells.reverse();
+    cells[cells.length - 1] = goal;
+    // String-pull: skip waypoints wherever a straight walk is clear.
+    const out = [];
+    let ax = sx, ay = sy, i = 0;
+    while (i < cells.length - 1) {
+      let j = Math.min(cells.length - 1, i + 30);
+      while (j > i + 1 && !this.straightWalkable(ax, ay, cells[j].x, cells[j].y)) j--;
+      out.push(cells[j]);
+      ax = cells[j].x; ay = cells[j].y; i = j;
+    }
+    if (!out.length) out.push(goal);
+    return out;
+  }
+
+  // ---------------------------------------------------------------- cover
+  // Best nearby spot that puts something between a man and the threat.
+  findCover(x, y, tx, ty, radius, reserved) {
+    let best = { x, y, posture: 'prone', score: -Infinity };
+    const c = this.cellOf(x, y), r = Math.ceil(radius / CELL);
+    const dThreat = dist(x, y, tx, ty);
+    for (let j = -r; j <= r; j++) for (let i = -r; i <= r; i++) {
+      const cx = c.cx + i, cy = c.cy + j;
+      if (!this.passableCell(cx, cy)) continue;
+      const k = this.ter[cy * GW + cx];
+      if (k === TER.WALL) continue;
+      const px = (cx + 0.5) * CELL, py = (cy + 0.5) * CELL;
+      const d = dist(x, y, px, py);
+      if (d > radius) continue;
+      const a = angleTo(px, py, tx, ty), ca = Math.cos(a), sa = Math.sin(a);
+      const k1 = this.terAt(px + ca * 1.8, py + sa * 1.8), k2 = this.terAt(px + ca * 3.4, py + sa * 3.4);
+      let score = 0, posture = 'prone';
+      if (k1 === TER.WALL || k2 === TER.WALL) { score += 6; posture = 'kneel'; }
+      else if (k1 === TER.BUILDING || k2 === TER.BUILDING) { score += 3.5; posture = 'kneel'; }
+      if (k === TER.WOODS) { score += 2.5; if (posture === 'prone' && score < 3) posture = 'prone'; }
+      else if (k === TER.GRASS) score += 1.2;
+      // Defilade: ground rising toward the threat.
+      if (this.elevAt(px + ca * 5, py + sa * 5) - this.elevAt(px, py) > 0.45) score += 1.5;
+      score -= d * 0.12;
+      score -= Math.max(0, dThreat - dist(px, py, tx, ty)) * 0.04;
+      if (reserved) for (const p of reserved) if (dist(p.x, p.y, px, py) < 3.5) score -= 4;
+      // Cover is worth less if the man cannot fire from it.
+      if (score > best.score && this.los(px, py, POSTURE[posture].eye, tx, ty, 1.0) <= 0) score -= 4;
+      if (score > best.score) best = { x: px, y: py, posture, score };
+    }
+    return best;
+  }
+}
+
+class MinHeap {
+  constructor() { this.k = []; this.p = []; }
+  get size() { return this.k.length; }
+  push(key, pri) {
+    const k = this.k, p = this.p;
+    k.push(key); p.push(pri);
+    let i = k.length - 1;
+    while (i > 0) {
+      const par = (i - 1) >> 1;
+      if (p[par] <= p[i]) break;
+      [k[par], k[i]] = [k[i], k[par]]; [p[par], p[i]] = [p[i], p[par]];
+      i = par;
+    }
+  }
+  pop() {
+    const k = this.k, p = this.p, top = k[0];
+    const lk = k.pop(), lp = p.pop();
+    if (k.length) {
+      k[0] = lk; p[0] = lp;
+      let i = 0;
+      for (;;) {
+        const l = 2 * i + 1, r = l + 1;
+        let m = i;
+        if (l < k.length && p[l] < p[m]) m = l;
+        if (r < k.length && p[r] < p[m]) m = r;
+        if (m === i) break;
+        [k[m], k[i]] = [k[i], k[m]]; [p[m], p[i]] = [p[i], p[m]];
+        i = m;
+      }
+    }
+    return top;
+  }
+}
+
+// ---- src/units.js
+'use strict';
+// Soldiers, fire teams and squads, and the builders for each side.
+
+let NEXT_ID = 1;
+const ORDINAL = ['1st', '2nd', '3rd', '4th'];
+
+class Soldier {
+  constructor(side, billet, team, cfg) {
+    this.id = NEXT_ID++;
+    this.side = side;
+    this.billet = billet;
+    this.team = team;
+    this.squad = team.squad;
+    this.title = cfg.title;
+    this.rank = cfg.rank || '';
+    this.name = cfg.name;
+    this.x = 0; this.y = 0;
+    this.facing = side === 'blue' ? -Math.PI / 2 : Math.PI / 2;
+    this.faceAngle = null;
+    this.posture = 'kneel'; this.homePosture = 'kneel'; this.postureBusy = 0;
+    this.postureCheckT = 0; this.postureAdj = null;
+    this.moveMode = 'walk'; this.path = [];
+    this.health = 'ok'; this.supp = 0; this.fatigue = 0;
+    this.weaponKey = cfg.weapon; this.weapon = WEAPONS[cfg.weapon];
+    this.inMag = this.weapon.mag;
+    this.mags = cfg.mags != null ? cfg.mags : this.weapon.mags - 1;
+    this.launcherKey = cfg.launcher || null;
+    this.launcher = cfg.launcher ? LAUNCHERS[cfg.launcher] : null;
+    this.lRounds = this.launcher ? (cfg.lRounds != null ? cfg.lRounds : this.launcher.rounds) : 0;
+    this.grenade = side === 'blue' ? GRENADES.M67 : GRENADES.RGD5;
+    this.frags = cfg.frags != null ? cfg.frags : 2;
+    this.fireControl = 'free';
+    this.targetId = null; this.priorityId = null; this.suppressPt = null; this.launchQueue = null;
+    this.fireCD = randRange(0.3, 1.5); this.reloadT = 0; this.launchCD = randRange(2, 5); this.fragCD = 0;
+    this.lastFired = -99; this.lastHitAt = -99;
+    this.assault = false; this.routing = false; this.routed = false;
+    this.shots = 0; this.hits = 0; this.dryLogged = false;
+    this.loadKg = this.computeLoad();
+  }
+  get alive() { return this.health !== 'kia'; }
+  get active() { return (this.health === 'ok' || this.health === 'light') && !this.routed; }
+  get pinned() { return this.supp >= 85; }
+  get suppressed() { return this.supp >= 50; }
+  get moving() { return this.path.length > 0; }
+  get label() { return (this.rank ? this.rank + ' ' : '') + this.name; }
+
+  computeLoad() {
+    let kg = 22; // helmet, plate carrier, water, kit
+    kg += this.weapon.kg + (this.mags + 1) * (MAG_KG[this.weapon.mag] || 0.5);
+    if (this.launcher) kg += 1.4 + this.lRounds * this.launcher.kg;
+    kg += this.frags * this.grenade.kg;
+    return kg;
+  }
+  get loadFactor() { return clamp(1 - (this.loadKg - 30) / 70, 0.72, 1.05); }
+
+  get statusText() {
+    if (this.health === 'kia') return 'KIA';
+    if (this.health === 'serious') return 'Casualty';
+    if (this.routed) return 'Withdrawn';
+    if (this.routing) return 'Falling back';
+    if (this.pinned) return 'Pinned';
+    if (this.suppressed) return 'Suppressed';
+    if (this.health === 'light') return 'Wounded';
+    if (this.reloadT > 0) return 'Reloading';
+    if (this.moving) return MOVE[this.moveMode].label === 'Walk' ? 'Moving' : MOVE[this.moveMode].label + 'ing';
+    if (this.lastFired > G.time - 2) return 'Firing';
+    return 'Ready';
+  }
+  get ammoText() {
+    if (this.inMag + this.mags === 0) return 'Out';
+    return this.inMag + '+' + this.mags;
+  }
+}
+
+class Team {
+  constructor(side, squad, num, name) {
+    this.side = side; this.squad = squad; this.num = num; this.name = name;
+    this.members = [];
+    this.formation = 'wedge';
+    this.morale = squad.morale;
+    this.lastFiredUpon = -99;
+    this.threats = new Map(); // enemy id -> time it last fired at this team
+    this.task = null;         // AI task
+  }
+  get leader() { return this.members.find(s => s.active) || null; }
+  get active() { return this.members.filter(s => s.active); }
+  get short() { return this.num ? ORDINAL[this.num - 1] + ' FT' : 'SL'; }
+  get broken() { return this.morale < 12; }
+  get shaken() { return this.morale < 28; }
+}
+
+class Squad {
+  constructor(side, name, morale) {
+    this.side = side; this.name = name; this.morale = morale;
+    this.teams = []; this.hq = null; this.leader = null;
+    this.formation = 'wedge';
+    this.training = 1;
+  }
+  get all() { return [this.hq, ...this.teams].flatMap(t => t.members); }
+  get active() { return this.all.filter(s => s.active); }
+}
+
+function defaultLoadout() {
+  const lo = {};
+  for (const k of Object.keys(USMC_BILLETS)) {
+    const b = USMC_BILLETS[k];
+    lo[k] = { weapon: b.weapon, mags: WEAPONS[b.weapon].mags - 1, frags: 2, launcher: b.launcher || null,
+      lRounds: b.launcher ? LAUNCHERS[b.launcher].rounds : 0 };
+  }
+  return lo;
+}
+
+function buildUSMCSquad(loadout) {
+  const sq = new Squad('blue', '1st Squad', 82);
+  sq.training = 0.85;
+  const names = shuffle(SURNAMES.slice());
+  const make = (key, team) => {
+    const b = USMC_BILLETS[key], lo = loadout[key];
+    const s = new Soldier('blue', key, team, { title: b.title, rank: b.rank, name: names.pop(), weapon: lo.weapon,
+      mags: lo.mags, frags: lo.frags, launcher: lo.launcher, lRounds: lo.lRounds });
+    team.members.push(s);
+    return s;
+  };
+  sq.hq = new Team('blue', sq, 0, 'Squad Leader');
+  sq.leader = make('SL', sq.hq);
+  for (let k = 1; k <= 3; k++) {
+    const t = new Team('blue', sq, k, ORDINAL[k - 1] + ' Fire Team');
+    for (const key of TEAM_ORDER) make(key, t);
+    sq.teams.push(t);
+  }
+  return sq;
+}
+
+// Random opposing force: a leader and two or three groups of three to five men.
+function buildOpforSquad() {
+  const sq = new Squad('red', 'Enemy squad', randRange(55, 80));
+  const make = (key, team) => {
+    const b = OPFOR_BILLETS[key];
+    const weapon = b.alt && chance(0.35) ? b.alt : b.weapon;
+    const s = new Soldier('red', key, team, { title: b.title, name: b.title, weapon, launcher: b.launcher,
+      frags: randInt(1, 2) });
+    team.members.push(s);
+    return s;
+  };
+  sq.hq = new Team('red', sq, 0, 'Enemy leader');
+  sq.leader = make('SL', sq.hq);
+  const n = randInt(2, 3);
+  for (let k = 1; k <= n; k++) {
+    const t = new Team('red', sq, k, 'Enemy group ' + k);
+    make('TL', t);
+    const size = randInt(2, 3);
+    for (let i = 0; i < size; i++) make(pick(OPFOR_POOL), t);
+    sq.teams.push(t);
+  }
+  return sq;
+}
+
+// Lay a squad out in its formation around (x, y), facing heading.
+function placeSquad(sq, map, x, y, heading) {
+  const n = sq.teams.length;
+  const put = (s, px, py) => {
+    const c = map.nearestPassable(Math.floor(clamp(px, 2, MAP_W - 2) / CELL), Math.floor(clamp(py, 2, MAP_H - 2) / CELL));
+    s.x = (c.cx + 0.5) * CELL; s.y = (c.cy + 0.5) * CELL;
+    s.facing = heading;
+  };
+  sq.teams.forEach((t, k) => {
+    const a = rotateOffset(squadSlot(sq.formation, k, n).x, squadSlot(sq.formation, k, n).y, heading);
+    t.members.forEach((s, i) => {
+      const o = teamSlot(t.formation, i), w = rotateOffset(o.x, o.y, heading);
+      put(s, x + a.x + w.x, y + a.y + w.y);
+    });
+  });
+  const so = squadLeaderSlot(sq.formation), w = rotateOffset(so.x, so.y, heading);
+  put(sq.leader, x + w.x, y + w.y);
+}
+
+// ---- src/combat.js
+'use strict';
+// Spotting, direct fire, suppression, indirect fire (40mm, RPG, hand grenades) and wounds.
+
+const SPOT_RANGE = 520;
+
+function sightLine(a, b) {
+  return G.map.los(a.x, a.y, POSTURE[a.posture].eye, b.x, b.y, POSTURE[b.posture].eye);
+}
+
+// Share of the target a shooter can hit: 1 fully exposed, 0.3 head only over hard cover.
+function exposure(s, e) {
+  const eye = POSTURE[s.posture].eye;
+  const vc = G.map.los(s.x, s.y, eye, e.x, e.y, POSTURE[e.posture].center);
+  if (vc > 0) return vc;
+  const vh = G.map.los(s.x, s.y, eye, e.x, e.y, POSTURE[e.posture].eye);
+  return vh > 0 ? 0.3 * vh : 0;
+}
+
+// ---------------------------------------------------------------- spotting
+// Each side shares what any of its men can see. Detection is a roll each check;
+// once seen, a man stays tracked while anyone keeps line of sight to him.
+function updateSpotting() {
+  for (const side of ['blue', 'red']) {
+    const known = G.known[side];
+    const observers = G.soldiers.filter(s => s.side === side && s.active);
+    const fresh = [];
+    for (const e of G.soldiers) {
+      if (e.side === side || e.routed) continue;
+      let entry = known.get(e.id), seenBy = null;
+      for (const o of observers) {
+        const d = dist(o.x, o.y, e.x, e.y);
+        if (d > SPOT_RANGE) continue;
+        const v = sightLine(o, e);
+        if (v <= 0) continue;
+        if (entry && entry.visible) { seenBy = o; break; }
+        let p = 0.55 * Math.pow(clamp(1 - d / 480, 0.04, 1), 1.4);
+        p *= POSTURE[e.posture].size + 0.1;
+        if (e.moving) p *= e.moveMode === 'rush' ? 2.6 : e.moveMode === 'walk' ? 1.8 : 1.1;
+        if (G.time - e.lastFired < 4) p *= 5;
+        if (!e.alive || e.health === 'serious') p *= 0.5;
+        p *= v;
+        if (Math.abs(angleDiff(o.facing, angleTo(o.x, o.y, e.x, e.y))) > 1.9) p *= 0.35;
+        p *= 1 - o.supp / 120;
+        if (d < 25) p = Math.max(p, 0.5 * v);
+        if (chance(Math.min(0.95, p))) { seenBy = o; break; }
+      }
+      if (seenBy) {
+        if (!entry) {
+          entry = { id: e.id, firstSeen: G.time };
+          known.set(e.id, entry);
+          if (e.active) fresh.push({ e, o: seenBy });
+        }
+        entry.visible = true; entry.x = e.x; entry.y = e.y; entry.t = G.time;
+        entry.billet = e.billet; entry.health = e.health;
+      } else if (entry) {
+        entry.visible = false;
+        if (G.time - entry.t > 45 && e.active) known.delete(e.id);
+      }
+    }
+    if (side === 'blue' && fresh.length) contactReport(fresh);
+  }
+}
+
+function contactReport(fresh) {
+  fresh.sort((a, b) => dist(a.o.x, a.o.y, a.e.x, a.e.y) - dist(b.o.x, b.o.y, b.e.x, b.e.y));
+  const { e, o } = fresh[0];
+  const d = Math.round(dist(o.x, o.y, e.x, e.y) / 10) * 10;
+  const what = fresh.length > 1 ? fresh.length + ' enemy' : 'enemy ' + e.title.toLowerCase();
+  G.log(o.team.short + ': Contact! ' + what + ', ' + d + ' m, bearing ' + pad3(bearing(o.x, o.y, e.x, e.y)) + '.', 'contact');
+}
+
+// ---------------------------------------------------------------- direct fire
+function pickTarget(s) {
+  const known = G.known[s.side];
+  if (s.priorityId) {
+    const e = G.byId.get(s.priorityId), k = known.get(s.priorityId);
+    if (!e || !e.active) s.priorityId = null;
+    else if (k && k.visible) {
+      const exp = exposure(s, e);
+      if (exp > 0 && dist(s.x, s.y, e.x, e.y) <= s.weapon.range * 1.2) return { e, exp };
+    }
+  }
+  const cands = [];
+  for (const k of known.values()) {
+    if (!k.visible) continue;
+    const e = G.byId.get(k.id);
+    if (!e || !e.active) continue;
+    const d = dist(s.x, s.y, e.x, e.y);
+    if (d > s.weapon.range * 1.2) continue;
+    if (s.fireControl === 'return' && !(s.team.threats.get(e.id) > G.time - 15) && d > 40) continue;
+    let sc = d;
+    if (G.time - e.lastFired < 3) sc *= 0.6;
+    if (e.id === s.targetId) sc *= 0.7;
+    if (e.billet === 'MG' || e.billet === 'AR') sc *= 0.8;
+    cands.push({ e, sc });
+  }
+  cands.sort((a, b) => a.sc - b.sc);
+  for (let i = 0; i < cands.length && i < 4; i++) {
+    const exp = exposure(s, cands[i].e);
+    if (exp > 0) return { e: cands[i].e, exp };
+  }
+  return null;
+}
+
+function updateCombat(s, dt) {
+  s.fireCD -= dt; s.launchCD -= dt; s.fragCD -= dt;
+  if (s.reloadT > 0) {
+    s.reloadT -= dt;
+    if (s.reloadT <= 0) s.inMag = s.weapon.mag;
+    return;
+  }
+  if (!s.active || s.routing || s.postureBusy > 0) return;
+
+  // An explicit 40mm mission is fired even under hold fire.
+  if (s.launchQueue && !s.moving && s.launchCD <= 0) {
+    const q = s.launchQueue;
+    if (s.lRounds <= 0 || !launchAt(s, q.x, q.y)) s.launchQueue = null;
+    else if (--q.count <= 0) s.launchQueue = null;
+    return;
+  }
+  if (s.fireControl === 'hold') return;
+  if (s.moving && !(s.assault && s.moveMode === 'walk')) return;
+  if (s.fireCD > 0) return;
+  if (s.inMag <= 0) { startReload(s); return; }
+  if (s.pinned && chance(0.6)) { s.fireCD = 1.5; return; }
+
+  const tgt = pickTarget(s);
+  if (tgt) {
+    const e = tgt.e, d = dist(s.x, s.y, e.x, e.y);
+    s.targetId = e.id;
+    if (s.launcher && s.lRounds > 0 && s.launchCD <= 0 && !s.moving && d >= s.launcher.min && d <= s.launcher.range) {
+      const clustered = G.soldiers.some(o => o !== e && o.side === e.side && o.active && dist(o.x, o.y, e.x, e.y) < 8);
+      if (tgt.exp < 0.6 || clustered || chance(0.25)) { launchAt(s, e.x, e.y); s.fireCD = 2; return; }
+    }
+    if (s.frags > 0 && s.fragCD <= 0 && d >= 8 && d <= s.grenade.range && (tgt.exp < 0.6 || s.assault) && chance(0.5)) {
+      throwFrag(s, e.x, e.y);
+      s.fireCD = 1.5;
+      return;
+    }
+    fireBurst(s, e, tgt.exp);
+    return;
+  }
+  s.targetId = null;
+
+  if (s.suppressPt && !s.moving) {
+    const p = s.suppressPt;
+    if (s.launcher && s.lRounds > 0 && s.launchCD <= 0 && chance(0.3) && launchAt(s, p.x, p.y)) { s.fireCD = 2; return; }
+    fireArea(s, p.x, p.y);
+    return;
+  }
+  // Automatic weapons keep fire on where the enemy was last seen.
+  if (s.fireControl === 'free' && !s.moving && (s.billet === 'AR' || s.billet === 'MG')) {
+    let best = null, bd = Infinity;
+    for (const k of G.known[s.side].values()) {
+      if (k.visible || G.time - k.t > 10) continue;
+      const e = G.byId.get(k.id);
+      if (!e || !e.active) continue;
+      const d = dist(s.x, s.y, k.x, k.y);
+      if (d < bd && d < s.weapon.range) { bd = d; best = k; }
+    }
+    if (best) { fireArea(s, best.x, best.y, 0.6); return; }
+  }
+  s.fireCD = 0.5;
+}
+
+function hitChance(s, e, exp, d) {
+  const W = s.weapon;
+  let p = W.acc * (d <= 100 ? 1 : Math.pow(100 / d, 1.1));
+  if (d > W.range) p *= 0.4;
+  p *= POSTURE[e.posture].size;
+  if (e.moving && e.moveMode === 'rush') p *= 0.6;
+  p *= exp;
+  p *= POSTURE[s.posture].acc;
+  if (s.moving) p *= 0.35;
+  p *= 1 - s.supp / 130;
+  if (s.health === 'light') p *= 0.7;
+  if (s.fatigue > 60) p *= 0.8;
+  if (s.pinned) p *= 0.3;
+  return p;
+}
+
+function fireBurst(s, e, exp) {
+  const W = s.weapon, n = Math.min(W.rounds, s.inMag), d = dist(s.x, s.y, e.x, e.y);
+  s.inMag -= n; s.shots += n; s.lastFired = G.time;
+  s.facing = angleTo(s.x, s.y, e.x, e.y);
+  const p = hitChance(s, e, exp, d);
+  let hit = false;
+  for (let i = 0; i < n; i++) {
+    const pi = i === 0 ? p : p * 0.55;
+    const h = e.alive && e.health !== 'serious' && chance(Math.min(0.9, pi));
+    if (h) { applyHit(e, s); s.hits++; hit = true; }
+    const miss = h ? 0 : 1 + d * 0.02;
+    addTracer(s, e.x + gauss() * miss, e.y + gauss() * miss, i * 0.07);
+  }
+  addSupp(e, W.supp * n * (exp < 0.5 ? 0.75 : 1) * (hit ? 1.5 : 1));
+  for (const o of G.soldiers) {
+    if (o !== e && o.side === e.side && o.active && dist(o.x, o.y, e.x, e.y) < 5) addSupp(o, W.supp * n * 0.4);
+  }
+  noteFiredUpon(e.team, s);
+  s.fireCD = W.cycle * randRange(0.8, 1.3) * (s.pinned ? 2.5 : 1) * (s.moving ? 1.6 : 1);
+  if (s.inMag <= 0) startReload(s);
+}
+
+// Fire at a place rather than a man: suppresses anyone near it, seen or not.
+function fireArea(s, x, y, rate) {
+  const W = s.weapon, d = dist(s.x, s.y, x, y);
+  if (d > W.range * 1.2 || G.map.los(s.x, s.y, POSTURE[s.posture].eye, x, y, 0.6) <= 0) { s.fireCD = 1; return; }
+  const n = Math.min(W.rounds, s.inMag);
+  s.inMag -= n; s.shots += n; s.lastFired = G.time;
+  s.facing = angleTo(s.x, s.y, x, y);
+  const spread = 2 + d * 0.015;
+  for (let i = 0; i < n; i++) addTracer(s, x + gauss() * spread, y + gauss() * spread, i * 0.07);
+  for (const o of G.soldiers) {
+    if (o.side === s.side || !o.active) continue;
+    const dd = dist(o.x, o.y, x, y);
+    if (dd > 8) continue;
+    addSupp(o, W.supp * n * 0.7 * (1 - dd / 10));
+    noteFiredUpon(o.team, s);
+    if (dd < 3) {
+      const exp = exposure(s, o);
+      for (let i = 0; i < n; i++) if (o.alive && o.health !== 'serious' && chance(0.025 * POSTURE[o.posture].size * exp)) { applyHit(o, s); s.hits++; }
+    }
+  }
+  s.fireCD = W.cycle * randRange(0.9, 1.4) * (s.pinned ? 2.5 : 1) / (rate || 1);
+  if (s.inMag <= 0) startReload(s);
+}
+
+function startReload(s) {
+  if (s.mags > 0) { s.mags--; s.reloadT = s.weapon.reload * randRange(0.9, 1.3); }
+  else if (!s.dryLogged) {
+    s.dryLogged = true;
+    if (s.side === 'blue') G.log(s.team.short + ': ' + s.label + ' is out of ammunition.', 'warn');
+  }
+}
+
+function addSupp(t, amount) {
+  if (!t.active) return;
+  t.supp = Math.min(100, t.supp + amount * t.squad.training * (t.team.shaken ? 1.3 : 1));
+}
+
+function noteFiredUpon(team, shooter) {
+  team.lastFiredUpon = G.time;
+  if (shooter) team.threats.set(shooter.id, G.time);
+}
+
+function addTracer(s, x, y, delay) {
+  G.effects.push({ type: 'tracer', x1: s.x, y1: s.y, x2: x, y2: y, t: -(delay || 0), life: 0.14, side: s.side });
+}
+
+// ---------------------------------------------------------------- indirect fire
+// Where a flat-trajectory rocket meets its first building or wall.
+function flatImpact(ax, ay, bx, by) {
+  const d = dist(ax, ay, bx, by), n = Math.ceil(d / 0.8);
+  for (let i = 4; i <= n; i++) {
+    const t = i / n, x = ax + (bx - ax) * t, y = ay + (by - ay) * t;
+    const k = G.map.terAt(x, y);
+    if (k === TER.BUILDING || k === TER.WALL) return { x, y };
+  }
+  return { x: bx, y: by };
+}
+
+function launchAt(s, x, y) {
+  const L = s.launcher, d = dist(s.x, s.y, x, y);
+  if (d < L.min || d > L.range) return false;
+  const sc = L.scatter * d * (1 + s.supp / 100) + 1;
+  let tx = x + gauss() * sc, ty = y + gauss() * sc;
+  const kind = s.launcherKey === 'RPG7' ? 'rpg' : '40mm';
+  if (kind === 'rpg') ({ x: tx, y: ty } = flatImpact(s.x, s.y, tx, ty));
+  G.projectiles.push({ x0: s.x, y0: s.y, x1: tx, y1: ty, t: 0, flight: dist(s.x, s.y, tx, ty) / L.vel + 0.05, fuse: 0,
+    spec: L, side: s.side, shooter: s, kind });
+  s.lRounds--; s.launchCD = L.cycle * randRange(1, 1.5); s.lastFired = G.time;
+  s.facing = angleTo(s.x, s.y, x, y);
+  G.effects.push({ type: 'flash', x: s.x, y: s.y, t: 0, life: 0.2 });
+  return true;
+}
+
+function throwFrag(s, x, y) {
+  const R = s.grenade;
+  let d = dist(s.x, s.y, x, y);
+  if (d > R.range) {
+    const a = angleTo(s.x, s.y, x, y);
+    x = s.x + Math.cos(a) * R.range; y = s.y + Math.sin(a) * R.range; d = R.range;
+  }
+  const sc = 1 + d * 0.08 + s.supp / 40;
+  G.projectiles.push({ x0: s.x, y0: s.y, x1: x + gauss() * sc, y1: y + gauss() * sc, t: 0, flight: d / 14, fuse: R.fuse,
+    spec: R, side: s.side, shooter: s, kind: 'frag' });
+  s.frags--; s.fragCD = 8; s.lastFired = G.time;
+  s.loadKg = s.computeLoad();
+  if (s.side === 'blue') G.log(s.team.short + ': Frag out!', 'fire');
+}
+
+function updateProjectiles(dt) {
+  for (let i = G.projectiles.length - 1; i >= 0; i--) {
+    const p = G.projectiles[i];
+    p.t += dt;
+    if (p.t >= p.flight + p.fuse) {
+      explode(p.x1, p.y1, p.spec, p.side, p.shooter);
+      G.projectiles.splice(i, 1);
+    }
+  }
+}
+
+function explode(x, y, spec, side, shooter) {
+  G.effects.push({ type: 'blast', x, y, r: spec.casualty, t: 0, life: 0.7 });
+  for (const o of G.soldiers) {
+    if (!o.alive || o.routed) continue;
+    const d = dist(o.x, o.y, x, y);
+    if (d < spec.casualty && o.health !== 'serious') {
+      const shielded = G.map.los(x, y, 0.4, o.x, o.y, POSTURE[o.posture].center) <= 0;
+      let p = d < spec.lethal ? 0.8 : 0.4 * (1 - (d - spec.lethal) / (spec.casualty - spec.lethal));
+      if (o.posture === 'prone') p *= 0.55;
+      if (shielded) p *= 0.12;
+      if (chance(p)) { applyHit(o, shooter, true); if (shooter && o.side !== shooter.side) shooter.hits++; }
+    }
+    if (d < spec.casualty * 1.6 && o.active) {
+      addSupp(o, 70 * (1 - d / (spec.casualty * 1.6)));
+      if (o.side !== side) noteFiredUpon(o.team, shooter);
+    }
+  }
+}
+
+// ---------------------------------------------------------------- wounds and morale
+function applyHit(t, shooter, blast) {
+  if (!t.alive || t.health === 'serious') return;
+  const r = rand();
+  let res;
+  if (t.health === 'light') res = r < 0.4 ? 'kia' : 'serious';
+  else res = r < (blast ? 0.3 : 0.25) ? 'kia' : r < 0.62 ? 'serious' : 'light';
+  t.health = res; t.lastHitAt = G.time;
+  G.stats[t.side][res]++;
+  if (res === 'light') {
+    t.supp = Math.min(100, t.supp + 40);
+    if (t.side === 'blue') G.log(t.team.short + ': ' + t.label + ' is wounded, still in the fight.', 'warn');
+    G.floaters.push({ id: t.id, x: t.x, y: t.y, text: 'WIA', t: 0, life: 1.6, side: t.side });
+    return;
+  }
+  t.path = []; t.posture = 'prone'; t.suppressPt = null; t.launchQueue = null; t.assault = false;
+  G.floaters.push({ id: t.id, x: t.x, y: t.y, text: res === 'kia' ? 'KIA' : 'CASUALTY', t: 0, life: 2, side: t.side });
+  casualtyEvent(t, res);
+}
+
+function casualtyEvent(t, res) {
+  const team = t.team, sq = t.squad;
+  const leader = t.billet === 'SL' || t.billet === 'TL';
+  team.morale -= leader ? 22 : 14;
+  for (const other of sq.teams) if (other !== team) other.morale -= t.billet === 'SL' ? 12 : 4;
+  for (const tm of [sq.hq, ...sq.teams]) tm.morale = clamp(tm.morale, 0, 100);
+  for (const o of sq.all) if (o !== t && o.active && dist(o.x, o.y, t.x, t.y) < 30) addSupp(o, 22);
+  if (t.side === 'blue') {
+    const what = res === 'kia' ? 'killed' : 'down, serious casualty';
+    G.log((leader ? t.title + ' ' : '') + t.label + ' is ' + what + '.', 'loss');
+    if (t.billet === 'TL' && team.leader) G.log(team.short + ': ' + team.leader.label + ' takes command of the team.', 'info');
+    if (t.billet === 'SL') {
+      const next = sq.teams.map(tm => tm.members.find(s => s.billet === 'TL' && s.active)).find(Boolean);
+      if (next) G.log(next.label + ' assumes command of the squad.', 'info');
+    }
+  } else if (G.known.blue.get(t.id)?.visible) {
+    G.log('Enemy ' + t.title.toLowerCase() + ' hit.', 'kill');
+  }
+}
+
+// ---- src/orders.js
+'use strict';
+// Orders to a Marine, a fire team or the squad, and the movement that carries them out.
+
+// A selection is { level: 'soldier' | 'team' | 'squad', soldier, team, squad }.
+function selMembers(sel) {
+  if (!sel) return [];
+  if (sel.level === 'soldier') return [sel.soldier];
+  if (sel.level === 'team') return sel.team.members.slice();
+  return sel.squad.all;
+}
+function selName(sel) {
+  if (sel.level === 'soldier') return sel.soldier.label;
+  if (sel.level === 'team') return sel.team.name;
+  return sel.squad.name;
+}
+function commandable(s) { return s.active && !s.routing; }
+
+function setPosture(s, p) {
+  if (s.posture === p) return;
+  s.postureBusy = Math.max(s.postureBusy, POSTURE_TIME[s.posture][p] || 0.5);
+  s.posture = p;
+}
+
+// Lowest posture from which a man can still see and fire on a point: prone, else kneeling.
+function firingPosture(s, x, y) {
+  if (G.map.los(s.x, s.y, POSTURE.prone.eye, x, y, 0.8) > 0.3) return 'prone';
+  if (G.map.los(s.x, s.y, POSTURE.kneel.eye, x, y, 0.8) > 0) return 'kneel';
+  return 'prone';
+}
+
+function turnToward(a, b, step) {
+  const d = angleDiff(a, b);
+  return Math.abs(d) <= step ? b : a + Math.sign(d) * step;
+}
+
+// Any new order to a man releases him from a bounding drill.
+function releaseControllers(members) {
+  G.controllers = G.controllers.filter(c => !c.members.some(m => members.includes(m)));
+}
+
+function orderMove(s, x, y, mode) {
+  if (!commandable(s)) return false;
+  const p = G.map.findPath(s.x, s.y, x, y);
+  s.path = p || [];
+  s.moveMode = mode;
+  s.faceAngle = null;
+  return true;
+}
+
+function teamMove(team, x, y, mode, heading) {
+  const act = team.members.filter(commandable);
+  if (!act.length) return;
+  if (heading == null) { const c = centroid(act); heading = angleTo(c.x, c.y, x, y); }
+  act.forEach((s, i) => {
+    const o = teamSlot(team.formation, i), w = rotateOffset(o.x, o.y, heading);
+    orderMove(s, x + w.x, y + w.y, mode);
+  });
+}
+
+function squadMove(sq, x, y, mode) {
+  const act = sq.all.filter(commandable);
+  if (!act.length) return;
+  const c = centroid(act), heading = angleTo(c.x, c.y, x, y);
+  const teams = sq.teams.filter(t => t.members.some(commandable));
+  teams.forEach((t, k) => {
+    const o = squadSlot(sq.formation, k, teams.length), w = rotateOffset(o.x, o.y, heading);
+    teamMove(t, x + w.x, y + w.y, mode, heading);
+  });
+  const sl = sq.hq.members[0];
+  if (commandable(sl)) {
+    const o = squadLeaderSlot(sq.formation), w = rotateOffset(o.x, o.y, heading);
+    orderMove(sl, x + w.x, y + w.y, mode);
+  }
+}
+
+function groupMove(sel, x, y, mode) {
+  const members = selMembers(sel);
+  releaseControllers(members);
+  for (const s of members) { s.assault = false; s.launchQueue = null; }
+  if (sel.level === 'soldier') orderMove(sel.soldier, x, y, mode);
+  else if (sel.level === 'team') teamMove(sel.team, x, y, mode);
+  else squadMove(sel.squad, x, y, mode);
+}
+
+// Nearest enemy this man's side knows about, or the last man who shot at his team.
+function threatPoint(s) {
+  let best = null, bd = Infinity;
+  for (const k of G.known[s.side].values()) {
+    if (G.time - k.t > 30) continue;
+    const e = G.byId.get(k.id);
+    if (!e || !e.active) continue;
+    const d = dist(s.x, s.y, k.x, k.y);
+    if (d < bd) { bd = d; best = { x: k.x, y: k.y }; }
+  }
+  if (best) return best;
+  for (const [id, t] of s.team.threats) {
+    if (G.time - t > 20) continue;
+    const e = G.byId.get(id);
+    if (e) return { x: e.x + gauss() * 15, y: e.y + gauss() * 15 };
+  }
+  return null;
+}
+
+function threatCentroid(side, members) {
+  const pts = [];
+  for (const k of G.known[side].values()) {
+    const e = G.byId.get(k.id);
+    if (e && e.active && G.time - k.t < 60) pts.push(k);
+  }
+  if (pts.length) return centroid(pts);
+  const c = centroid(members);
+  return { x: c.x, y: side === 'blue' ? 0 : MAP_H };
+}
+
+// ---------------------------------------------------------------- bounding overwatch
+// Elements take turns: one rushes forward past the others while the rest
+// lie in overwatch with fire at will, until every element reaches the objective.
+class BoundController {
+  constructor(elements, x, y, label) {
+    this.elements = elements.filter(e => e.some(commandable));
+    this.members = this.elements.flat();
+    this.label = label;
+    this.dest = { x, y };
+    this.start = centroid(this.members);
+    this.total = Math.max(1, dist(this.start.x, this.start.y, x, y));
+    this.heading = angleTo(this.start.x, this.start.y, x, y);
+    this.prog = this.elements.map(() => 0);
+    this.boundLen = this.elements.length > 2 ? 35 : 25;
+    this.idx = 0; this.timer = 0; this.done = false;
+    for (const s of this.members) { s.path = []; s.assault = false; s.fireControl = 'free'; }
+    this.startBound();
+  }
+  slotFor(k, prog, i, m) {
+    const n = this.elements.length;
+    const lat = (k - (n - 1) / 2) * (n > 2 ? 24 : 12) + (i - (m - 1) / 2) * 6;
+    const w = rotateOffset(lat, 0, this.heading);
+    return { x: lerp(this.start.x, this.dest.x, prog) + w.x, y: lerp(this.start.y, this.dest.y, prog) + w.y };
+  }
+  overwatchPosture(s) {
+    const t = threatPoint(s) || { x: s.x + Math.cos(this.heading) * 80, y: s.y + Math.sin(this.heading) * 80 };
+    return firingPosture(s, t.x, t.y);
+  }
+  startBound() {
+    const n = this.elements.length;
+    for (let tries = 0; tries < n; tries++) {
+      const k = (this.idx + tries) % n;
+      if (this.prog[k] < 1 && this.elements[k].some(commandable)) { this.idx = k; break; }
+      if (tries === n - 1) { this.finish(); return; }
+    }
+    const k = this.idx;
+    const np = Math.min(1, Math.max(...this.prog) + this.boundLen / this.total);
+    this.prog[k] = np;
+    const movers = this.elements[k].filter(commandable);
+    movers.forEach((s, i) => {
+      const p = this.slotFor(k, np, i, movers.length);
+      orderMove(s, p.x, p.y, 'rush');
+    });
+    for (const s of this.members) if (!movers.includes(s)) s.homePosture = this.overwatchPosture(s);
+    this.timer = 0;
+  }
+  update(dt) {
+    this.timer += dt;
+    const movers = this.elements[this.idx].filter(commandable);
+    const arrived = movers.every(s => !s.moving || s.pinned);
+    if ((arrived && this.timer > 1) || this.timer > 40) {
+      for (const s of movers) { s.path = []; s.homePosture = this.overwatchPosture(s); }
+      if (this.prog.every(p => p >= 1)) this.finish();
+      else { this.idx = (this.idx + 1) % this.elements.length; this.startBound(); }
+    }
+  }
+  finish() {
+    this.done = true;
+    if (this.members[0].side === 'blue') G.log(this.label + ': Set. Bounds complete.', 'info');
+  }
+}
+
+function boundElements(sel) {
+  if (sel.level === 'squad') {
+    const teams = sel.squad.teams.map(t => t.members.filter(commandable)).filter(e => e.length);
+    const sl = sel.squad.hq.members[0];
+    if (commandable(sl) && teams.length) teams[Math.min(1, teams.length - 1)].push(sl);
+    return teams;
+  }
+  // Within a fire team, two buddy pairs: team leader and rifleman, automatic rifleman and grenadier.
+  const m = sel.team.members.filter(commandable);
+  const a = [], b = [];
+  sel.team.members.forEach((s, i) => { if (!commandable(s)) return; ([0, 3, 4].includes(i) ? a : b).push(s); });
+  return [a, b].filter(e => e.length).length > 1 ? [a, b] : m.map(s => [s]);
+}
+
+// ---------------------------------------------------------------- the order set
+function issueOrder(sel, type, arg) {
+  const members = selMembers(sel).filter(commandable);
+  const who = selName(sel);
+  if (!members.length) { G.toast(who + ' cannot take orders.'); return; }
+  const team = sel.level === 'soldier' ? sel.soldier.team : sel.team;
+
+  switch (type) {
+    case 'move':
+      groupMove(sel, arg.x, arg.y, G.ui.moveMode);
+      break;
+    case 'posture':
+      for (const s of members) { s.homePosture = arg; if (!s.moving) setPosture(s, arg); }
+      G.toast(who + ': ' + POSTURE[arg].label.toLowerCase() + '.');
+      break;
+    case 'fire':
+      for (const s of members) { s.fireControl = arg; if (arg === 'hold') { s.suppressPt = null; s.priorityId = null; } }
+      G.toast(who + ': ' + { free: 'Fire at will.', return: 'Return fire only.', hold: 'Hold fire.' }[arg]);
+      break;
+    case 'formation':
+      if (sel.level === 'squad') sel.squad.formation = arg; else team.formation = arg;
+      G.toast(who + ': formation ' + FORMATIONS[arg].label.toLowerCase() + '.');
+      break;
+    case 'halt':
+      releaseControllers(members);
+      for (const s of members) { s.path = []; s.assault = false; s.launchQueue = null; }
+      G.toast(who + ': Halt.');
+      break;
+    case 'cover': {
+      releaseControllers(members);
+      const reserved = [];
+      for (const s of members) {
+        s.assault = false;
+        const t = threatPoint(s);
+        if (!t) { s.path = []; s.homePosture = 'prone'; continue; }
+        const c = G.map.findCover(s.x, s.y, t.x, t.y, 14, reserved);
+        reserved.push(c);
+        orderMove(s, c.x, c.y, 'rush');
+        s.homePosture = c.posture;
+      }
+      G.toast(who + ': Take cover.');
+      break;
+    }
+    case 'fallback': {
+      releaseControllers(members);
+      const c = centroid(members), t = threatCentroid(members[0].side, members);
+      const a = angleTo(t.x, t.y, c.x, c.y);
+      for (const s of members) {
+        s.assault = false; s.suppressPt = null; s.launchQueue = null;
+        orderMove(s, clamp(s.x + Math.cos(a) * 45, 2, MAP_W - 2), clamp(s.y + Math.sin(a) * 45, 2, MAP_H - 2), 'rush');
+        s.homePosture = 'prone';
+      }
+      G.toast(who + ': Fall back.');
+      break;
+    }
+    case 'assault':
+      groupMove(sel, arg.x, arg.y, 'walk');
+      for (const s of members) { s.assault = true; s.fireControl = 'free'; s.homePosture = 'kneel'; }
+      G.log(who + ': Assault through!', 'fire');
+      break;
+    case 'bound': {
+      if (sel.level === 'soldier') { groupMove(sel, arg.x, arg.y, 'rush'); break; }
+      releaseControllers(members);
+      for (const s of members) { s.launchQueue = null; }
+      G.controllers.push(new BoundController(boundElements(sel), arg.x, arg.y, who));
+      G.toast(who + ': Bounding overwatch.');
+      break;
+    }
+    case 'suppress':
+      for (const s of members) { s.suppressPt = { x: arg.x, y: arg.y }; s.priorityId = null; if (s.fireControl === 'hold') s.fireControl = 'free'; }
+      G.log(who + ': Suppressing, bearing ' + pad3(bearing(members[0].x, members[0].y, arg.x, arg.y)) + '.', 'fire');
+      break;
+    case 'lift':
+      for (const s of members) { s.suppressPt = null; s.priorityId = null; }
+      G.toast(who + ': Lift fire.');
+      break;
+    case 'engage':
+      for (const s of members) { s.priorityId = arg.id; s.suppressPt = null; if (s.fireControl === 'hold') s.fireControl = 'free'; }
+      G.toast(who + ': Engage the ' + arg.title.toLowerCase() + '.');
+      break;
+    case 'launcher': {
+      const gs = members.filter(s => s.launcher && s.lRounds > 0);
+      if (!gs.length) { G.toast('No grenadier with 40mm rounds in ' + who + '.'); break; }
+      let any = false;
+      for (const s of gs) {
+        const d = dist(s.x, s.y, arg.x, arg.y);
+        if (d < s.launcher.min || d > s.launcher.range) continue;
+        s.launchQueue = { x: arg.x, y: arg.y, count: 3 }; any = true;
+      }
+      if (any) G.log(who + ': Firing 40mm, three rounds.', 'fire');
+      else G.toast('Target is outside 40mm range (' + gs[0].launcher.min + '–' + gs[0].launcher.range + ' m).');
+      break;
+    }
+    case 'frag': {
+      const cands = members.filter(s => s.frags > 0 && !s.moving && dist(s.x, s.y, arg.x, arg.y) <= s.grenade.range + 4)
+        .sort((a, b) => dist(a.x, a.y, arg.x, arg.y) - dist(b.x, b.y, arg.x, arg.y));
+      if (!cands.length) { G.toast('Nobody halted within ' + GRENADES.M67.range + ' m with a grenade.'); break; }
+      throwFrag(cands[0], arg.x, arg.y);
+      break;
+    }
+    case 'face':
+      for (const s of members) { s.faceAngle = angleTo(s.x, s.y, arg.x, arg.y); }
+      G.toast(who + ': Watching bearing ' + pad3(bearing(members[0].x, members[0].y, arg.x, arg.y)) + '.');
+      break;
+  }
+}
+
+// ---------------------------------------------------------------- movement
+function updateMovement(s, dt) {
+  if (!s.active) return;
+  if (s.postureBusy > 0) { s.postureBusy -= dt; return; }
+
+  if (!s.path.length) {
+    s.assault = false;
+    let want = s.homePosture;
+    // A man ordered prone rises to a knee if that is the only way to see the enemy.
+    if (want === 'prone') {
+      s.postureCheckT -= dt;
+      if (s.postureCheckT <= 0) {
+        s.postureCheckT = 2;
+        const t = s.fireControl !== 'hold' ? threatPoint(s) : null;
+        s.postureAdj = t ? firingPosture(s, t.x, t.y) : null;
+      }
+      if (s.postureAdj) want = s.postureAdj;
+    }
+    if (s.supp > 70) want = 'prone';
+    else if (s.supp > 40 && want === 'stand') want = 'kneel';
+    if (s.posture !== want) setPosture(s, want);
+    if (s.faceAngle != null && G.time - s.lastFired > 2) s.facing = turnToward(s.facing, s.faceAngle, dt * 3);
+    s.fatigue = Math.max(0, s.fatigue - dt * 4);
+    return;
+  }
+
+  let mode = s.moveMode;
+  if (mode === 'rush' && s.fatigue > 85) mode = 'walk';
+  if (s.pinned && mode !== 'crawl' && !s.routing) {
+    if (s.posture !== 'prone') setPosture(s, 'prone');
+    return;
+  }
+  let want = MOVE[mode].posture, spMul = 1;
+  if (mode === 'walk' && (s.suppressed || s.assault)) { want = 'kneel'; spMul = 0.65; }
+  if (s.posture !== want) { setPosture(s, want); return; }
+
+  const tgt = s.path[0], d = dist(s.x, s.y, tgt.x, tgt.y);
+  const ter = TERRAIN[G.map.terAt(s.x, s.y)].speed || 0.3;
+  const sp = MOVE[mode].speed * spMul * ter * s.loadFactor * (s.health === 'light' ? 0.7 : 1) * (s.fatigue > 60 && mode === 'rush' ? 0.8 : 1);
+  const step = sp * dt;
+  const a = angleTo(s.x, s.y, tgt.x, tgt.y);
+  if (step >= d) { s.x = tgt.x; s.y = tgt.y; s.path.shift(); }
+  else { s.x += Math.cos(a) * step; s.y += Math.sin(a) * step; }
+  if (!(s.assault && G.time - s.lastFired < 1.5)) s.facing = turnToward(s.facing, a, dt * 6);
+  s.fatigue = clamp(s.fatigue + (MOVE[mode].fatigue - 1.5) * dt, 0, 100);
+}
+
+// ---- src/ai.js
+'use strict';
+// Enemy squad AI. On contact the heaviest group becomes the base of fire and the
+// others try to flank and assault. It breaks contact after heavy losses.
+
+const AI = { mode: 'defend', objective: null, contact: false, withdrawing: false, timer: 0, lastContact: -99 };
+
+function initAI(mode, objective) {
+  AI.mode = mode; AI.objective = objective;
+  AI.contact = false; AI.withdrawing = false; AI.timer = 2; AI.lastContact = -99;
+  for (const t of [G.squads.red.hq, ...G.squads.red.teams]) t.task = null;
+}
+
+// Defenders start dug in: each man takes the best cover near the position.
+function setupDefense(sq, threat) {
+  const reserved = [];
+  for (const s of sq.all) {
+    const c = G.map.findCover(s.x, s.y, threat.x, threat.y, 16, reserved);
+    reserved.push(c);
+    s.x = c.x; s.y = c.y;
+    s.homePosture = c.posture; s.posture = c.posture;
+    s.facing = angleTo(s.x, s.y, threat.x, threat.y);
+    s.faceAngle = s.facing;
+  }
+}
+
+function aiTakeCover(members, threat) {
+  const reserved = [];
+  for (const s of members) {
+    s.assault = false;
+    const c = G.map.findCover(s.x, s.y, threat.x, threat.y, 14, reserved);
+    reserved.push(c);
+    orderMove(s, c.x, c.y, 'rush');
+    s.homePosture = c.posture;
+    s.faceAngle = angleTo(c.x, c.y, threat.x, threat.y);
+  }
+}
+
+function firepower(t) {
+  return t.members.reduce((n, s) => n + (s.active ? (s.billet === 'MG' ? 4 : s.billet === 'AR' ? 2.5 : 1) : 0), 0);
+}
+
+function assignTasks(sq) {
+  const teams = sq.teams.filter(t => t.members.some(commandable)).sort((a, b) => firepower(b) - firepower(a));
+  let maneuvers = 0;
+  teams.forEach((t, i) => {
+    if (i === 0) { t.task = { type: 'base' }; return; }
+    const go = t.morale > 45 && (AI.mode === 'advance' ? true : maneuvers === 0 && chance(0.55));
+    t.task = go ? { type: 'maneuver', phase: 'start', t0: G.time } : { type: 'hold' };
+    if (go) maneuvers++;
+  });
+  sq.hq.task = { type: 'hold' };
+}
+
+function updateAI(dt) {
+  AI.timer -= dt;
+  if (AI.timer > 0) return;
+  AI.timer = 1.5;
+  const sq = G.squads.red;
+  const act = sq.all.filter(commandable);
+  if (!act.length || AI.withdrawing) return;
+
+  if (sq.active.length / sq.all.length < 0.45) {
+    AI.withdrawing = true;
+    for (const t of [sq.hq, ...sq.teams]) startRouting(t, 'withdraw');
+    if (sq.all.some(s => G.known.blue.get(s.id)?.visible)) G.log('Enemy is breaking contact.', 'kill');
+    return;
+  }
+
+  const contacts = [...G.known.red.values()].filter(k => G.time - k.t < 30 && G.byId.get(k.id)?.active);
+  if (contacts.length) AI.lastContact = G.time;
+  const enemyC = contacts.length ? centroid(contacts) : null;
+
+  if (!enemyC) {
+    if (AI.contact && G.time - AI.lastContact > 40) { AI.contact = false; for (const t of sq.teams) t.task = null; }
+    if (!AI.contact && AI.mode === 'advance' && act.every(s => !s.moving)) {
+      const c = centroid(act);
+      if (dist(c.x, c.y, AI.objective.x, AI.objective.y) > 15) {
+        for (const s of act) { s.homePosture = 'kneel'; }
+        squadMove(sq, AI.objective.x, AI.objective.y, 'walk');
+      }
+    }
+    return;
+  }
+
+  if (!AI.contact) {
+    AI.contact = true;
+    assignTasks(sq);
+    if (AI.mode === 'advance') {
+      for (const s of act) { s.path = []; }
+    }
+  }
+
+  for (const t of [sq.hq, ...sq.teams]) {
+    const m = t.members.filter(commandable);
+    if (!m.length || !t.task) continue;
+    runTask(t, m, enemyC);
+  }
+}
+
+function runTask(t, m, enemyC) {
+  const task = t.task;
+  const avgSupp = m.reduce((n, s) => n + s.supp, 0) / m.length;
+
+  if (task.type === 'base' || task.type === 'hold') {
+    if (!task.covered) { aiTakeCover(m, enemyC); task.covered = true; }
+    // Automatic weapons in the base of fire keep rounds on the enemy's last position.
+    if (task.type === 'base') {
+      for (const s of m) {
+        if ((s.billet === 'MG' || s.billet === 'AR') && !s.targetId) s.suppressPt = { x: enemyC.x + gauss() * 4, y: enemyC.y + gauss() * 4 };
+      }
+    }
+    return;
+  }
+
+  // Maneuver: flank, then assault. Give up and go to ground when the fire is too heavy.
+  if (t.morale < 35 || avgSupp > 65) {
+    t.task = { type: 'hold' };
+    return;
+  }
+  const c = centroid(m);
+  if (task.phase === 'start') {
+    const toUs = angleTo(enemyC.x, enemyC.y, c.x, c.y);
+    const options = [1, -1].map(side => {
+      const a = toUs + side * Math.PI / 2;
+      const x = clamp(enemyC.x + Math.cos(a) * 55 + Math.cos(toUs) * 25, 6, MAP_W - 6);
+      const y = clamp(enemyC.y + Math.sin(a) * 55 + Math.sin(toUs) * 25, 6, MAP_H - 6);
+      let cover = 0;
+      for (let i = 1; i <= 8; i++) {
+        const k = G.map.terAt(lerp(c.x, x, i / 8), lerp(c.y, y, i / 8));
+        if (k === TER.WOODS || k === TER.GRASS || k === TER.WALL || k === TER.BUILDING) cover++;
+      }
+      return { x, y, score: cover + rand() * 2 };
+    });
+    const p = options[0].score > options[1].score ? options[0] : options[1];
+    task.flank = p;
+    task.phase = 'flank';
+    task.t0 = G.time;
+    teamMove(t, p.x, p.y, 'walk');
+    return;
+  }
+  if (task.phase === 'flank') {
+    if (m.every(s => !s.moving || s.pinned) || G.time - task.t0 > 70) {
+      task.phase = 'assault';
+      task.t0 = G.time;
+      teamMove(t, enemyC.x, enemyC.y, 'walk');
+      for (const s of m) { s.assault = true; s.fireControl = 'free'; }
+    }
+    return;
+  }
+  if (task.phase === 'assault') {
+    if (m.every(s => !s.moving)) {
+      if (dist(c.x, c.y, enemyC.x, enemyC.y) > 20 && G.time - task.t0 < 90) {
+        teamMove(t, enemyC.x, enemyC.y, 'walk');
+        for (const s of m) s.assault = true;
+      } else {
+        t.task = { type: 'hold' };
+      }
+    }
+  }
+}
+
+// ---- src/symbols.js
+'use strict';
+// Billet symbols from the Marine rifle squad organization figure:
+// squad leader (circle, X, lower half solid), fire team leader (slash),
+// automatic rifleman (arrow), grenadier (G), rifleman (R).
+// Enemy-only billets (machine gunner, RPG, marksman) are placeholders until
+// each foreign organization is modeled.
+
+const SIDE_FILL = { blue: '#80e0ff', red: '#ff8080' };
+const INK = '#0d1418';
+
+function drawSymbol(ctx, x, y, r, billet, o) {
+  o = o || {};
+  const fill = o.fill || SIDE_FILL[o.side || 'blue'], ink = o.ink || INK;
+  ctx.save();
+  ctx.translate(x, y);
+  if (o.alpha != null) ctx.globalAlpha *= o.alpha;
+  if (o.prone) ctx.scale(1.12, 0.74);
+  const lw = Math.max(1.2, r * 0.13);
+  ctx.lineWidth = lw;
+  ctx.lineCap = 'round';
+  ctx.strokeStyle = ink;
+  ctx.fillStyle = fill;
+  ctx.beginPath(); ctx.arc(0, 0, r, 0, Math.PI * 2); ctx.fill();
+  const k = r * 0.7071;
+  switch (billet) {
+    case 'SL': {
+      ctx.fillStyle = ink;
+      ctx.beginPath(); ctx.arc(0, 0, r, 0, Math.PI); ctx.closePath(); ctx.fill();
+      ctx.beginPath(); ctx.moveTo(-k, -k); ctx.lineTo(0, 0); ctx.lineTo(k, -k); ctx.stroke();
+      ctx.strokeStyle = fill;
+      ctx.beginPath(); ctx.moveTo(-k, k); ctx.lineTo(0, 0); ctx.lineTo(k, k); ctx.stroke();
+      break;
+    }
+    case 'TL':
+      ctx.beginPath(); ctx.moveTo(-k, k); ctx.lineTo(k, -k); ctx.stroke();
+      break;
+    case 'AR':
+    case 'MG': {
+      ctx.beginPath(); ctx.moveTo(0, r * 0.62); ctx.lineTo(0, -r * 0.15); ctx.stroke();
+      ctx.fillStyle = ink;
+      ctx.beginPath(); ctx.moveTo(0, -r * 0.7); ctx.lineTo(r * 0.38, -r * 0.08); ctx.lineTo(-r * 0.38, -r * 0.08); ctx.closePath(); ctx.fill();
+      if (billet === 'MG') { ctx.beginPath(); ctx.moveTo(-r * 0.36, r * 0.36); ctx.lineTo(r * 0.36, r * 0.36); ctx.stroke(); }
+      break;
+    }
+    default: {
+      const txt = { G: 'G', R: 'R', MM: 'M', RPG: 'AT' }[billet] || billet;
+      ctx.fillStyle = ink;
+      ctx.font = '700 ' + Math.round(r * (txt.length > 1 ? 0.9 : 1.25)) + 'px "Saira Condensed", "Arial Narrow", sans-serif';
+      ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+      ctx.fillText(txt, 0, r * 0.06);
+    }
+  }
+  ctx.strokeStyle = ink;
+  ctx.lineWidth = lw;
+  ctx.beginPath(); ctx.arc(0, 0, r, 0, Math.PI * 2); ctx.stroke();
+  ctx.restore();
+}
+
+// Small standalone symbol for the roster.
+function symbolCanvas(billet, side, size) {
+  const c = document.createElement('canvas');
+  const dpr = Math.min(window.devicePixelRatio || 1, 2);
+  c.width = c.height = size * dpr;
+  c.style.width = c.style.height = size + 'px';
+  const ctx = c.getContext('2d');
+  ctx.scale(dpr, dpr);
+  drawSymbol(ctx, size / 2, size / 2, size / 2 - 1.5, billet, { side });
+  return c;
+}
+
+// ---- src/render.js
+'use strict';
+// Drawing: a pre-rendered 2.5D terrain sheet (hill shading, contours, extruded
+// buildings, walls and trees), with units, fire and orders drawn over it each frame.
+
+const R = { canvas: null, ctx: null, w: 0, h: 0, dpr: 1, cam: { x: MAP_W / 2, y: MAP_H / 2, zoom: 4 }, terrain: null, minZoom: 1 };
+const PXM = 5;     // terrain sheet pixels per meter
+const TILT = 0.55; // screen rise per meter of height, for the oblique 2.5D look
+
+function initRender(canvas) {
+  R.canvas = canvas;
+  R.ctx = canvas.getContext('2d');
+  resizeView();
+  window.addEventListener('resize', resizeView);
+}
+
+function resizeView() {
+  const c = R.canvas;
+  R.dpr = Math.min(window.devicePixelRatio || 1, 2);
+  R.w = c.clientWidth; R.h = c.clientHeight;
+  c.width = Math.round(R.w * R.dpr); c.height = Math.round(R.h * R.dpr);
+  R.minZoom = Math.min(R.w / MAP_W, R.h / MAP_H) * 0.9;
+  clampCam();
+}
+
+function clampCam() {
+  const c = R.cam;
+  c.zoom = clamp(c.zoom, R.minZoom, 16);
+  c.x = clamp(c.x, 0, MAP_W); c.y = clamp(c.y, 0, MAP_H);
+}
+
+function fitCamera(focus) {
+  R.cam.zoom = Math.max(R.minZoom, Math.min(R.w / (R.w < 600 ? 90 : 130), R.h / 100));
+  R.cam.x = focus ? focus.x : MAP_W / 2;
+  R.cam.y = focus ? focus.y - 25 : MAP_H / 2;
+  clampCam();
+}
+
+function toScreen(x, y) {
+  const z = R.cam.zoom;
+  return { x: R.w / 2 + (x - R.cam.x) * z, y: R.h / 2 + (y - R.cam.y) * z };
+}
+function toWorld(sx, sy) {
+  const z = R.cam.zoom;
+  return { x: R.cam.x + (sx - R.w / 2) / z, y: R.cam.y + (sy - R.h / 2) / z };
+}
+
+// ---------------------------------------------------------------- terrain sheet
+const GROUND = [
+  [126, 144, 86],  // open
+  [152, 156, 84],  // tall grass
+  [70, 88, 54],    // woods floor
+  [178, 160, 122], // road
+  [96, 92, 86],    // building footprint
+  [128, 140, 90],  // under a wall
+  [124, 100, 72],  // plowed
+];
+
+function buildTerrain(map) {
+  const W = MAP_W * PXM, H = MAP_H * PXM;
+  const c = document.createElement('canvas');
+  c.width = W; c.height = H;
+  const ctx = c.getContext('2d');
+  const img = ctx.createImageData(W, H), px = img.data;
+  const elev = new Float32Array(W * H);
+  for (let y = 0; y < H; y++) for (let x = 0; x < W; x++) elev[y * W + x] = map.elevAt((x + 0.5) / PXM, (y + 0.5) / PXM);
+  const L = [-0.55, -0.6, 0.58];
+  for (let y = 0; y < H; y++) {
+    for (let x = 0; x < W; x++) {
+      const i = y * W + x, wx = (x + 0.5) / PXM, wy = (y + 0.5) / PXM;
+      const k = map.terAt(wx, wy);
+      let [r, g, b] = GROUND[k];
+      const n = ((Math.sin(x * 12.9898 + y * 78.233) * 43758.5453) % 1) * 10;
+      r += n; g += n; b += n * 0.6;
+      if (k === TER.PLOWED && (wx * 0.9 + wy * 0.2) % 1.4 < 0.45) { r -= 16; g -= 14; b -= 10; }
+      if (k === TER.GRASS && (x * 7 + y * 3) % 11 === 0) { r += 14; g += 12; }
+      if (k === TER.ROAD) { const e = Math.abs(((wy - map.roadY[Math.floor(wx / CELL)] || 0)) - 2); if (e > 1.6) { r -= 14; g -= 14; b -= 12; } }
+      const xl = Math.max(0, x - 1), xr = Math.min(W - 1, x + 1), yu = Math.max(0, y - 1), yd = Math.min(H - 1, y + 1);
+      const ex = (elev[y * W + xr] - elev[y * W + xl]) * PXM / 2, ey = (elev[yd * W + x] - elev[yu * W + x]) * PXM / 2;
+      const nl = Math.hypot(ex, ey, 1);
+      const shade = 0.82 + 0.45 * ((-ex * L[0] - ey * L[1] + L[2]) / nl - 0.58);
+      r *= shade; g *= shade; b *= shade;
+      // Contour every meter of elevation, heavier every five.
+      const e0 = elev[i], f0 = Math.floor(e0);
+      if (Math.floor(elev[y * W + xr]) !== f0 || Math.floor(elev[yd * W + x]) !== f0) {
+        const heavy = Math.floor(Math.max(elev[y * W + xr], elev[yd * W + x])) % 5 === 0;
+        const a = heavy ? 0.55 : 0.3;
+        r = r * (1 - a) + 92 * a; g = g * (1 - a) + 64 * a; b = b * (1 - a) + 34 * a;
+      }
+      px[i * 4] = r; px[i * 4 + 1] = g; px[i * 4 + 2] = b; px[i * 4 + 3] = 255;
+    }
+  }
+  ctx.putImageData(img, 0, 0);
+  ctx.scale(PXM, PXM);
+
+  // 50 m grid
+  ctx.strokeStyle = 'rgba(20,24,16,0.22)';
+  ctx.lineWidth = 0.25;
+  for (let x = 50; x < MAP_W; x += 50) { ctx.beginPath(); ctx.moveTo(x, 0); ctx.lineTo(x, MAP_H); ctx.stroke(); }
+  for (let y = 50; y < MAP_H; y += 50) { ctx.beginPath(); ctx.moveTo(0, y); ctx.lineTo(MAP_W, y); ctx.stroke(); }
+
+  // Extruded features, drawn back to front.
+  const items = [];
+  const isWall = (cx, cy) => map.inGrid(cx, cy) && map.ter[cy * GW + cx] === TER.WALL;
+  for (let cy = 0; cy < GH; cy++) for (let cx = 0; cx < GW; cx++) {
+    if (!isWall(cx, cy)) continue;
+    // Join each wall cell to its neighbors; a diagonal only where no corner cell already joins them.
+    const links = [];
+    if (isWall(cx + 1, cy)) links.push([1, 0]);
+    if (isWall(cx, cy + 1)) links.push([0, 1]);
+    if (isWall(cx + 1, cy + 1) && !isWall(cx + 1, cy) && !isWall(cx, cy + 1)) links.push([1, 1]);
+    if (isWall(cx - 1, cy + 1) && !isWall(cx - 1, cy) && !isWall(cx, cy + 1)) links.push([-1, 1]);
+    const lone = !links.length && !isWall(cx - 1, cy) && !isWall(cx, cy - 1) && !isWall(cx - 1, cy - 1) && !isWall(cx + 1, cy - 1);
+    const x = (cx + 0.5) * CELL, y = (cy + 0.5) * CELL;
+    for (const [dx, dy] of links) items.push({ y: y + dy * CELL, kind: 'wall', x1: x, y1: y, x2: x + dx * CELL, y2: y + dy * CELL });
+    if (lone) items.push({ y, kind: 'wall', x1: x - 0.5, y1: y, x2: x + 0.5, y2: y });
+  }
+  for (const b of map.buildings) items.push({ y: b.y1, kind: 'building', b });
+  for (const t of map.trees) items.push({ y: t.y, kind: 'tree', t });
+  items.sort((a, b) => a.y - b.y);
+
+  // Shadows first so they never fall across a roof.
+  for (const it of items) {
+    if (it.kind === 'building') {
+      const b = it.b, s = b.height * 0.45;
+      ctx.fillStyle = 'rgba(18,20,14,0.35)';
+      ctx.beginPath();
+      ctx.moveTo(b.x1, b.y0); ctx.lineTo(b.x1 + s, b.y0 + s * 0.7); ctx.lineTo(b.x1 + s, b.y1 + s * 0.7);
+      ctx.lineTo(b.x0 + s, b.y1 + s * 0.7); ctx.lineTo(b.x0, b.y1); ctx.closePath(); ctx.fill();
+    } else if (it.kind === 'tree') {
+      const t = it.t;
+      ctx.fillStyle = 'rgba(18,24,12,0.32)';
+      ctx.beginPath(); ctx.ellipse(t.x + t.h * 0.22, t.y + t.h * 0.12, t.r * 1.05, t.r * 0.8, 0, 0, Math.PI * 2); ctx.fill();
+    }
+  }
+  for (const it of items) {
+    if (it.kind === 'wall') {
+      const h = 1.0 * TILT;
+      ctx.lineCap = 'round';
+      ctx.strokeStyle = 'rgba(18,20,14,0.3)'; ctx.lineWidth = 1.5;
+      ctx.beginPath(); ctx.moveTo(it.x1 + 0.5, it.y1 + 0.4); ctx.lineTo(it.x2 + 0.5, it.y2 + 0.4); ctx.stroke();
+      ctx.strokeStyle = '#6c665b'; ctx.lineWidth = 1.1;
+      ctx.beginPath(); ctx.moveTo(it.x1, it.y1); ctx.lineTo(it.x2, it.y2); ctx.stroke();
+      ctx.strokeStyle = '#b4ad9c'; ctx.lineWidth = 0.9;
+      ctx.beginPath(); ctx.moveTo(it.x1, it.y1 - h); ctx.lineTo(it.x2, it.y2 - h); ctx.stroke();
+      ctx.strokeStyle = 'rgba(90,84,72,0.6)'; ctx.lineWidth = 0.25; ctx.setLineDash([0.5, 0.9]);
+      ctx.beginPath(); ctx.moveTo(it.x1, it.y1 - h); ctx.lineTo(it.x2, it.y2 - h); ctx.stroke();
+      ctx.setLineDash([]);
+    } else if (it.kind === 'building') {
+      const b = it.b, h = b.height * TILT, w = b.x1 - b.x0, d = b.y1 - b.y0;
+      ctx.fillStyle = '#b3a993'; ctx.fillRect(b.x0, b.y1 - h, w, h);
+      ctx.fillStyle = 'rgba(40,36,30,0.55)';
+      for (let x = b.x0 + 2; x < b.x1 - 1.5; x += 3.2) ctx.fillRect(x, b.y1 - h * 0.62, 1.1, h * 0.3);
+      ctx.fillStyle = b.roof; ctx.fillRect(b.x0, b.y0 - h, w, d);
+      ctx.strokeStyle = 'rgba(20,16,12,0.5)'; ctx.lineWidth = 0.25;
+      if (w >= d) { ctx.beginPath(); ctx.moveTo(b.x0 + 0.5, b.y0 - h + d / 2); ctx.lineTo(b.x1 - 0.5, b.y0 - h + d / 2); ctx.stroke(); }
+      else { ctx.beginPath(); ctx.moveTo(b.x0 + w / 2, b.y0 - h + 0.5); ctx.lineTo(b.x0 + w / 2, b.y1 - h - 0.5); ctx.stroke(); }
+      ctx.fillStyle = 'rgba(255,255,255,0.08)'; ctx.fillRect(b.x0, b.y0 - h, w, w >= d ? d / 2 : d);
+      ctx.strokeStyle = 'rgba(20,16,12,0.7)'; ctx.lineWidth = 0.3;
+      ctx.strokeRect(b.x0, b.y0 - h, w, d + h);
+    } else {
+      const t = it.t, cy = t.y - t.h * TILT * 0.55;
+      const g = 70 + t.tone * 12;
+      ctx.fillStyle = 'rgb(' + (g * 0.55 | 0) + ',' + (g + 18 | 0) + ',' + (g * 0.45 | 0) + ')';
+      ctx.beginPath(); ctx.arc(t.x, cy, t.r, 0, Math.PI * 2); ctx.fill();
+      ctx.fillStyle = 'rgba(190,220,140,0.16)';
+      ctx.beginPath(); ctx.arc(t.x - t.r * 0.3, cy - t.r * 0.3, t.r * 0.55, 0, Math.PI * 2); ctx.fill();
+    }
+  }
+  R.terrain = c;
+}
+
+// ---------------------------------------------------------------- frame
+const TEAM_TAG = ['', '1', '2', '3', '4'];
+
+function render() {
+  const ctx = R.ctx, z = R.cam.zoom;
+  ctx.setTransform(R.dpr, 0, 0, R.dpr, 0, 0);
+  ctx.fillStyle = '#1d2119';
+  ctx.fillRect(0, 0, R.w, R.h);
+  const o = toScreen(0, 0);
+  ctx.imageSmoothingEnabled = true;
+  if (R.terrain) ctx.drawImage(R.terrain, o.x, o.y, MAP_W * z, MAP_H * z);
+
+  drawEdgeLabels(ctx);
+  drawOrdersOverlay(ctx);
+  drawContacts(ctx);
+  drawUnits(ctx);
+  drawProjectiles(ctx);
+  drawEffects(ctx);
+  drawFloaters(ctx);
+  drawScale(ctx);
+}
+
+function drawEdgeLabels(ctx) {
+  ctx.font = '600 11px "IBM Plex Mono", ui-monospace, monospace';
+  ctx.fillStyle = 'rgba(240,236,220,0.75)';
+  ctx.textAlign = 'center'; ctx.textBaseline = 'top';
+  for (let x = 0; x <= MAP_W; x += 50) {
+    const p = toScreen(x, 0);
+    if (p.x > 20 && p.x < R.w - 20) ctx.fillText(String(G.grid.e + x / 50).padStart(2, '0'), p.x, Math.max(4, p.y + 4));
+  }
+  ctx.textAlign = 'left'; ctx.textBaseline = 'middle';
+  for (let y = 0; y <= MAP_H; y += 50) {
+    const p = toScreen(0, y);
+    if (p.y > 40 && p.y < R.h - 20) ctx.fillText(String(G.grid.n - y / 50).padStart(2, '0'), Math.max(4, p.x + 4), p.y);
+  }
+}
+
+function drawScale(ctx) {
+  const z = R.cam.zoom, len = 50 * z;
+  const x = 14, y = R.h - (G.ui.panelH || 0) - 22;
+  ctx.fillStyle = 'rgba(16,18,14,0.6)';
+  ctx.fillRect(x - 6, y - 16, len + 50, 28);
+  ctx.strokeStyle = '#f0ecdc'; ctx.lineWidth = 2;
+  ctx.beginPath(); ctx.moveTo(x, y); ctx.lineTo(x + len, y); ctx.moveTo(x, y - 4); ctx.lineTo(x, y + 4);
+  ctx.moveTo(x + len / 2, y - 3); ctx.lineTo(x + len / 2, y + 3); ctx.moveTo(x + len, y - 4); ctx.lineTo(x + len, y + 4); ctx.stroke();
+  ctx.fillStyle = '#f0ecdc'; ctx.font = '600 11px "IBM Plex Mono", ui-monospace, monospace';
+  ctx.textAlign = 'left'; ctx.textBaseline = 'bottom';
+  ctx.fillText('50 m', x + len + 6, y + 5);
+  ctx.textBaseline = 'alphabetic';
+  ctx.fillText('N ↑', x, y - 6);
+}
+
+function unitRadius() { return clamp(R.cam.zoom * 1.5, 9, 15); }
+
+function enemyVisible(e) {
+  const k = G.known.blue.get(e.id);
+  return G.revealAll || (k && k.visible);
+}
+
+function drawUnits(ctx) {
+  const r = unitRadius();
+  const sel = new Set(selMembers(G.ui.sel));
+  const list = G.soldiers.filter(s => !s.routed && (s.side === 'blue' || enemyVisible(s)));
+  list.sort((a, b) => (a.alive ? 1 : 0) - (b.alive ? 1 : 0) || a.y - b.y);
+  for (const s of list) {
+    const p = toScreen(s.x, s.y);
+    if (p.x < -30 || p.y < -30 || p.x > R.w + 30 || p.y > R.h + 30) continue;
+    const down = !s.active;
+    if (sel.has(s)) {
+      ctx.strokeStyle = '#ffe066'; ctx.lineWidth = 2.5;
+      ctx.beginPath(); ctx.arc(p.x, p.y, r + 6, 0, Math.PI * 2); ctx.stroke();
+    }
+    if (!down) {
+      // Facing tick
+      ctx.strokeStyle = 'rgba(12,16,10,0.9)'; ctx.lineWidth = 2.5;
+      ctx.beginPath();
+      ctx.moveTo(p.x + Math.cos(s.facing) * (r + 1), p.y + Math.sin(s.facing) * (r + 1));
+      ctx.lineTo(p.x + Math.cos(s.facing) * (r + 8), p.y + Math.sin(s.facing) * (r + 8));
+      ctx.stroke();
+      // Suppression ring
+      if (s.supp > 8) {
+        ctx.strokeStyle = s.pinned ? '#ff3b30' : s.suppressed ? '#ff8c1a' : 'rgba(255,190,80,0.85)';
+        ctx.lineWidth = 3;
+        ctx.beginPath(); ctx.arc(p.x, p.y, r + 3, -Math.PI / 2, -Math.PI / 2 + Math.PI * 2 * s.supp / 100); ctx.stroke();
+      }
+    }
+    drawSymbol(ctx, p.x, p.y, r, s.billet, {
+      side: s.side, prone: s.posture === 'prone',
+      fill: down ? '#9a9d96' : undefined, alpha: s.health === 'kia' ? 0.55 : 1,
+    });
+    if (down) {
+      ctx.strokeStyle = s.health === 'kia' ? '#2a2a2a' : '#c0392b'; ctx.lineWidth = 2.5;
+      ctx.beginPath(); ctx.moveTo(p.x - r - 3, p.y); ctx.lineTo(p.x + r + 3, p.y); ctx.stroke();
+      continue;
+    }
+    // Posture bar to the left: tall standing, half kneeling, flat prone.
+    const ph = s.posture === 'stand' ? r * 1.4 : s.posture === 'kneel' ? r * 0.8 : 3;
+    const pw = s.posture === 'prone' ? 9 : 3.5;
+    ctx.fillStyle = '#10140e';
+    ctx.fillRect(p.x - r - 8 - pw / 2, p.y + r - ph, pw, ph);
+    // Team number, top right.
+    if (s.team.num) {
+      ctx.font = '700 ' + Math.round(r * 0.85) + 'px "Saira Condensed", "Arial Narrow", sans-serif';
+      ctx.textAlign = 'left'; ctx.textBaseline = 'middle';
+      ctx.lineWidth = 3; ctx.strokeStyle = 'rgba(10,12,8,0.85)';
+      ctx.strokeText(TEAM_TAG[s.team.num], p.x + r * 0.75, p.y - r * 0.85);
+      ctx.fillStyle = '#f4f1e4';
+      ctx.fillText(TEAM_TAG[s.team.num], p.x + r * 0.75, p.y - r * 0.85);
+    }
+    if (s.health === 'light') {
+      ctx.fillStyle = '#e53935';
+      ctx.beginPath(); ctx.arc(p.x + r * 0.8, p.y + r * 0.8, 3.2, 0, Math.PI * 2); ctx.fill();
+    }
+    if (s.side === 'blue' && s.inMag + s.mags === 0) {
+      ctx.fillStyle = '#ffe066'; ctx.font = '700 10px "IBM Plex Mono", monospace';
+      ctx.textAlign = 'center'; ctx.fillText('NO AMMO', p.x, p.y + r + 10);
+    }
+  }
+}
+
+function drawContacts(ctx) {
+  if (G.revealAll) return;
+  const r = unitRadius() * 0.8;
+  for (const k of G.known.blue.values()) {
+    if (k.visible) continue;
+    const e = G.byId.get(k.id);
+    if (!e || !e.active) continue;
+    const age = G.time - k.t, a = clamp(1 - age / 45, 0.15, 0.8);
+    const p = toScreen(k.x, k.y);
+    ctx.save();
+    ctx.globalAlpha = a;
+    ctx.setLineDash([4, 3]);
+    ctx.strokeStyle = '#ff6b6b'; ctx.lineWidth = 2;
+    ctx.beginPath(); ctx.moveTo(p.x, p.y - r); ctx.lineTo(p.x + r, p.y); ctx.lineTo(p.x, p.y + r); ctx.lineTo(p.x - r, p.y); ctx.closePath(); ctx.stroke();
+    ctx.setLineDash([]);
+    ctx.fillStyle = '#ffd6d6'; ctx.font = '700 ' + Math.round(r) + 'px "IBM Plex Mono", monospace';
+    ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+    ctx.fillText('?', p.x, p.y + 1);
+    ctx.restore();
+  }
+}
+
+function drawOrdersOverlay(ctx) {
+  const sel = G.ui.sel;
+  // Planned routes for the selection.
+  ctx.setLineDash([5, 5]);
+  ctx.lineWidth = 1.5;
+  for (const s of selMembers(sel)) {
+    if (!s.active || !s.path.length) continue;
+    ctx.strokeStyle = s.moveMode === 'rush' ? 'rgba(255,224,102,0.9)' : s.moveMode === 'crawl' ? 'rgba(160,220,255,0.9)' : 'rgba(255,255,255,0.85)';
+    ctx.beginPath();
+    let p = toScreen(s.x, s.y); ctx.moveTo(p.x, p.y);
+    for (const w of s.path) { p = toScreen(w.x, w.y); ctx.lineTo(p.x, p.y); }
+    ctx.stroke();
+  }
+  ctx.setLineDash([]);
+  // Suppression targets.
+  for (const s of selMembers(sel)) {
+    if (!s.active || !s.suppressPt) continue;
+    const a = toScreen(s.x, s.y), b = toScreen(s.suppressPt.x, s.suppressPt.y);
+    ctx.strokeStyle = 'rgba(255,120,60,0.55)'; ctx.lineWidth = 1;
+    ctx.beginPath(); ctx.moveTo(a.x, a.y); ctx.lineTo(b.x, b.y); ctx.stroke();
+    ctx.strokeStyle = 'rgba(255,120,60,0.9)'; ctx.lineWidth = 1.5;
+    ctx.beginPath(); ctx.arc(b.x, b.y, 7 * R.cam.zoom / 2, 0, Math.PI * 2); ctx.stroke();
+  }
+  // Pending order: line to the cursor with range and bearing.
+  const pend = G.ui.pending, hv = G.ui.hover;
+  if (sel && hv) {
+    const m = selMembers(sel).filter(s => s.active);
+    if (!m.length) return;
+    const c = centroid(m), a = toScreen(c.x, c.y), b = toScreen(hv.x, hv.y);
+    if (pend === 'launcher' || pend === 'frag') {
+      const gs = pend === 'launcher' ? m.filter(s => s.launcher) : m;
+      for (const s of gs.slice(0, 3)) {
+        const sp = toScreen(s.x, s.y);
+        const max = pend === 'launcher' ? s.launcher.range : s.grenade.range;
+        ctx.strokeStyle = 'rgba(255,224,102,0.5)'; ctx.lineWidth = 1;
+        ctx.beginPath(); ctx.arc(sp.x, sp.y, max * R.cam.zoom, 0, Math.PI * 2); ctx.stroke();
+      }
+    }
+    if (!pend && !G.ui.hoverIsPointer) return;
+    ctx.strokeStyle = pend ? 'rgba(255,224,102,0.9)' : 'rgba(255,255,255,0.4)';
+    ctx.lineWidth = 1.5;
+    ctx.setLineDash([3, 4]);
+    ctx.beginPath(); ctx.moveTo(a.x, a.y); ctx.lineTo(b.x, b.y); ctx.stroke();
+    ctx.setLineDash([]);
+    const d = Math.round(dist(c.x, c.y, hv.x, hv.y));
+    const label = (pend ? ORDER_LABEL[pend] + '  ' : '') + d + ' m  ' + pad3(bearing(c.x, c.y, hv.x, hv.y)) + '°';
+    ctx.font = '600 12px "IBM Plex Mono", ui-monospace, monospace';
+    const tw = ctx.measureText(label).width;
+    ctx.fillStyle = 'rgba(14,16,12,0.8)';
+    ctx.fillRect(b.x + 12, b.y - 22, tw + 12, 20);
+    ctx.fillStyle = '#ffe066'; ctx.textAlign = 'left'; ctx.textBaseline = 'middle';
+    ctx.fillText(label, b.x + 18, b.y - 12);
+  }
+}
+
+function drawProjectiles(ctx) {
+  for (const p of G.projectiles) {
+    const f = Math.min(1, p.t / p.flight);
+    const x = lerp(p.x0, p.x1, f), y = lerp(p.y0, p.y1, f);
+    const arc = p.kind === 'rpg' ? 0 : Math.sin(f * Math.PI) * (p.kind === 'frag' ? 4 : 10);
+    const s = toScreen(x, y - arc * TILT);
+    ctx.fillStyle = p.kind === 'frag' ? '#2c3a22' : '#1a1a1a';
+    ctx.strokeStyle = '#f4f1e4'; ctx.lineWidth = 1;
+    ctx.beginPath(); ctx.arc(s.x, s.y, p.kind === 'frag' ? 3 : 2.5, 0, Math.PI * 2); ctx.fill(); ctx.stroke();
+    if (p.kind === 'rpg' && f < 1) {
+      const t = toScreen(lerp(p.x0, p.x1, Math.max(0, f - 0.15)), lerp(p.y0, p.y1, Math.max(0, f - 0.15)));
+      ctx.strokeStyle = 'rgba(230,230,220,0.6)'; ctx.lineWidth = 3;
+      ctx.beginPath(); ctx.moveTo(t.x, t.y); ctx.lineTo(s.x, s.y); ctx.stroke();
+    }
+  }
+}
+
+// Tracers: Marine ammunition burns red-orange, the enemy's green.
+function drawEffects(ctx) {
+  const z = R.cam.zoom;
+  for (const e of G.effects) {
+    if (e.t < 0) continue;
+    const f = e.t / e.life;
+    if (e.type === 'tracer') {
+      const h = clamp(f * 1.3, 0, 1), tl = clamp(f * 1.3 - 0.35, 0, 1);
+      const a = toScreen(lerp(e.x1, e.x2, tl), lerp(e.y1, e.y2, tl)), b = toScreen(lerp(e.x1, e.x2, h), lerp(e.y1, e.y2, h));
+      ctx.strokeStyle = e.side === 'blue' ? 'rgba(255,120,70,0.95)' : 'rgba(140,255,120,0.95)';
+      ctx.lineWidth = 1.6;
+      ctx.beginPath(); ctx.moveTo(a.x, a.y); ctx.lineTo(b.x, b.y); ctx.stroke();
+    } else if (e.type === 'flash') {
+      const p = toScreen(e.x, e.y);
+      ctx.fillStyle = 'rgba(255,230,150,' + (1 - f) + ')';
+      ctx.beginPath(); ctx.arc(p.x, p.y, 5 + 6 * f, 0, Math.PI * 2); ctx.fill();
+    } else if (e.type === 'blast') {
+      const p = toScreen(e.x, e.y);
+      const rr = (2 + e.r * 0.6 * Math.sqrt(f)) * z;
+      ctx.fillStyle = 'rgba(255,' + (180 - 120 * f | 0) + ',60,' + (0.85 * (1 - f)) + ')';
+      ctx.beginPath(); ctx.arc(p.x, p.y, rr * 0.55, 0, Math.PI * 2); ctx.fill();
+      ctx.fillStyle = 'rgba(70,64,56,' + (0.55 * (1 - f)) + ')';
+      ctx.beginPath(); ctx.arc(p.x, p.y - f * 8, rr, 0, Math.PI * 2); ctx.fill();
+    }
+  }
+}
+
+function drawFloaters(ctx) {
+  ctx.font = '700 12px "IBM Plex Mono", ui-monospace, monospace';
+  ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+  for (const f of G.floaters) {
+    if (f.side === 'red' && !enemyVisible(G.byId.get(f.id))) continue;
+    const p = toScreen(f.x, f.y);
+    const a = 1 - f.t / f.life;
+    ctx.lineWidth = 3; ctx.strokeStyle = 'rgba(10,10,8,' + a + ')';
+    ctx.strokeText(f.text, p.x, p.y - 22 - f.t * 14);
+    ctx.fillStyle = f.side === 'blue' ? 'rgba(255,214,102,' + a + ')' : 'rgba(255,170,170,' + a + ')';
+    ctx.fillText(f.text, p.x, p.y - 22 - f.t * 14);
+  }
+}
+
+// ---- src/ui.js
+'use strict';
+// Interface: order panel, roster, radio log, briefing with loadout, debrief, help.
+
+const ORDER_LABEL = {
+  bound: 'Bound', assault: 'Assault', suppress: 'Suppress', launcher: '40mm', frag: 'Frag', face: 'Face',
+};
+// Orders that need a point on the map.
+const TARGETED = ['bound', 'assault', 'suppress', 'launcher', 'frag', 'face'];
+
+const $ = (id) => document.getElementById(id);
+function el(tag, cls, text) {
+  const e = document.createElement(tag);
+  if (cls) e.className = cls;
+  if (text != null) e.textContent = text;
+  return e;
+}
+
+const UI = {
+  logLines: [], rosterRows: [], tickT: 0,
+
+  init() {
+    this.buildOrders();
+    $('btnPause').addEventListener('click', () => togglePause());
+    $('btnSpeed').addEventListener('click', () => { G.speed = G.speed === 1 ? 2 : G.speed === 2 ? 4 : 1; this.refreshBar(); });
+    $('btnRoster').addEventListener('click', () => document.body.classList.toggle('roster-open'));
+    $('btnHelp').addEventListener('click', () => this.showModal('help'));
+    $('btnMenu').addEventListener('click', () => this.showBriefing());
+    document.querySelectorAll('[data-close]').forEach(b => b.addEventListener('click', () => this.hideModal(b.dataset.close)));
+  },
+
+  // ------------------------------------------------------------ order panel
+  buildOrders() {
+    const groups = [
+      { label: 'Move', items: [['mode', 'walk', 'Walk'], ['mode', 'rush', 'Rush'], ['mode', 'crawl', 'Crawl'],
+        ['order', 'bound', 'Bound'], ['order', 'assault', 'Assault']] },
+      { label: 'Posture', items: [['posture', 'stand', 'Stand'], ['posture', 'kneel', 'Kneel'], ['posture', 'prone', 'Prone']] },
+      { label: 'Fire', items: [['fire', 'free', 'At will'], ['fire', 'return', 'Return'], ['fire', 'hold', 'Hold'],
+        ['order', 'suppress', 'Suppress'], ['now', 'lift', 'Lift']] },
+      { label: 'Weapons', items: [['order', 'launcher', '40mm'], ['order', 'frag', 'Frag']] },
+      { label: 'Act', items: [['now', 'cover', 'Take cover'], ['now', 'fallback', 'Fall back'], ['now', 'halt', 'Halt'], ['order', 'face', 'Face']] },
+      { label: 'Formation', items: FORMATION_KEYS.map(k => ['formation', k, FORMATIONS[k].label]) },
+    ];
+    const grid = $('orderGrid');
+    for (const g of groups) {
+      const box = el('div', 'ogroup');
+      box.appendChild(el('div', 'olabel', g.label));
+      const row = el('div', 'obuttons');
+      for (const [kind, val, text] of g.items) {
+        const b = el('button', 'obtn', text);
+        b.dataset.kind = kind; b.dataset.val = val;
+        b.addEventListener('click', () => this.onOrderButton(kind, val));
+        row.appendChild(b);
+      }
+      box.appendChild(row);
+      grid.appendChild(box);
+    }
+    const chips = $('selChips');
+    const mk = (text, fn) => { const b = el('button', 'chip', text); b.addEventListener('click', fn); chips.appendChild(b); return b; };
+    this.chipSquad = mk('Squad', () => this.select({ level: 'squad', squad: G.squads.blue }));
+    this.chipTeams = [1, 2, 3].map(n => mk(ORDINAL[n - 1] + ' FT', () => this.selectTeam(n)));
+  },
+
+  onOrderButton(kind, val) {
+    if (kind === 'mode') { G.ui.moveMode = val; G.ui.pending = null; this.refreshOrders(); this.toast(MOVE[val].label + ': tap the map to move.'); return; }
+    const sel = G.ui.sel;
+    if (!sel) { this.toast('Select a Marine, a fire team or the squad first.'); return; }
+    if (kind === 'order') {
+      G.ui.pending = G.ui.pending === val ? null : val;
+      if (G.ui.pending) this.toast({
+        bound: 'Tap the objective for the bounds.', assault: 'Tap the point to assault.', suppress: 'Tap the area to suppress.',
+        launcher: 'Tap the 40mm target.', frag: 'Tap where the grenade should land.', face: 'Tap the direction to watch.' }[val]);
+      this.refreshOrders();
+      return;
+    }
+    G.ui.pending = null;
+    if (kind === 'now') issueOrder(sel, val);
+    else if (kind === 'posture') issueOrder(sel, 'posture', val);
+    else if (kind === 'fire') issueOrder(sel, 'fire', val);
+    else if (kind === 'formation') issueOrder(sel, 'formation', val);
+    this.refreshOrders();
+  },
+
+  refreshOrders() {
+    const sel = G.ui.sel, m = selMembers(sel).filter(s => s.active);
+    const common = (fn) => { if (!m.length) return null; const v = fn(m[0]); return m.every(s => fn(s) === v) ? v : null; };
+    const posture = common(s => s.homePosture), fire = common(s => s.fireControl);
+    const form = sel ? (sel.level === 'squad' ? sel.squad.formation : sel.level === 'team' ? sel.team.formation : null) : null;
+    document.querySelectorAll('.obtn').forEach(b => {
+      const k = b.dataset.kind, v = b.dataset.val;
+      let on = false, dis = !sel && k !== 'mode';
+      if (k === 'mode') on = G.ui.moveMode === v;
+      else if (k === 'posture') on = posture === v;
+      else if (k === 'fire') on = fire === v;
+      else if (k === 'formation') { on = form === v; dis = dis || !form; }
+      else if (k === 'order') on = G.ui.pending === v;
+      if (v === 'launcher') dis = dis || !m.some(s => s.launcher && s.lRounds > 0);
+      b.classList.toggle('on', on);
+      b.disabled = dis;
+    });
+    this.chipSquad.classList.toggle('on', sel && sel.level === 'squad');
+    this.chipTeams.forEach((c, i) => {
+      const t = G.squads.blue && G.squads.blue.teams[i];
+      c.classList.toggle('on', !!(sel && sel.level === 'team' && sel.team === t));
+      c.disabled = !t || !t.members.some(s => s.active);
+    });
+    let txt = 'Nothing selected. Tap a Marine, tap again for the fire team, again for the squad.';
+    if (sel) {
+      const n = m.length, tot = selMembers(sel).length;
+      txt = selName(sel) + (sel.level === 'soldier' ? ' · ' + sel.soldier.title + ' · ' + sel.soldier.weapon.name
+        : ' · ' + n + ' of ' + tot + ' effective');
+    }
+    $('selText').textContent = txt;
+  },
+
+  // ------------------------------------------------------------ selection
+  select(sel) {
+    G.ui.sel = sel; G.ui.pending = null;
+    this.refreshOrders(); this.refreshRosterSel();
+  },
+  selectTeam(n) {
+    const t = G.squads.blue.teams[n - 1];
+    if (t && t.members.some(s => s.active)) this.select({ level: 'team', team: t, squad: t.squad });
+  },
+  // Tapping a Marine cycles: the man, his fire team, the squad.
+  cycleSelect(s) {
+    const sel = G.ui.sel;
+    if (sel && sel.level === 'soldier' && sel.soldier === s) {
+      if (s.team.num) this.select({ level: 'team', team: s.team, squad: s.squad });
+      else this.select({ level: 'squad', squad: s.squad });
+    } else if (sel && sel.level === 'team' && sel.team === s.team) {
+      this.select({ level: 'squad', squad: s.squad });
+    } else {
+      this.select({ level: 'soldier', soldier: s, team: s.team, squad: s.squad });
+    }
+  },
+
+  // ------------------------------------------------------------ map taps
+  handleTap(sx, sy, secondary) {
+    if (!G.running || G.over) return;
+    const w = toWorld(sx, sy);
+    const hit = this.unitAt(sx, sy);
+    const sel = G.ui.sel;
+    if (secondary) {
+      G.ui.pending = null;
+      if (sel) issueOrder(sel, hit && hit.side === 'red' && hit.active ? 'engage' : 'move', hit && hit.side === 'red' && hit.active ? hit : w);
+      this.refreshOrders();
+      return;
+    }
+    if (G.ui.pending && sel) {
+      const p = G.ui.pending;
+      G.ui.pending = null;
+      const target = hit && hit.side === 'red' && p !== 'face' ? { x: hit.x, y: hit.y } : w;
+      issueOrder(sel, p, target);
+      this.refreshOrders();
+      return;
+    }
+    if (hit && hit.side === 'blue' && hit.alive) { this.cycleSelect(hit); return; }
+    if (hit && hit.side === 'red' && hit.active && sel) { issueOrder(sel, 'engage', hit); return; }
+    if (sel) issueOrder(sel, 'move', w);
+  },
+
+  unitAt(sx, sy) {
+    const r = unitRadius() + 5;
+    let best = null, bd = Infinity;
+    for (const s of G.soldiers) {
+      if (s.routed || (s.side === 'red' && !enemyVisible(s))) continue;
+      const p = toScreen(s.x, s.y), d = Math.hypot(p.x - sx, p.y - sy);
+      // Prefer the living and our own when symbols overlap.
+      const pen = d + (s.alive ? 0 : 6) + (s.side === 'blue' ? 0 : 2);
+      if (d < r && pen < bd) { bd = pen; best = s; }
+    }
+    return best;
+  },
+
+  // ------------------------------------------------------------ roster
+  buildRoster() {
+    const box = $('roster');
+    box.innerHTML = '';
+    this.rosterRows = [];
+    const sq = G.squads.blue;
+    for (const t of [sq.hq, ...sq.teams]) {
+      const sec = el('section', 'rteam');
+      const head = el('button', 'rhead');
+      head.appendChild(el('span', 'rname', t.num ? t.name : 'Squad leader'));
+      const mor = el('span', 'rmorale');
+      mor.appendChild(el('i'));
+      head.appendChild(mor);
+      head.addEventListener('click', () => t.num ? this.selectTeam(t.num) : this.select({ level: 'squad', squad: sq }));
+      sec.appendChild(head);
+      t.ui = { sec, mor: mor.firstChild };
+      for (const s of t.members) {
+        const row = el('button', 'rrow');
+        row.appendChild(symbolCanvas(s.billet, 'blue', 22));
+        const who = el('span', 'rwho');
+        who.appendChild(el('b', null, s.label));
+        who.appendChild(el('small', null, s.title));
+        row.appendChild(who);
+        const st = el('span', 'rstat');
+        const ammo = el('span', 'rammo');
+        row.appendChild(st); row.appendChild(ammo);
+        row.addEventListener('click', () => {
+          if (s.alive) this.select({ level: 'soldier', soldier: s, team: s.team, squad: s.squad });
+          R.cam.x = s.x; R.cam.y = s.y;
+        });
+        sec.appendChild(row);
+        this.rosterRows.push({ s, row, st, ammo });
+      }
+      box.appendChild(sec);
+    }
+  },
+  refreshRoster() {
+    for (const r of this.rosterRows) {
+      const s = r.s, st = s.statusText;
+      r.st.textContent = st;
+      r.st.dataset.state = s.health === 'kia' || s.health === 'serious' ? 'down' : s.pinned || s.routing ? 'bad' : s.suppressed || s.health === 'light' ? 'warn' : 'ok';
+      let a = s.ammoText;
+      if (s.launcher) a += ' · ' + s.lRounds + '×40';
+      if (s.frags) a += ' · ' + s.frags + 'F';
+      r.ammo.textContent = a;
+      r.row.classList.toggle('dead', !s.alive || s.health === 'serious');
+    }
+    const sq = G.squads.blue;
+    for (const t of [sq.hq, ...sq.teams]) {
+      if (!t.ui) continue;
+      t.ui.mor.style.width = clamp(t.morale, 0, 100) + '%';
+      t.ui.mor.dataset.state = t.broken ? 'bad' : t.shaken ? 'warn' : 'ok';
+    }
+  },
+  refreshRosterSel() {
+    const m = new Set(selMembers(G.ui.sel));
+    for (const r of this.rosterRows) r.row.classList.toggle('sel', m.has(r.s));
+  },
+
+  // ------------------------------------------------------------ log and toast
+  log(msg, kind) {
+    this.logLines.push({ msg, kind: kind || 'info', t: G.time });
+    if (this.logLines.length > 60) this.logLines.shift();
+    const box = $('log');
+    const line = el('div', 'lline ' + (kind || 'info'));
+    line.appendChild(el('span', 'ltime', fmtClock(G.time)));
+    line.appendChild(el('span', null, msg));
+    box.appendChild(line);
+    while (box.children.length > 6) box.removeChild(box.firstChild);
+  },
+  toast(msg) {
+    const t = $('toast');
+    t.textContent = msg; t.hidden = false;
+    clearTimeout(this._toastT);
+    this._toastT = setTimeout(() => { t.hidden = true; }, 2600);
+  },
+
+  refreshBar() {
+    $('clock').textContent = fmtClock(G.time);
+    $('btnPause').textContent = G.paused ? 'Resume' : 'Pause';
+    $('btnPause').classList.toggle('on', G.paused);
+    $('btnSpeed').textContent = G.speed + '×';
+  },
+
+  tick(dt) {
+    this.tickT -= dt;
+    if (this.tickT > 0) return;
+    this.tickT = 0.25;
+    this.refreshBar();
+    if (G.running) { this.refreshRoster(); this.refreshOrders(); }
+    G.ui.panelH = $('orders').offsetHeight;
+    document.documentElement.style.setProperty('--orders-h', G.ui.panelH + 'px');
+  },
+
+  // ------------------------------------------------------------ modals
+  showModal(id) { $(id).hidden = false; if (G.running && !G.paused) togglePause(); },
+  hideModal(id) { $(id).hidden = true; },
+
+  showBriefing() {
+    const set = G.settings;
+    const box = $('briefBody');
+    box.innerHTML = '';
+
+    const situation = el('div', 'bsit');
+    situation.appendChild(el('h3', null, 'Situation'));
+    situation.appendChild(el('p', null, 'An enemy squad-sized element is operating in the vicinity. Its organization and weapons are unknown; expect automatic weapons and grenade launchers. Your squad is the only friendly force in the area. There is no supporting fire.'));
+    box.appendChild(situation);
+    const sit = el('div', 'bsit');
+    sit.appendChild(el('h3', null, 'Mission'));
+    const mp = el('p');
+    const modes = { attack: 'Attack. The enemy holds a position to your front. Close with and destroy him.',
+      meeting: 'Meeting engagement. The enemy is moving toward you. Find him, fix him and destroy him.',
+      random: 'Unknown. Either the enemy holds a position, or he is moving toward you.' };
+    const modeSel = el('select'); modeSel.id = 'missionMode';
+    for (const [k, t] of [['random', 'Random'], ['attack', 'Attack a position'], ['meeting', 'Meeting engagement']]) {
+      const o = el('option', null, t); o.value = k; if (set.mode === k) o.selected = true; modeSel.appendChild(o);
+    }
+    const desc = el('span', 'bdesc', modes[set.mode]);
+    modeSel.addEventListener('change', () => { set.mode = modeSel.value; desc.textContent = modes[set.mode]; });
+    mp.appendChild(modeSel); mp.appendChild(desc);
+    sit.appendChild(mp);
+    const seedRow = el('p', 'bseed');
+    seedRow.appendChild(el('span', null, 'Map number '));
+    const seedIn = el('input'); seedIn.id = 'missionSeed'; seedIn.type = 'number'; seedIn.value = set.seed;
+    seedIn.addEventListener('change', () => { set.seed = parseInt(seedIn.value, 10) || 1; });
+    const reroll = el('button', 'obtn', 'New map');
+    reroll.addEventListener('click', () => { set.seed = Math.floor(Math.random() * 99999) + 1; seedIn.value = set.seed; });
+    seedRow.appendChild(seedIn); seedRow.appendChild(reroll);
+    sit.appendChild(seedRow);
+    box.appendChild(sit);
+
+    // Loadout by billet.
+    const lo = set.loadout;
+    const wrap = el('div', 'bload');
+    wrap.appendChild(el('h3', null, 'Loadout'));
+    const tableWrap = el('div', 'tablewrap');
+    const tbl = el('table', 'ltable');
+    const head = el('tr');
+    for (const h of ['', 'Billet', 'Weapon', 'Spare mags', '40mm', 'Frags', 'Load']) head.appendChild(el('th', null, h));
+    tbl.appendChild(head);
+    const kgCells = {};
+    const recalc = () => {
+      for (const k of Object.keys(USMC_BILLETS)) {
+        const l = lo[k], w = WEAPONS[l.weapon];
+        let kg = 22 + w.kg + (l.mags + 1) * (MAG_KG[w.mag] || 0.5) + l.frags * GRENADES.M67.kg;
+        if (l.launcher) kg += 1.4 + l.lRounds * LAUNCHERS[l.launcher].kg;
+        kgCells[k].textContent = kg.toFixed(1) + ' kg';
+      }
+    };
+    const num = (k, field, min, max) => {
+      const i = el('input'); i.type = 'number'; i.min = min; i.max = max; i.value = lo[k][field];
+      i.id = 'lo-' + k + '-' + field;
+      i.addEventListener('change', () => { lo[k][field] = clamp(parseInt(i.value, 10) || 0, min, max); i.value = lo[k][field]; recalc(); });
+      return i;
+    };
+    for (const k of Object.keys(USMC_BILLETS)) {
+      const b = USMC_BILLETS[k], tr = el('tr');
+      const sc = el('td'); sc.appendChild(symbolCanvas(k, 'blue', 22)); tr.appendChild(sc);
+      tr.appendChild(el('td', 'bname', b.title + (k === 'SL' ? '' : ' ×3')));
+      const wtd = el('td'), ws = el('select'); ws.id = 'lo-' + k + '-weapon';
+      for (const wk of b.weapons) { const o = el('option', null, WEAPONS[wk].name); o.value = wk; if (lo[k].weapon === wk) o.selected = true; ws.appendChild(o); }
+      wtd.appendChild(ws); tr.appendChild(wtd);
+      const mtd = el('td'), mags = num(k, 'mags', 1, 30); mtd.appendChild(mags); tr.appendChild(mtd);
+      ws.addEventListener('change', () => {
+        lo[k].weapon = ws.value; lo[k].mags = WEAPONS[ws.value].mags - 1; mags.value = lo[k].mags; recalc();
+      });
+      const gtd = el('td');
+      if (b.launchers) {
+        const ls = el('select'); ls.id = 'lo-G-launcher';
+        for (const lk of b.launchers) { const o = el('option', null, lk); o.value = lk; if (lo[k].launcher === lk) o.selected = true; ls.appendChild(o); }
+        ls.addEventListener('change', () => { lo[k].launcher = ls.value; recalc(); });
+        gtd.className = 'cellrow';
+        gtd.appendChild(ls); gtd.appendChild(num(k, 'lRounds', 0, 24));
+      } else gtd.textContent = '—';
+      tr.appendChild(gtd);
+      const ftd = el('td'); ftd.appendChild(num(k, 'frags', 0, 4)); tr.appendChild(ftd);
+      kgCells[k] = el('td', 'kg'); tr.appendChild(kgCells[k]);
+      tbl.appendChild(tr);
+    }
+    tableWrap.appendChild(tbl);
+    wrap.appendChild(tableWrap);
+    wrap.appendChild(el('p', 'bnote', 'Load includes about 22 kg of helmet, plates, water and kit. Heavier loads slow movement and tire men faster.'));
+    const reset = el('button', 'obtn', 'Standard loadout');
+    reset.addEventListener('click', () => { set.loadout = defaultLoadout(); this.showBriefing(); });
+    wrap.appendChild(reset);
+    box.appendChild(wrap);
+    recalc();
+    this.showModal('briefing');
+  },
+
+  showDebrief(result) {
+    const box = $('debriefBody');
+    box.innerHTML = '';
+    const won = result === 'victory';
+    $('debriefTitle').textContent = won ? 'Enemy defeated' : 'Squad combat ineffective';
+    box.appendChild(el('p', 'dsub', (won ? 'The enemy is destroyed or has withdrawn.' : 'Your squad can no longer fight.') + ' Elapsed time ' + fmtClock(G.time) + '.'));
+    const count = (sq) => {
+      const all = sq.all;
+      return {
+        kia: all.filter(s => s.health === 'kia').length,
+        serious: all.filter(s => s.health === 'serious').length,
+        light: all.filter(s => s.health === 'light').length,
+        gone: all.filter(s => s.routed || s.routing).length,
+        effective: all.filter(s => s.active && !s.routing).length,
+        total: all.length,
+        shots: all.reduce((n, s) => n + s.shots, 0),
+        hits: all.reduce((n, s) => n + s.hits, 0),
+      };
+    };
+    const b = count(G.squads.blue), r = count(G.squads.red);
+    const rows = [['Strength', b.total, r.total], ['Killed', b.kia, r.kia], ['Serious casualties', b.serious, r.serious],
+      ['Wounded, fighting', b.light, r.light], ['Withdrew or fled', b.gone, r.gone], ['Effective at end', b.effective, r.effective],
+      ['Rounds fired', b.shots, r.shots], ['Hits', b.hits, r.hits]];
+    const pre = el('pre', 'dtable');
+    const line = (a, x, y) => a.padEnd(19) + String(x).padStart(8) + String(y).padStart(7);
+    pre.textContent = line('', 'Marines', 'Enemy') + '\n' + rows.map(rw => line(rw[0], rw[1], rw[2])).join('\n');
+    box.appendChild(pre);
+    $('debrief').hidden = false;
+  },
+};
+
+function togglePause() {
+  if (!G.running) return;
+  G.paused = !G.paused;
+  UI.refreshBar();
+}
+
+// ---- src/input.js
+'use strict';
+// Mouse, touch and keyboard. Drag pans, wheel or pinch zooms, tap selects or orders,
+// right-click moves (or engages a visible enemy).
+
+const Input = {
+  pointers: new Map(), moved: false, camStart: null, pinch: null,
+
+  init(canvas) {
+    canvas.addEventListener('pointerdown', (e) => {
+      canvas.setPointerCapture(e.pointerId);
+      this.pointers.set(e.pointerId, { x: e.offsetX, y: e.offsetY, sx: e.offsetX, sy: e.offsetY, button: e.button });
+      if (this.pointers.size === 1) {
+        this.moved = false;
+        this.camStart = { x: R.cam.x, y: R.cam.y };
+      } else if (this.pointers.size === 2) {
+        this.moved = true;
+        const [a, b] = [...this.pointers.values()];
+        const mid = { x: (a.x + b.x) / 2, y: (a.y + b.y) / 2 };
+        this.pinch = { d: Math.hypot(a.x - b.x, a.y - b.y), zoom: R.cam.zoom, world: toWorld(mid.x, mid.y) };
+      }
+    });
+    canvas.addEventListener('pointermove', (e) => {
+      G.ui.hover = toWorld(e.offsetX, e.offsetY);
+      G.ui.hoverIsPointer = e.pointerType === 'mouse';
+      const p = this.pointers.get(e.pointerId);
+      if (!p) return;
+      p.x = e.offsetX; p.y = e.offsetY;
+      if (this.pointers.size === 1) {
+        if (Math.hypot(p.x - p.sx, p.y - p.sy) > 8) this.moved = true;
+        if (this.moved) {
+          R.cam.x = this.camStart.x - (p.x - p.sx) / R.cam.zoom;
+          R.cam.y = this.camStart.y - (p.y - p.sy) / R.cam.zoom;
+          clampCam();
+        }
+      } else if (this.pointers.size === 2 && this.pinch) {
+        const [a, b] = [...this.pointers.values()];
+        const mid = { x: (a.x + b.x) / 2, y: (a.y + b.y) / 2 };
+        R.cam.zoom = clamp(this.pinch.zoom * Math.hypot(a.x - b.x, a.y - b.y) / Math.max(1, this.pinch.d), R.minZoom, 16);
+        R.cam.x = this.pinch.world.x - (mid.x - R.w / 2) / R.cam.zoom;
+        R.cam.y = this.pinch.world.y - (mid.y - R.h / 2) / R.cam.zoom;
+        clampCam();
+      }
+    });
+    const end = (e) => {
+      const p = this.pointers.get(e.pointerId);
+      if (!p) return;
+      this.pointers.delete(e.pointerId);
+      if (e.type === 'pointerup' && !this.moved && this.pointers.size === 0) UI.handleTap(p.x, p.y, p.button === 2);
+      if (this.pointers.size < 2) this.pinch = null;
+      if (this.pointers.size === 1) {
+        const q = [...this.pointers.values()][0];
+        q.sx = q.x; q.sy = q.y;
+        this.camStart = { x: R.cam.x, y: R.cam.y };
+      }
+    };
+    canvas.addEventListener('pointerup', end);
+    canvas.addEventListener('pointercancel', end);
+    canvas.addEventListener('pointerleave', () => { G.ui.hover = null; });
+    canvas.addEventListener('contextmenu', (e) => e.preventDefault());
+    canvas.addEventListener('wheel', (e) => {
+      e.preventDefault();
+      const before = toWorld(e.offsetX, e.offsetY);
+      R.cam.zoom = clamp(R.cam.zoom * Math.exp(-e.deltaY * 0.0015), R.minZoom, 16);
+      R.cam.x = before.x - (e.offsetX - R.w / 2) / R.cam.zoom;
+      R.cam.y = before.y - (e.offsetY - R.h / 2) / R.cam.zoom;
+      clampCam();
+    }, { passive: false });
+
+    window.addEventListener('keydown', (e) => {
+      if (e.target.closest && e.target.closest('input, select, textarea')) return;
+      if (!G.running) return;
+      const k = e.key;
+      if (k === ' ') { e.preventDefault(); togglePause(); }
+      else if (k === '1' || k === '2' || k === '3') UI.selectTeam(+k);
+      else if (k === '0' || k === '`') UI.select({ level: 'squad', squad: G.squads.blue });
+      else if (k === 'Escape') {
+        if (G.ui.pending) { G.ui.pending = null; UI.refreshOrders(); }
+        else UI.select(null);
+      }
+    });
+  },
+};
+
+// ---- src/main.js
+'use strict';
+// Game state, mission setup and the main loop.
+
+const G = {
+  map: null, squads: {}, soldiers: [], byId: new Map(),
+  known: { blue: new Map(), red: new Map() },
+  effects: [], projectiles: [], floaters: [], controllers: [],
+  time: 0, paused: true, speed: 1, running: false, over: false,
+  spotT: 0, teamT: 0, endT: 0,
+  stats: null, grid: { e: 34, n: 72 }, revealAll: false,
+  settings: null,
+  ui: { sel: null, pending: null, moveMode: 'walk', hover: null, hoverIsPointer: false, panelH: 0 },
+  log(msg, kind) { UI.log(msg, kind); },
+  toast(msg) { UI.toast(msg); },
+};
+
+function loadSettings() {
+  let saved = null;
+  try { saved = JSON.parse(localStorage.getItem('squad.settings') || 'null'); } catch (e) { saved = null; }
+  const s = { seed: Math.floor(Math.random() * 99999) + 1, mode: 'random', loadout: defaultLoadout() };
+  if (saved && saved.loadout) {
+    for (const k of Object.keys(s.loadout)) {
+      const l = saved.loadout[k];
+      if (l && WEAPONS[l.weapon] && USMC_BILLETS[k].weapons.includes(l.weapon)) Object.assign(s.loadout[k], l);
+    }
+    if (saved.mode) s.mode = saved.mode;
+  }
+  return s;
+}
+function saveSettings() {
+  try { localStorage.setItem('squad.settings', JSON.stringify({ mode: G.settings.mode, loadout: G.settings.loadout })); } catch (e) { /* storage unavailable */ }
+}
+
+function newMission() {
+  const set = G.settings;
+  saveSettings();
+  NEXT_ID = 1;
+  G.map = new GameMap(set.seed);
+  G.grid = { e: randInt(10, 80), n: randInt(20, 90) };
+  const blue = buildUSMCSquad(set.loadout);
+  const red = buildOpforSquad();
+  G.squads = { blue, red };
+  const mode = set.mode === 'random' ? (chance(0.5) ? 'attack' : 'meeting') : set.mode;
+  G.mode = mode;
+
+  const bx = randRange(70, MAP_W - 70), by = MAP_H - 16;
+  placeSquad(blue, G.map, bx, by, -Math.PI / 2);
+  const blueStart = { x: bx, y: by - 10 };
+
+  if (mode === 'attack') {
+    const north = G.map.buildings.filter(b => (b.y0 + b.y1) / 2 < 105);
+    let anchor;
+    if (north.length && chance(0.7)) { const b = pick(north); anchor = { x: (b.x0 + b.x1) / 2, y: b.y1 + 4 }; }
+    else anchor = { x: randRange(50, MAP_W - 50), y: randRange(30, 60) };
+    placeSquad(red, G.map, anchor.x, anchor.y, Math.PI / 2);
+    setupDefense(red, blueStart);
+  } else {
+    placeSquad(red, G.map, randRange(60, MAP_W - 60), 14, Math.PI / 2);
+  }
+
+  G.soldiers = [...blue.all, ...red.all];
+  G.byId = new Map(G.soldiers.map(s => [s.id, s]));
+  G.known = { blue: new Map(), red: new Map() };
+  G.effects = []; G.projectiles = []; G.floaters = []; G.controllers = [];
+  G.stats = { blue: { light: 0, serious: 0, kia: 0 }, red: { light: 0, serious: 0, kia: 0 } };
+  G.time = 0; G.spotT = 0; G.teamT = 0; G.endT = 0;
+  G.over = false; G.running = true; G.paused = true;
+  G.missionId = (G.missionId || 0) + 1;
+  $('debrief').hidden = true;
+  G.ui.sel = null; G.ui.pending = null;
+  for (const t of [blue.hq, ...blue.teams, red.hq, ...red.teams]) { t.routing = false; t.morale = t.squad.morale; }
+  initAI(mode === 'attack' ? 'defend' : 'advance', blueStart);
+
+  buildTerrain(G.map);
+  fitCamera(centroid(blue.all));
+  $('log').innerHTML = '';
+  UI.logLines = [];
+  UI.buildRoster();
+  UI.select({ level: 'squad', squad: blue });
+  G.log(mode === 'attack' ? 'Mission: attack. Enemy reported holding to the north.' : 'Mission: meeting engagement. Enemy reported moving south toward you.', 'info');
+  G.log('Paused. Give your orders, then press Resume.', 'info');
+  UI.refreshBar();
+}
+
+// ---------------------------------------------------------------- morale and routing
+function startRouting(team, reason) {
+  if (team.routing) return;
+  team.routing = true; team.routeReason = reason;
+  const edgeY = team.side === 'blue' ? MAP_H - 1 : 1;
+  for (const s of team.members) {
+    if (!s.active) continue;
+    s.routing = true; s.assault = false; s.suppressPt = null; s.launchQueue = null;
+    s.path = G.map.findPath(s.x, s.y, s.x, edgeY) || [];
+    s.moveMode = 'rush';
+  }
+  releaseControllers(team.members);
+  if (team.side === 'blue' && team.members.some(s => s.active)) G.log(team.name + ' has broken and is falling back!', 'loss');
+}
+
+function rally(team) {
+  team.routing = false;
+  for (const s of team.members) if (s.routing && !s.routed) { s.routing = false; s.path = []; s.homePosture = 'prone'; }
+  if (team.side === 'blue') G.log(team.name + ' has rallied.', 'info');
+}
+
+function updateTeams(dt) {
+  for (const sq of [G.squads.blue, G.squads.red]) {
+    for (const t of [sq.hq, ...sq.teams]) {
+      const quiet = G.time - t.lastFiredUpon;
+      if (quiet > 10) t.morale = Math.min(sq.morale, t.morale + 0.6 * dt);
+      if (!t.routing && t.broken && t.members.some(s => s.active)) startRouting(t, 'break');
+      if (t.routing && t.routeReason === 'break' && t.morale > 35 && quiet > 15) rally(t);
+      for (const s of t.members) {
+        if (!s.routing || s.routed || !s.active) continue;
+        const edgeY = s.side === 'blue' ? MAP_H - 1 : 1;
+        if (Math.abs(s.y - edgeY) < 4) { s.routed = true; s.path = []; }
+        else if (!s.moving) { s.path = G.map.findPath(s.x, s.y, s.x, edgeY) || []; s.moveMode = 'rush'; }
+      }
+    }
+  }
+}
+
+function inCover(s) {
+  const k = G.map.terAt(s.x, s.y);
+  if (k === TER.WOODS) return true;
+  for (const [dx, dy] of [[1.8, 0], [-1.8, 0], [0, 1.8], [0, -1.8]]) {
+    const n = G.map.terAt(s.x + dx, s.y + dy);
+    if (n === TER.WALL || n === TER.BUILDING) return true;
+  }
+  return k === TER.GRASS && s.posture === 'prone';
+}
+
+function updateSuppression(s, dt) {
+  if (!s.active) { s.supp = 0; return; }
+  let rate = inCover(s) ? 14 : 9;
+  const lead = s.team.leader;
+  if (!lead || (lead.billet !== 'TL' && lead.billet !== 'SL')) rate *= 0.8;
+  rate *= clamp(s.team.morale / 80, 0.5, 1.2);
+  if (G.time - s.team.lastFiredUpon < 1.5) rate *= 0.3;
+  s.supp = Math.max(0, s.supp - rate * dt);
+}
+
+// ---------------------------------------------------------------- loop
+function update(dt) {
+  G.time += dt;
+  G.spotT -= dt;
+  if (G.spotT <= 0) { G.spotT = 0.25; updateSpotting(); }
+  for (const c of G.controllers) c.update(dt);
+  G.controllers = G.controllers.filter(c => !c.done);
+  updateAI(dt);
+  for (const s of G.soldiers) {
+    if (!s.alive || s.routed) continue;
+    updateSuppression(s, dt);
+    updateMovement(s, dt);
+    updateCombat(s, dt);
+  }
+  updateProjectiles(dt);
+  for (const list of [G.effects, G.floaters]) {
+    for (let i = list.length - 1; i >= 0; i--) { list[i].t += dt; if (list[i].t > list[i].life) list.splice(i, 1); }
+  }
+  G.teamT -= dt;
+  if (G.teamT <= 0) { G.teamT = 0.5; updateTeams(0.5); }
+  G.endT -= dt;
+  if (G.endT <= 0) { G.endT = 1; checkEnd(); }
+}
+
+function checkEnd() {
+  const up = (sq) => sq.all.some(s => s.active && !s.routing);
+  if (!up(G.squads.red)) endMission('victory');
+  else if (!up(G.squads.blue)) endMission('defeat');
+}
+
+function endMission(result) {
+  G.over = true; G.paused = true;
+  G.revealAll = true;
+  G.log(result === 'victory' ? 'Enemy defeated.' : 'Your squad is combat ineffective.', result === 'victory' ? 'kill' : 'loss');
+  const id = G.missionId;
+  setTimeout(() => { if (G.missionId !== id) return; UI.showDebrief(result); G.revealAll = false; }, 1200);
+}
+
+let lastFrame = performance.now();
+function frame(now) {
+  const dt = Math.min(0.1, (now - lastFrame) / 1000);
+  lastFrame = now;
+  if (G.running && !G.paused && !G.over) {
+    let sim = dt * G.speed;
+    while (sim > 1e-6) { const step = Math.min(0.05, sim); update(step); sim -= step; }
+  }
+  render();
+  UI.tick(dt);
+  requestAnimationFrame(frame);
+}
+
+function boot() {
+  G.settings = loadSettings();
+  initRender($('view'));
+  UI.init();
+  Input.init($('view'));
+  $('btnBegin').addEventListener('click', () => {
+    G.settings.seed = parseInt($('missionSeed').value, 10) || G.settings.seed;
+    UI.hideModal('briefing');
+    newMission();
+  });
+  $('btnAgain').addEventListener('click', () => { $('debrief').hidden = true; newMission(); });
+  $('btnNext').addEventListener('click', () => {
+    $('debrief').hidden = true;
+    G.settings.seed = Math.floor(Math.random() * 99999) + 1;
+    UI.showBriefing();
+  });
+  // Draw a map behind the briefing so the first view is the ground, not a blank screen.
+  G.map = new GameMap(G.settings.seed);
+  buildTerrain(G.map);
+  fitCamera();
+  UI.showBriefing();
+  requestAnimationFrame(frame);
+}
+
+if (document.readyState === 'loading') window.addEventListener('DOMContentLoaded', boot);
+else boot();
+
+</script>
+</body>
+</html>

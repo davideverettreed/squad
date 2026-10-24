@@ -1,0 +1,100 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover, user-scalable=no">
+<title>Squad Fire and Maneuver</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<meta name="theme-color" content="#1d2119">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@500;600&family=Saira+Condensed:wght@500;600;700&display=swap">
+<link rel="stylesheet" href="css/style.css">
+</head>
+<body>
+<div id="app">
+  <canvas id="view" aria-label="Tactical map"></canvas>
+
+  <header id="bar">
+    <div class="brand"><b>SQUAD</b><span>Fire and maneuver</span></div>
+    <div id="clock" aria-label="Mission time">00:00</div>
+    <div class="barbtns">
+      <button id="btnPause" class="obtn">Resume</button>
+      <button id="btnSpeed" class="obtn" title="Game speed">1×</button>
+      <button id="btnRoster" class="obtn">Roster</button>
+      <button id="btnHelp" class="obtn" title="Controls">Help</button>
+      <button id="btnMenu" class="obtn">Mission</button>
+    </div>
+  </header>
+
+  <aside id="roster" aria-label="Squad roster"></aside>
+  <div id="log" aria-live="polite"></div>
+  <div id="toast" hidden></div>
+
+  <section id="orders" aria-label="Orders">
+    <div id="selbar">
+      <div id="selChips"></div>
+      <div id="selText"></div>
+    </div>
+    <div id="orderGrid"></div>
+  </section>
+
+  <div id="briefing" class="modal" hidden>
+    <div class="card">
+      <div class="cardhead">
+        <h2>Operation order</h2>
+        <span class="eyebrow">1st Squad · Marine rifle squad, 13 men</span>
+      </div>
+      <div id="briefBody"></div>
+      <div class="cardfoot">
+        <span class="bnote">The mission starts paused. Give your orders, then press Resume.</span>
+        <button id="btnBegin" class="obtn primary">Begin mission</button>
+      </div>
+    </div>
+  </div>
+
+  <div id="debrief" class="modal" hidden>
+    <div class="card small">
+      <div class="cardhead"><h2 id="debriefTitle">Debrief</h2><span class="eyebrow">After-action report</span></div>
+      <div id="debriefBody"></div>
+      <div class="cardfoot">
+        <button id="btnAgain" class="obtn">Same map again</button>
+        <button id="btnNext" class="obtn primary">New mission</button>
+      </div>
+    </div>
+  </div>
+
+  <div id="help" class="modal" hidden>
+    <div class="card small">
+      <div class="cardhead"><h2>Controls</h2><span class="eyebrow">Mouse, touch and keyboard</span></div>
+      <div class="helpbody">
+        <h3>Selecting</h3>
+        <p>Tap a Marine to select that Marine. Tap again to select the fire team, and again for the whole squad. The Squad and fire team buttons above the orders do the same. Keys: <kbd>1</kbd> <kbd>2</kbd> <kbd>3</kbd> fire teams, <kbd>0</kbd> squad, <kbd>Esc</kbd> cancel.</p>
+        <h3>Moving</h3>
+        <p>Pick Walk, Rush or Crawl, then tap the ground. Right-click also moves. Teams and the squad move in their formation. Rushing is fast but tiring and easy to spot. Crawling is slow but men can crawl while pinned.</p>
+        <h3>Fire and maneuver</h3>
+        <p><b>Suppress</b> puts fire on an area, seen enemy or not. <b>Bound</b> sends the squad forward one fire team at a time while the others cover it (a fire team bounds in buddy pairs). <b>Assault</b> walks forward firing and throwing grenades. Tap a visible enemy to make the selection engage that target.</p>
+        <h3>Reading the map</h3>
+        <p>Blue circles are your Marines and red circles are enemy you can see. A dashed red diamond marks where an enemy was last seen. The orange ring is suppression: red means pinned, and a pinned man will not move except by crawling. The bar to the left of a symbol shows posture: tall for standing, short for kneeling, flat for prone. The numeral is the fire team.</p>
+        <h3>Camera</h3>
+        <p>Drag to pan. Use the wheel or pinch to zoom. <kbd>Space</kbd> pauses; you can give orders while paused.</p>
+      </div>
+      <div class="cardfoot"><button class="obtn primary" data-close="help">Close</button></div>
+    </div>
+  </div>
+</div>
+
+<script src="src/util.js"></script>
+<script src="src/data.js"></script>
+<script src="src/map.js"></script>
+<script src="src/units.js"></script>
+<script src="src/combat.js"></script>
+<script src="src/orders.js"></script>
+<script src="src/ai.js"></script>
+<script src="src/symbols.js"></script>
+<script src="src/render.js"></script>
+<script src="src/ui.js"></script>
+<script src="src/input.js"></script>
+<script src="src/main.js"></script>
+</body>
+</html>
