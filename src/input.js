@@ -7,15 +7,18 @@ const Input = {
 
   init(canvas) {
     canvas.addEventListener('pointerdown', (e) => {
-      canvas.setPointerCapture(e.pointerId);
+      try { canvas.setPointerCapture(e.pointerId); } catch (err) { /* pointer already gone */ }
       this.pointers.set(e.pointerId, { x: e.offsetX, y: e.offsetY, sx: e.offsetX, sy: e.offsetY, button: e.button });
       if (this.pointers.size === 1) {
         this.moved = false;
         this.camStart = { x: R.cam.x, y: R.cam.y };
+        // On a touch screen a finger on one of our pieces drags the unit to a new place.
+        this.dragU = e.pointerType !== 'mouse' && G.running && !G.over && !Plan.tool && !G.ui.measuring ? UI.unitDragStart(pieceAt(e.offsetX, e.offsetY)) : null;
         // While planning, a control measure under the finger is dragged instead of the map.
-        this.dragG = G.running && Plan.planning && !Plan.tool && e.button !== 2 ? Plan.hitGraphic(e.offsetX, e.offsetY) : null;
+        this.dragG = !this.dragU && G.running && Plan.planning && !Plan.tool && e.button !== 2 ? Plan.hitGraphic(e.offsetX, e.offsetY) : null;
       } else if (this.pointers.size === 2) {
         this.moved = true;
+        if (this.dragU) { this.dragU = null; G.ui.unitDrag = null; }
         const [a, b] = [...this.pointers.values()];
         const mid = { x: (a.x + b.x) / 2, y: (a.y + b.y) / 2 };
         this.pinch = { d: Math.hypot(a.x - b.x, a.y - b.y), zoom: R.cam.zoom, world: toWorld(mid.x, mid.y) };
@@ -29,7 +32,9 @@ const Input = {
       p.x = e.offsetX; p.y = e.offsetY;
       if (this.pointers.size === 1) {
         if (Math.hypot(p.x - p.sx, p.y - p.sy) > 8) this.moved = true;
-        if (this.moved && this.dragG) {
+        if (this.moved && this.dragU) {
+          G.ui.unitDrag.to = toWorld(p.x, p.y);
+        } else if (this.moved && this.dragG) {
           const w = toWorld(p.x, p.y), pt = this.dragG.g.pts[this.dragG.idx];
           pt.x = clamp(w.x, 0, MAP_W); pt.y = clamp(w.y, 0, MAP_H);
         } else if (this.moved) {
@@ -50,6 +55,11 @@ const Input = {
       const p = this.pointers.get(e.pointerId);
       if (!p) return;
       this.pointers.delete(e.pointerId);
+      if (e.type === 'pointerup' && this.dragU && this.pointers.size === 0) {
+        const d = this.dragU; this.dragU = null;
+        if (this.moved) { UI.unitDrop(p.x, p.y, toWorld(p.x, p.y), d); return; }
+        G.ui.unitDrag = null; // a plain tap: handled below as usual
+      }
       // A tap (no drag) on a plan ghost picks the unit, even when it stands on a control measure.
       if (e.type === 'pointerup' && this.dragG && !this.moved && this.pointers.size === 0 && ghostAt(p.x, p.y)) {
         this.dragG = null;

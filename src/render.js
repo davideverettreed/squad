@@ -677,6 +677,7 @@ function render() {
   drawUnits(ctx);
   drawGhostFormation(ctx);
   drawNudge(ctx);
+  drawUnitDrag(ctx);
   drawTapes(ctx);
   drawFloaters(ctx);
   drawScale(ctx);
@@ -1487,6 +1488,28 @@ function drawGhostFormation(ctx) {
   ctx.font = '700 13px "Saira Condensed", sans-serif'; ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
   ctx.lineWidth = 3; ctx.strokeStyle = 'rgba(247,245,236,0.95)'; ctx.strokeText(FORMATIONS[form].label.toUpperCase(), tx, ty - 14);
   ctx.fillStyle = OVL.blue; ctx.fillText(FORMATIONS[form].label.toUpperCase(), tx, ty - 14);
+  ctx.restore();
+}
+
+// A unit being dragged by a finger: a dashed line from where it stands to under the finger,
+// with a ring and what letting go will do.
+function drawUnitDrag(ctx) {
+  const d = G.ui.unitDrag;
+  if (!d || !d.to) return;
+  const a = toScreen(d.from.x, d.from.y), b = toScreen(d.to.x, d.to.y), m = dist(d.from.x, d.from.y, d.to.x, d.to.y);
+  ctx.save();
+  ctx.strokeStyle = 'rgba(31,79,191,0.9)'; ctx.fillStyle = 'rgba(128,224,255,0.3)'; ctx.lineWidth = View3D.drawingDrape ? 4 : 2.5;
+  ctx.setLineDash([8, 6]);
+  ctx.beginPath(); ctx.moveTo(a.x, a.y); ctx.lineTo(b.x, b.y); ctx.stroke();
+  ctx.setLineDash([]);
+  const r = View3D.drawingDrape ? 30 : 18;
+  ctx.beginPath(); ctx.arc(b.x, b.y, r, 0, Math.PI * 2); ctx.fill(); ctx.stroke();
+  if (!View3D.drawingDrape) {
+    const txt = (Plan.planning ? 'Plan · ' : MOVE[G.ui.moveMode].label + ' · ') + Math.round(m) + ' m';
+    ctx.font = '700 13px "Saira Condensed", "Arial Narrow", sans-serif'; ctx.textAlign = 'center'; ctx.textBaseline = 'bottom';
+    ctx.lineWidth = 3; ctx.strokeStyle = 'rgba(247,245,236,0.95)'; ctx.strokeText(txt, b.x, b.y - r - 4);
+    ctx.fillStyle = OVL.blue; ctx.fillText(txt, b.x, b.y - r - 4);
+  }
   ctx.restore();
 }
 

@@ -217,7 +217,7 @@ const View3D = {
     try {
       Fog.draw(ctx);
       drawPlan(ctx); drawPlanGhosts(ctx); drawOrdersOverlay(ctx); drawProjectiles(ctx); drawEffects(ctx);
-      drawCones(ctx); drawGhostFormation(ctx); drawNudge(ctx); drawTapes(ctx);
+      drawCones(ctx); drawGhostFormation(ctx); drawNudge(ctx); drawUnitDrag(ctx); drawTapes(ctx);
     } finally { R.cam = save.cam; R.w = save.w; R.h = save.h; this.drawingDrape = false; }
     t.tex.needsUpdate = true;
     t.drawnAt = performance.now(); t.dirty = false;
@@ -491,12 +491,15 @@ const View3D = {
     const cv = this.canvas;
     cv.addEventListener('contextmenu', (e) => e.preventDefault());
     cv.addEventListener('pointerdown', (e) => {
-      cv.setPointerCapture(e.pointerId);
+      try { cv.setPointerCapture(e.pointerId); } catch (err) { /* pointer already gone */ }
       this.pointers.set(e.pointerId, { x: e.offsetX, y: e.offsetY, sx: e.offsetX, sy: e.offsetY, button: e.button });
       this.moved = this.pointers.size > 1;
       this.drag = { turn: e.button === 2 || e.shiftKey };
+      // On a touch screen a finger on one of our pieces drags the unit to a new place.
+      this.dragU = this.pointers.size === 1 && e.pointerType !== 'mouse' && G.running && !G.over && !Plan.tool && !G.ui.measuring ? UI.unitDragStart(this.pieceAt(e.offsetX, e.offsetY)) : null;
+      if (this.pointers.size > 1 && this.dragU) { this.dragU = null; G.ui.unitDrag = null; }
       // While planning, a control measure under the finger is dragged instead of the view.
-      this.dragG = this.pointers.size === 1 && G.running && Plan.planning && !Plan.tool && e.button !== 2 ? this.hitGraphic(e.offsetX, e.offsetY) : null;
+      this.dragG = !this.dragU && this.pointers.size === 1 && G.running && Plan.planning && !Plan.tool && e.button !== 2 ? this.hitGraphic(e.offsetX, e.offsetY) : null;
       if (this.pointers.size === 2) this.pinch = this.twoFinger();
     });
     cv.addEventListener('pointermove', (e) => {
@@ -516,6 +519,9 @@ const View3D = {
         c.yaw += (now.a - this.pinch.a);
         c.pitch += (now.my - this.pinch.my) * 0.006;
         this.pinch = now;
+      } else if (this.pointers.size === 1 && this.moved && this.dragU) {
+        const w = this.groundAt(p.x, p.y);
+        if (w) { G.ui.unitDrag.to = w; this.drapeDirty = true; }
       } else if (this.pointers.size === 1 && this.moved && this.dragG) {
         const w = this.groundAt(p.x, p.y), pt = this.dragG.g.pts[this.dragG.idx];
         if (w) { pt.x = clamp(w.x, 0, MAP_W); pt.y = clamp(w.y, 0, MAP_H); }
@@ -534,6 +540,12 @@ const View3D = {
       const p = this.pointers.get(e.pointerId);
       if (!p) return;
       this.pointers.delete(e.pointerId);
+      if (e.type === 'pointerup' && this.dragU && this.pointers.size === 0) {
+        const d = this.dragU; this.dragU = null;
+        const w = this.moved ? this.groundAt(p.x, p.y) : null;
+        if (w) { UI.unitDrop(p.x, p.y, w, d); return; }
+        G.ui.unitDrag = null;
+      }
       if (e.type === 'pointerup' && this.dragG && !this.moved && this.pointers.size === 0 && Plan.planning && this.ghostAt(p.x, p.y)) {
         this.dragG = null;
         this.tap(p.x, p.y, false);

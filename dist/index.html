@@ -514,7 +514,7 @@ body:not(.roster-min) #btn3d, body:not(.roster-min) #ctl3d { margin-left: 0; }
         <h3>Selecting</h3>
         <p>Tap a Marine to select that Marine. Tap again to select the fire team, and again for the whole squad. The Squad and fire team buttons above the orders do the same. Keys: <kbd>1</kbd> <kbd>2</kbd> <kbd>3</kbd> fire teams, <kbd>0</kbd> squad, <kbd>Esc</kbd> cancel.</p>
         <h3>Moving</h3>
-        <p>While planning, each planned move shows as a dashed blue arrow, and a dashed ghost of the unit stands where its last move ends. Tap a ghost to pick that unit there, then tap the map to plan its next step. Tap a control measure to change it into another kind (a checkpoint into an assault position, say), rename it, open it in the order or delete it; drag it to move it. While planning, nothing moves: select a unit and tap the map to open a menu that sets a checkpoint, a bound, a route, a fighting position, a support-by-fire position, an assault position, an objective or a target reference point at that spot and adds the line to the plan. After step-off, orders go by radio: tap the ground to move in the chosen mode (Walk unless you pick Rush or Crawl); tap twice quickly to rush. Double-click a fire team's button to select every other team instead. The squad leader moves with 1st Fire Team, but can still be selected alone, and the other teams move without him. W, A, S and D shift the selected unit forward, left, back and right while it keeps its front; Q and E turn it. A ghost shows where it will end up, the order goes out when you stop pressing, and once there the men take up whatever move they were on. Right-click also moves. Teams and the squad move in their formation. A walking team that takes fire, or sees a new enemy within 250 m, halts on its own, gets down and returns fire; rush, assault or bound to keep moving under fire. Rushing is fast but tiring and easy to spot. Crawling is slow but men can crawl while pinned.</p>
+        <p>While planning, each planned move shows as a dashed blue arrow, and a dashed ghost of the unit stands where its last move ends. Tap a ghost to pick that unit there, then tap the map to plan its next step. Tap a control measure to change it into another kind (a checkpoint into an assault position, say), rename it, open it in the order or delete it; drag it to move it. While planning, nothing moves: select a unit and tap the map to open a menu that sets a checkpoint, a bound, a route, a fighting position, a support-by-fire position, an assault position, an objective or a target reference point at that spot and adds the line to the plan. On a touch screen, press on one of your pieces and drag it: let go to open the plan menu at that spot while planning, or to send it there after step-off. After step-off, orders go by radio: tap the ground to move in the chosen mode (Walk unless you pick Rush or Crawl); tap twice quickly to rush. Double-click a fire team's button to select every other team instead. The squad leader moves with 1st Fire Team, but can still be selected alone, and the other teams move without him. W, A, S and D shift the selected unit forward, left, back and right while it keeps its front; Q and E turn it. A ghost shows where it will end up, the order goes out when you stop pressing, and once there the men take up whatever move they were on. Right-click also moves. Teams and the squad move in their formation. A walking team that takes fire, or sees a new enemy within 250 m, halts on its own, gets down and returns fire; rush, assault or bound to keep moving under fire. Rushing is fast but tiring and easy to spot. Crawling is slow but men can crawl while pinned.</p>
         <h3>Fire and maneuver</h3>
         <p><b>Suppress</b> puts fire on an area, seen enemy or not. <b>Bound</b> sends the squad forward one fire team at a time while the others cover it (a fire team bounds in buddy pairs). <b>Assault</b> walks forward firing and throwing grenades. Tap a visible enemy to make the selection engage that target.</p>
         <h3>Reading the pieces</h3>
@@ -3960,6 +3960,7 @@ function render() {
   drawUnits(ctx);
   drawGhostFormation(ctx);
   drawNudge(ctx);
+  drawUnitDrag(ctx);
   drawTapes(ctx);
   drawFloaters(ctx);
   drawScale(ctx);
@@ -4773,6 +4774,28 @@ function drawGhostFormation(ctx) {
   ctx.restore();
 }
 
+// A unit being dragged by a finger: a dashed line from where it stands to under the finger,
+// with a ring and what letting go will do.
+function drawUnitDrag(ctx) {
+  const d = G.ui.unitDrag;
+  if (!d || !d.to) return;
+  const a = toScreen(d.from.x, d.from.y), b = toScreen(d.to.x, d.to.y), m = dist(d.from.x, d.from.y, d.to.x, d.to.y);
+  ctx.save();
+  ctx.strokeStyle = 'rgba(31,79,191,0.9)'; ctx.fillStyle = 'rgba(128,224,255,0.3)'; ctx.lineWidth = View3D.drawingDrape ? 4 : 2.5;
+  ctx.setLineDash([8, 6]);
+  ctx.beginPath(); ctx.moveTo(a.x, a.y); ctx.lineTo(b.x, b.y); ctx.stroke();
+  ctx.setLineDash([]);
+  const r = View3D.drawingDrape ? 30 : 18;
+  ctx.beginPath(); ctx.arc(b.x, b.y, r, 0, Math.PI * 2); ctx.fill(); ctx.stroke();
+  if (!View3D.drawingDrape) {
+    const txt = (Plan.planning ? 'Plan · ' : MOVE[G.ui.moveMode].label + ' · ') + Math.round(m) + ' m';
+    ctx.font = '700 13px "Saira Condensed", "Arial Narrow", sans-serif'; ctx.textAlign = 'center'; ctx.textBaseline = 'bottom';
+    ctx.lineWidth = 3; ctx.strokeStyle = 'rgba(247,245,236,0.95)'; ctx.strokeText(txt, b.x, b.y - r - 4);
+    ctx.fillStyle = OVL.blue; ctx.fillText(txt, b.x, b.y - r - 4);
+  }
+  ctx.restore();
+}
+
 // The unit as a W A S D nudge will leave it: dashed rings with a tick for the new front.
 function drawNudge(ctx) {
   const n = Nudge.cur;
@@ -5073,6 +5096,28 @@ const UI = {
     document.body.classList.toggle('orders-open', on);
     $('btnOrdersMore').textContent = on ? 'Orders ▾' : 'Orders ▴';
     $('btnOrdersMore').setAttribute('aria-expanded', on ? 'true' : 'false');
+  },
+
+  // ------------------------------------------------------------ dragging a unit (touch)
+  // A finger pressed on one of our pieces: a man, a fire team counter or the squad counter.
+  unitDragStart(piece) {
+    if (!piece || piece.side !== 'blue') return null;
+    let sel;
+    if (piece.kind === 'man') { if (!piece.soldier.active) return null; sel = { level: 'soldier', soldier: piece.soldier, team: piece.soldier.team, squad: piece.soldier.squad }; }
+    else if (piece.kind === 'team' && piece.team.num) sel = { level: 'team', team: piece.team, squad: piece.team.squad };
+    else sel = { level: 'squad', squad: G.squads.blue };
+    const from = centroid(selMembers(sel).filter(s => s.active));
+    G.ui.unitDrag = { sel, from, to: null };
+    return G.ui.unitDrag;
+  },
+  // Let go: while planning, the plan menu for that unit at the spot; after step-off, the
+  // move order (by radio) in the chosen mode.
+  unitDrop(sx, sy, w, d) {
+    G.ui.unitDrag = null;
+    if (!G.running || G.over) return;
+    this.select(d.sel);
+    if (Plan.planning) this.planMenu(sx, sy, w, d.sel);
+    else issueOrder(d.sel, 'move', { x: w.x, y: w.y, mode: G.ui.moveMode });
   },
 
   // ------------------------------------------------------------ measuring tape
@@ -7096,7 +7141,7 @@ const View3D = {
     try {
       Fog.draw(ctx);
       drawPlan(ctx); drawPlanGhosts(ctx); drawOrdersOverlay(ctx); drawProjectiles(ctx); drawEffects(ctx);
-      drawCones(ctx); drawGhostFormation(ctx); drawNudge(ctx); drawTapes(ctx);
+      drawCones(ctx); drawGhostFormation(ctx); drawNudge(ctx); drawUnitDrag(ctx); drawTapes(ctx);
     } finally { R.cam = save.cam; R.w = save.w; R.h = save.h; this.drawingDrape = false; }
     t.tex.needsUpdate = true;
     t.drawnAt = performance.now(); t.dirty = false;
@@ -7370,12 +7415,15 @@ const View3D = {
     const cv = this.canvas;
     cv.addEventListener('contextmenu', (e) => e.preventDefault());
     cv.addEventListener('pointerdown', (e) => {
-      cv.setPointerCapture(e.pointerId);
+      try { cv.setPointerCapture(e.pointerId); } catch (err) { /* pointer already gone */ }
       this.pointers.set(e.pointerId, { x: e.offsetX, y: e.offsetY, sx: e.offsetX, sy: e.offsetY, button: e.button });
       this.moved = this.pointers.size > 1;
       this.drag = { turn: e.button === 2 || e.shiftKey };
+      // On a touch screen a finger on one of our pieces drags the unit to a new place.
+      this.dragU = this.pointers.size === 1 && e.pointerType !== 'mouse' && G.running && !G.over && !Plan.tool && !G.ui.measuring ? UI.unitDragStart(this.pieceAt(e.offsetX, e.offsetY)) : null;
+      if (this.pointers.size > 1 && this.dragU) { this.dragU = null; G.ui.unitDrag = null; }
       // While planning, a control measure under the finger is dragged instead of the view.
-      this.dragG = this.pointers.size === 1 && G.running && Plan.planning && !Plan.tool && e.button !== 2 ? this.hitGraphic(e.offsetX, e.offsetY) : null;
+      this.dragG = !this.dragU && this.pointers.size === 1 && G.running && Plan.planning && !Plan.tool && e.button !== 2 ? this.hitGraphic(e.offsetX, e.offsetY) : null;
       if (this.pointers.size === 2) this.pinch = this.twoFinger();
     });
     cv.addEventListener('pointermove', (e) => {
@@ -7395,6 +7443,9 @@ const View3D = {
         c.yaw += (now.a - this.pinch.a);
         c.pitch += (now.my - this.pinch.my) * 0.006;
         this.pinch = now;
+      } else if (this.pointers.size === 1 && this.moved && this.dragU) {
+        const w = this.groundAt(p.x, p.y);
+        if (w) { G.ui.unitDrag.to = w; this.drapeDirty = true; }
       } else if (this.pointers.size === 1 && this.moved && this.dragG) {
         const w = this.groundAt(p.x, p.y), pt = this.dragG.g.pts[this.dragG.idx];
         if (w) { pt.x = clamp(w.x, 0, MAP_W); pt.y = clamp(w.y, 0, MAP_H); }
@@ -7413,6 +7464,12 @@ const View3D = {
       const p = this.pointers.get(e.pointerId);
       if (!p) return;
       this.pointers.delete(e.pointerId);
+      if (e.type === 'pointerup' && this.dragU && this.pointers.size === 0) {
+        const d = this.dragU; this.dragU = null;
+        const w = this.moved ? this.groundAt(p.x, p.y) : null;
+        if (w) { UI.unitDrop(p.x, p.y, w, d); return; }
+        G.ui.unitDrag = null;
+      }
       if (e.type === 'pointerup' && this.dragG && !this.moved && this.pointers.size === 0 && Plan.planning && this.ghostAt(p.x, p.y)) {
         this.dragG = null;
         this.tap(p.x, p.y, false);
@@ -7466,15 +7523,18 @@ const Input = {
 
   init(canvas) {
     canvas.addEventListener('pointerdown', (e) => {
-      canvas.setPointerCapture(e.pointerId);
+      try { canvas.setPointerCapture(e.pointerId); } catch (err) { /* pointer already gone */ }
       this.pointers.set(e.pointerId, { x: e.offsetX, y: e.offsetY, sx: e.offsetX, sy: e.offsetY, button: e.button });
       if (this.pointers.size === 1) {
         this.moved = false;
         this.camStart = { x: R.cam.x, y: R.cam.y };
+        // On a touch screen a finger on one of our pieces drags the unit to a new place.
+        this.dragU = e.pointerType !== 'mouse' && G.running && !G.over && !Plan.tool && !G.ui.measuring ? UI.unitDragStart(pieceAt(e.offsetX, e.offsetY)) : null;
         // While planning, a control measure under the finger is dragged instead of the map.
-        this.dragG = G.running && Plan.planning && !Plan.tool && e.button !== 2 ? Plan.hitGraphic(e.offsetX, e.offsetY) : null;
+        this.dragG = !this.dragU && G.running && Plan.planning && !Plan.tool && e.button !== 2 ? Plan.hitGraphic(e.offsetX, e.offsetY) : null;
       } else if (this.pointers.size === 2) {
         this.moved = true;
+        if (this.dragU) { this.dragU = null; G.ui.unitDrag = null; }
         const [a, b] = [...this.pointers.values()];
         const mid = { x: (a.x + b.x) / 2, y: (a.y + b.y) / 2 };
         this.pinch = { d: Math.hypot(a.x - b.x, a.y - b.y), zoom: R.cam.zoom, world: toWorld(mid.x, mid.y) };
@@ -7488,7 +7548,9 @@ const Input = {
       p.x = e.offsetX; p.y = e.offsetY;
       if (this.pointers.size === 1) {
         if (Math.hypot(p.x - p.sx, p.y - p.sy) > 8) this.moved = true;
-        if (this.moved && this.dragG) {
+        if (this.moved && this.dragU) {
+          G.ui.unitDrag.to = toWorld(p.x, p.y);
+        } else if (this.moved && this.dragG) {
           const w = toWorld(p.x, p.y), pt = this.dragG.g.pts[this.dragG.idx];
           pt.x = clamp(w.x, 0, MAP_W); pt.y = clamp(w.y, 0, MAP_H);
         } else if (this.moved) {
@@ -7509,6 +7571,11 @@ const Input = {
       const p = this.pointers.get(e.pointerId);
       if (!p) return;
       this.pointers.delete(e.pointerId);
+      if (e.type === 'pointerup' && this.dragU && this.pointers.size === 0) {
+        const d = this.dragU; this.dragU = null;
+        if (this.moved) { UI.unitDrop(p.x, p.y, toWorld(p.x, p.y), d); return; }
+        G.ui.unitDrag = null; // a plain tap: handled below as usual
+      }
       // A tap (no drag) on a plan ghost picks the unit, even when it stands on a control measure.
       if (e.type === 'pointerup' && this.dragG && !this.moved && this.pointers.size === 0 && ghostAt(p.x, p.y)) {
         this.dragG = null;

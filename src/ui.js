@@ -232,6 +232,28 @@ const UI = {
     $('btnOrdersMore').setAttribute('aria-expanded', on ? 'true' : 'false');
   },
 
+  // ------------------------------------------------------------ dragging a unit (touch)
+  // A finger pressed on one of our pieces: a man, a fire team counter or the squad counter.
+  unitDragStart(piece) {
+    if (!piece || piece.side !== 'blue') return null;
+    let sel;
+    if (piece.kind === 'man') { if (!piece.soldier.active) return null; sel = { level: 'soldier', soldier: piece.soldier, team: piece.soldier.team, squad: piece.soldier.squad }; }
+    else if (piece.kind === 'team' && piece.team.num) sel = { level: 'team', team: piece.team, squad: piece.team.squad };
+    else sel = { level: 'squad', squad: G.squads.blue };
+    const from = centroid(selMembers(sel).filter(s => s.active));
+    G.ui.unitDrag = { sel, from, to: null };
+    return G.ui.unitDrag;
+  },
+  // Let go: while planning, the plan menu for that unit at the spot; after step-off, the
+  // move order (by radio) in the chosen mode.
+  unitDrop(sx, sy, w, d) {
+    G.ui.unitDrag = null;
+    if (!G.running || G.over) return;
+    this.select(d.sel);
+    if (Plan.planning) this.planMenu(sx, sy, w, d.sel);
+    else issueOrder(d.sel, 'move', { x: w.x, y: w.y, mode: G.ui.moveMode });
+  },
+
   // ------------------------------------------------------------ measuring tape
   setMeasuring(on) {
     G.ui.measuring = on; G.ui.tapeStart = null;
