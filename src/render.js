@@ -167,6 +167,7 @@ function drawMapRegion(ctx, map, x0, y0, w, h, ppm, level) {
   for (let y = 0; y < H + 2; y++) for (let x = 0; x < W + 2; x++) elev[y * (W + 2) + x] = map.elevAt(x0 + (x - 0.5) / ppm, y0 + (y - 0.5) / ppm);
   for (let y = 0; y < H; y++) for (let x = 0; x < W; x++) cls[y * W + x] = groundClass(map, x0 + (x + 0.5) / ppm, y0 + (y + 0.5) / ppm);
   const ci = map.ci, ii = map.ci * map.index;
+
   for (let y = 0; y < H; y++) {
     for (let x = 0; x < W; x++) {
       const i = y * W + x, k = cls[i];
@@ -179,6 +180,9 @@ function drawMapRegion(ctx, map, x0, y0, w, h, ppm, level) {
       let [r, g, b] = col;
       if (k !== TER.POND && k !== TER.ICE) {
         const e = elev[(y + 1) * (W + 2) + x + 1], er = elev[(y + 1) * (W + 2) + x + 2], ed = elev[(y + 2) * (W + 2) + x + 1];
+        // Relief shading; flat ground keeps its printed color.
+        const shade = map.shadeAt(x0 + (x + 0.5) / ppm, y0 + (y + 0.5) / ppm);
+        r *= shade; g *= shade; b *= shade;
         const onIndex = Math.floor(e / ii) !== Math.floor(er / ii) || Math.floor(e / ii) !== Math.floor(ed / ii);
         const onLine = Math.floor(e / ci) !== Math.floor(er / ci) || Math.floor(e / ci) !== Math.floor(ed / ci);
         if (onIndex || onLine) {

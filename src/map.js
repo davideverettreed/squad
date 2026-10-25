@@ -39,6 +39,23 @@ class GameMap {
     return (a * (1 - tx) + b * tx) * (1 - ty) + (c * (1 - tx) + d * tx) * ty;
   }
 
+  // Relief shading for the printed map: slopes lit from the northwest at 45 degrees, measured
+  // over 24 m so the small stream cuts do not streak it, heights doubled so gentle ground reads.
+  shadeAt(x, y) {
+    if (!this.shade) {
+      const s = this.shade = new Float32Array(GW * GH), e = this.elev, k = 3, L = 0.7071;
+      for (let cy = 0; cy < GH; cy++) for (let cx = 0; cx < GW; cx++) {
+        const x0 = Math.max(0, cx - k), x1 = Math.min(GW - 1, cx + k), y0 = Math.max(0, cy - k), y1 = Math.min(GH - 1, cy + k);
+        const nx = -(e[cy * GW + x1] - e[cy * GW + x0]) / ((x1 - x0) * CELL) * 2;
+        const ny = -(e[y1 * GW + cx] - e[y0 * GW + cx]) / ((y1 - y0) * CELL) * 2;
+        s[cy * GW + cx] = clamp(1 + ((-0.5 * nx - 0.5 * ny + L) / Math.hypot(nx, ny, 1) - L) * 0.9, 0.72, 1.1);
+      }
+    }
+    const fx = clamp(x / CELL - 0.5, 0, GW - 1.001), fy = clamp(y / CELL - 0.5, 0, GH - 1.001);
+    const x0 = Math.floor(fx), y0 = Math.floor(fy), tx = fx - x0, ty = fy - y0, i = y0 * GW + x0, s = this.shade;
+    return (s[i] * (1 - tx) + s[i + 1] * tx) * (1 - ty) + (s[i + GW] * (1 - tx) + s[i + GW + 1] * tx) * ty;
+  }
+
   // ---------------------------------------------------------------- generation
   generate() {
     this.genElevation();
