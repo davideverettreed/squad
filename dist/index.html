@@ -309,7 +309,10 @@ kbd { font: 600 12px/1 var(--mono); border: 1px solid var(--line); border-bottom
   #clock { font-size: 13px; white-space: nowrap; }
   #btnHelp { display: none; }
   .obtn { padding: 7px 9px; font-size: 13px; min-height: 36px; }
-  #bar { gap: 8px; }
+  #bar { gap: 6px; padding-left: max(8px, env(safe-area-inset-left, 0px)); padding-right: max(8px, env(safe-area-inset-right, 0px)); }
+  /* The buttons share what is left of the bar after the clock, and shrink to fit it. */
+  .barbtns { flex: 1 1 0; min-width: 0; justify-content: flex-end; gap: 3px; }
+  .barbtns .obtn { flex: 0 1 auto; min-width: 0; padding: 7px 6px; font-size: 12px; letter-spacing: 0.02em; overflow: hidden; text-overflow: clip; white-space: nowrap; }
   #roster { display: none; width: min(320px, calc(100% - 16px)); }
   body.roster-open #roster { display: block; }
   #log { left: max(8px, env(safe-area-inset-left, 0px)); width: auto; top: calc(env(safe-area-inset-top, 0px) + 54px); }
@@ -348,6 +351,13 @@ details.cheat dl { display: grid; grid-template-columns: minmax(110px, 38%) 1fr;
 details.cheat dt { font-weight: 700; }
 details.cheat dd { margin: 0; opacity: .9; }
 #btnMeasure .sm { display: none; }
+/* Narrow phones: tighter header so every button keeps its full label. */
+@media (max-width: 400px) {
+  #clock { font-size: 11px; }
+  #bar { gap: 4px; }
+  .barbtns { gap: 2px; }
+  .barbtns .obtn { padding: 6px 4px; font-size: 11px; letter-spacing: 0; }
+}
 </style>
 </head>
 <body>
