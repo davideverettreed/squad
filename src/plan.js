@@ -61,7 +61,55 @@ const Plan = {
     this.timeAvail = G.mode === 'meeting' ? Math.round(sep / 1.25 / 60) * 60 : 45 * 60;
     this.intel = this.makeIntel();
     this.terrain = this.keyTerrain();
+    this.ao = this.aoFacts();
     this.showTerrain = true;
+  },
+
+  // Facts about the area of operations for the orientation: extent, relief, obstacles and
+  // restrictive terrain (ponds, streams, woods, steep ground, villages), avenues of approach.
+  aoFacts() {
+    const m = G.map, N = GW * GH;
+    let lo = Infinity, hi = -Infinity, woods = 0, steep = 0, worst = { s: 0 };
+    for (let cy = 1; cy < GH - 1; cy++) for (let cx = 1; cx < GW - 1; cx++) {
+      const i = cy * GW + cx, e = m.elev[i];
+      if (e < lo) lo = e; if (e > hi) hi = e;
+      const k = m.ter[i];
+      if (k === TER.WOODS || k === TER.ORCHARD) woods++;
+      const s = Math.hypot(m.elev[i + 1] - m.elev[i - 1], m.elev[i + GW] - m.elev[i - GW]) / (2 * CELL);
+      if (s > 0.3) { steep++; if (s > worst.s) worst = { s, x: (cx + 0.5) * CELL, y: (cy + 0.5) * CELL }; }
+    }
+    // Ponds: connected water, largest first.
+    const seen = new Uint8Array(N), ponds = [];
+    for (let i = 0; i < N; i++) {
+      if (seen[i] || m.ter[i] !== TER.POND) continue;
+      let n = 0, sx = 0, sy = 0;
+      const q = [i]; seen[i] = 1;
+      while (q.length) {
+        const c = q.pop(), x = c % GW, y = Math.floor(c / GW);
+        n++; sx += x; sy += y;
+        for (const [dx, dy] of [[1, 0], [-1, 0], [0, 1], [0, -1]]) {
+          const nx = x + dx, ny = y + dy, j = ny * GW + nx;
+          if (m.inGrid(nx, ny) && !seen[j] && m.ter[j] === TER.POND) { seen[j] = 1; q.push(j); }
+        }
+      }
+      ponds.push({ ha: n * CELL * CELL / 10000, x: (sx / n + 0.5) * CELL, y: (sy / n + 0.5) * CELL });
+    }
+    ponds.sort((a, b) => b.ha - a.ha);
+    const paved = m.roads.find(r => r.kind === 'paved');
+    let road = null;
+    if (paved) {
+      const a = paved.pts[0], b = paved.pts[paved.pts.length - 1], brg = bearing(a.x, a.y, b.x, b.y);
+      const ends = ['north', 'northeast', 'east', 'southeast', 'south', 'southwest', 'west', 'northwest'];
+      const from = ends[Math.round(((brg + 180) % 360) / 45) % 8], to = ends[Math.round(brg / 45) % 8];
+      const via = m.places.filter(p => p.kind === 'village' && paved.pts.some(q => dist(q.x, q.y, p.x, p.y) < 200)).map(p => p.name.toUpperCase());
+      road = { text: 'Runs ' + from + ' to ' + to + ' across the AO' + (via.length ? ', through ' + via.join(' and ') : '') + '.', at: paved.pts[Math.floor(paved.pts.length / 2)] };
+    }
+    return {
+      e0: G.grid.e, n0: G.grid.n, lo: Math.round(m.elevBase + lo), hi: Math.round(m.elevBase + hi),
+      woodsPct: Math.round(woods / N * 100), steepPct: steep / N * 100, worst, ponds,
+      streams: m.streams.length, road, tracks: m.roads.filter(r => r.kind === 'track').length,
+      villages: m.places.filter(p => p.kind === 'village'), farms: m.places.filter(p => p.kind === 'farm').length,
+    };
   },
 
   // Marks for the orientation: our assembly area, the reported enemy, and key terrain

@@ -187,11 +187,30 @@ const OPORD = {
   // ------------------------------------------------------------ 1. Orientation
   orientation(box) {
     const f = Plan.terrainFacts(), m = G.map;
-    this.para(box, 'Orientation', 'Study the ground before anything else. The sheet covers 3 × 3 km of farmland, woods and villages in 1 km grid squares. North is up. Contours are 5 m apart, with an index contour every 25 m.');
+    const ao = Plan.ao, two = (v) => String(v).padStart(2, '0');
+    this.para(box, 'Orientation', 'AO is 3 × 3 km, grid ' + two(ao.e0) + '–' + two(ao.e0 + 3) + ' E, ' + two(ao.n0) + '–' + two(ao.n0 + 3) + ' N. ' +
+      'Rolling farmland, woods and villages. Elevation ' + ao.lo + '–' + ao.hi + ' m. North up. CI 5 m, index 25 m.');
+
+    box.appendChild(el('h4', null, 'Obstacles and restrictive terrain'));
+    if (ao.ponds.length) {
+      const big = ao.ponds[0];
+      this.factRow(box, 'Ponds', ao.ponds.length + ' on the sheet. Impassable on foot; go around. Largest ' + big.ha.toFixed(1) + ' ha vic grid ' + gridRef(big.x, big.y) + '.', big, 1.4);
+    }
+    this.factRow(box, 'Streams', ao.streams + ' on the sheet, ' + (f.streams ? f.streams + ' across your axis' : 'none across your axis') +
+      '. Fordable, at about a third of walking speed. The gullies give cover.', null);
+    this.factRow(box, 'Woods', ao.woodsPct + '% of the AO, with orchards. Slow going, short fields of fire, good concealment.', null);
+    if (ao.steepPct > 0.5) this.factRow(box, 'Steep ground', 'Slopes over 30% on ' + ao.steepPct.toFixed(1) + '% of the AO; steepest vic grid ' + gridRef(ao.worst.x, ao.worst.y) + '. Slow to climb.', ao.worst, 1.6);
+    if (ao.villages.length) this.factRow(box, 'Built-up', ao.villages.map(v => v.name.toUpperCase() + ' (' + gridRef(v.x, v.y) + ')').join(', ') + (ao.farms ? '; ' + ao.farms + ' farms' : '') + '. Stone walls and buildings: hard cover for a defender.', ao.villages[0], 1.6);
+
+    box.appendChild(el('h4', null, 'Avenues of approach'));
+    if (ao.road) this.factRow(box, 'Paved road', ao.road.text + ' Fastest going, open to observation.', ao.road.at, 1.4);
+    if (ao.tracks) this.factRow(box, 'Tracks', ao.tracks + ' dirt tracks link the farms and villages to the road.', null);
+    this.factRow(box, 'Direct line', f.woodsPct + '% woods or orchard, ' + (f.streams ? f.streams + ' stream crossing' + (f.streams > 1 ? 's' : '') : 'no streams') + (f.roads ? ', ' + f.roads + ' road crossing' + (f.roads > 1 ? 's' : '') : '') + '.', null);
+
+    box.appendChild(el('h4', null, 'Positions'));
     this.factRow(box, 'You', 'Grid ' + gridRef(f.b.x, f.b.y) + ', elevation ' + Math.round(m.elevBase + m.elevAt(f.b.x, f.b.y)) + ' m.', f.b, 2.2);
     this.factRow(box, 'Enemy', 'Reported at grid ' + gridRef(f.e.x, f.e.y) + ': bearing ' + pad3(bearing(f.b.x, f.b.y, f.e.x, f.e.y)) + '°, ' + Math.round(f.d / 10) * 10 + ' m.', f.e, 1.6);
-    this.factRow(box, 'Between', f.woodsPct + '% of the direct line is woods or orchard. ' + (f.streams ? f.streams + ' stream' + (f.streams > 1 ? 's' : '') + ' to cross. ' : 'No streams on the direct line. ') + (f.roads ? f.roads + ' road crossing' + (f.roads > 1 ? 's' : '') + '.' : ''), null);
-    this.factRow(box, 'High ground', 'Highest point on the direct line: ' + Math.round(m.elevBase + f.hi.e) + ' m at grid ' + gridRef(f.hi.x, f.hi.y) + '. Ground that sees the objective is key terrain.', f.hi, 1.6);
+    this.factRow(box, 'High ground', Math.round(m.elevBase + f.hi.e) + ' m at grid ' + gridRef(f.hi.x, f.hi.y) + ', the highest point on the direct line. Ground that overlooks the objective is key terrain.', f.hi, 1.6);
     box.appendChild(el('h4', null, 'Key terrain'));
     const tog = el('label', 'otoggle');
     const cb = el('input'); cb.type = 'checkbox'; cb.id = 'showTerrain'; cb.checked = Plan.showTerrain;
