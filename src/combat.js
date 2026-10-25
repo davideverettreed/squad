@@ -1,7 +1,7 @@
 'use strict';
 // Spotting, direct fire, suppression, indirect fire (40mm, RPG, hand grenades) and wounds.
 
-const SPOT_RANGE = 520;
+const SPOT_RANGE = 800;
 
 function sightLine(a, b) {
   return G.map.los(a.x, a.y, POSTURE[a.posture].eye, b.x, b.y, POSTURE[b.posture].eye);
@@ -33,7 +33,7 @@ function updateSpotting() {
         const v = sightLine(o, e);
         if (v <= 0) continue;
         if (entry && entry.visible) { seenBy = o; break; }
-        let p = 0.55 * Math.pow(clamp(1 - d / 480, 0.04, 1), 1.4);
+        let p = 0.55 * Math.pow(clamp(1 - d / 760, 0.03, 1), 1.6);
         p *= POSTURE[e.posture].size + 0.1;
         if (e.moving) p *= e.moveMode === 'rush' ? 2.6 : e.moveMode === 'walk' ? 1.8 : 1.1;
         if (G.time - e.lastFired < 4) p *= 5;

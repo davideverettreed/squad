@@ -21,7 +21,7 @@ const UI = {
   init() {
     this.buildOrders();
     $('btnPause').addEventListener('click', () => togglePause());
-    $('btnSpeed').addEventListener('click', () => { G.speed = G.speed === 1 ? 2 : G.speed === 2 ? 4 : 1; this.refreshBar(); });
+    $('btnSpeed').addEventListener('click', () => { G.speed = G.speed >= 16 ? 1 : G.speed * 2; this.refreshBar(); });
     $('btnRoster').addEventListener('click', () => document.body.classList.toggle('roster-open'));
     $('btnHelp').addEventListener('click', () => this.showModal('help'));
     $('btnMenu').addEventListener('click', () => this.showBriefing());
@@ -138,38 +138,32 @@ const UI = {
   handleTap(sx, sy, secondary) {
     if (!G.running || G.over) return;
     const w = toWorld(sx, sy);
-    const hit = this.unitAt(sx, sy);
+    const piece = pieceAt(sx, sy);
     const sel = G.ui.sel;
+    // An enemy piece stands for its nearest visible, effective man.
+    const enemy = piece && piece.side === 'red' ? (piece.kind === 'man' ? (piece.soldier.active ? piece.soldier : null)
+      : piece.live.filter(s => enemyVisible(s)).sort((a, b) => dist(a.x, a.y, w.x, w.y) - dist(b.x, b.y, w.x, w.y))[0] || null) : null;
     if (secondary) {
       G.ui.pending = null;
-      if (sel) issueOrder(sel, hit && hit.side === 'red' && hit.active ? 'engage' : 'move', hit && hit.side === 'red' && hit.active ? hit : w);
+      if (sel) issueOrder(sel, enemy ? 'engage' : 'move', enemy || w);
       this.refreshOrders();
       return;
     }
     if (G.ui.pending && sel) {
       const p = G.ui.pending;
       G.ui.pending = null;
-      const target = hit && hit.side === 'red' && p !== 'face' ? { x: hit.x, y: hit.y } : w;
-      issueOrder(sel, p, target);
+      issueOrder(sel, p, enemy && p !== 'face' ? { x: enemy.x, y: enemy.y } : w);
       this.refreshOrders();
       return;
     }
-    if (hit && hit.side === 'blue' && hit.alive) { this.cycleSelect(hit); return; }
-    if (hit && hit.side === 'red' && hit.active && sel) { issueOrder(sel, 'engage', hit); return; }
-    if (sel) issueOrder(sel, 'move', w);
-  },
-
-  unitAt(sx, sy) {
-    const r = unitRadius() + 5;
-    let best = null, bd = Infinity;
-    for (const s of G.soldiers) {
-      if (s.routed || (s.side === 'red' && !enemyVisible(s))) continue;
-      const p = toScreen(s.x, s.y), d = Math.hypot(p.x - sx, p.y - sy);
-      // Prefer the living and our own when symbols overlap.
-      const pen = d + (s.alive ? 0 : 6) + (s.side === 'blue' ? 0 : 2);
-      if (d < r && pen < bd) { bd = pen; best = s; }
+    if (piece && piece.side === 'blue') {
+      if (piece.kind === 'man') { if (piece.soldier.alive) this.cycleSelect(piece.soldier); }
+      else if (piece.kind === 'team' && piece.team.num) this.select({ level: 'team', team: piece.team, squad: piece.team.squad });
+      else this.select({ level: 'squad', squad: G.squads.blue });
+      return;
     }
-    return best;
+    if (enemy && sel) { issueOrder(sel, 'engage', enemy); return; }
+    if (sel) issueOrder(sel, 'move', w);
   },
 
   // ------------------------------------------------------------ roster
@@ -200,7 +194,7 @@ const UI = {
         row.appendChild(st); row.appendChild(ammo);
         row.addEventListener('click', () => {
           if (s.alive) this.select({ level: 'soldier', soldier: s, team: s.team, squad: s.squad });
-          R.cam.x = s.x; R.cam.y = s.y;
+          R.cam.zoom = Math.max(R.cam.zoom, 3); R.cam.x = s.x; R.cam.y = s.y; clampCam();
         });
         sec.appendChild(row);
         this.rosterRows.push({ s, row, st, ammo });

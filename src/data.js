@@ -3,23 +3,31 @@
 // Weapon figures are game abstractions tuned for play, loosely scaled from
 // published effective ranges and rates of fire; they are not ballistic tables.
 
-const CELL = 2;                 // meters per grid cell
-const MAP_W = 240, MAP_H = 180; // meters
+const CELL = 4;                    // meters per terrain cell
+const MAP_W = 3000, MAP_H = 3000;  // meters: nine 1 km grid squares
 const GW = MAP_W / CELL, GH = MAP_H / CELL;
 
-const TER = { OPEN: 0, GRASS: 1, WOODS: 2, ROAD: 3, BUILDING: 4, WALL: 5, PLOWED: 6 };
+const TER = {
+  OPEN: 0, GRASS: 1, WOODS: 2, ROAD: 3, BUILDING: 4, WALL: 5, PLOWED: 6,
+  ORCHARD: 7, VINEYARD: 8, STREAM: 9, POND: 10, PAVED: 11,
+};
 
 // losH: height above ground the feature blocks sight to.
-// density: share of sight blocked per cell crossed (vegetation).
+// density: share of sight blocked per meter of the feature crossed (vegetation).
 // cover: share of rounds stopped for a man inside or behind it.
 const TERRAIN = [
-  { name: 'Open field',   speed: 1.0,  losH: 0,   density: 0,    cover: 0,   conceal: 0 },
-  { name: 'Tall grass',   speed: 0.8,  losH: 0.9, density: 0.2,  cover: 0,   conceal: 0.5 },
-  { name: 'Woods',        speed: 0.6,  losH: 10,  density: 0.28, cover: 0.3, conceal: 0.6 },
-  { name: 'Dirt road',    speed: 1.15, losH: 0,   density: 0,    cover: 0,   conceal: 0 },
-  { name: 'Building',     speed: 0,    losH: 6.5, solid: true,   cover: 1,   conceal: 1 },
-  { name: 'Stone wall',   speed: 0.3,  losH: 1.0, solid: true,   cover: 0.9, conceal: 0.3 },
-  { name: 'Plowed field', speed: 0.85, losH: 0,   density: 0,    cover: 0,   conceal: 0.1 },
+  { name: 'Open field',   speed: 1.0,  losH: 0,   density: 0,     cover: 0,   conceal: 0 },
+  { name: 'Tall grass',   speed: 0.8,  losH: 0.9, density: 0.1,   cover: 0,   conceal: 0.5 },
+  { name: 'Woods',        speed: 0.6,  losH: 12,  density: 0.14,  cover: 0.3, conceal: 0.6 },
+  { name: 'Dirt road',    speed: 1.15, losH: 0,   density: 0,     cover: 0,   conceal: 0 },
+  { name: 'Building',     speed: 0,    losH: 6.5, solid: true,    cover: 1,   conceal: 1 },
+  { name: 'Stone wall',   speed: 0.3,  losH: 1.0, solid: true,    cover: 0.9, conceal: 0.3 },
+  { name: 'Plowed field', speed: 0.85, losH: 0,   density: 0,     cover: 0,   conceal: 0.1 },
+  { name: 'Orchard',      speed: 0.9,  losH: 4,   density: 0.035, cover: 0.1, conceal: 0.3 },
+  { name: 'Vineyard',     speed: 0.7,  losH: 1.6, density: 0.07,  cover: 0.05, conceal: 0.4 },
+  { name: 'Stream',       speed: 0.35, losH: 0,   density: 0,     cover: 0,   conceal: 0.2 },
+  { name: 'Pond',         speed: 0,    losH: 0,   density: 0,     cover: 0,   conceal: 0 },
+  { name: 'Paved road',   speed: 1.2,  losH: 0,   density: 0,     cover: 0,   conceal: 0 },
 ];
 
 // eye: sight height. center: center of mass. size: relative target size.

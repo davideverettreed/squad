@@ -30,6 +30,7 @@
   <aside id="roster" aria-label="Squad roster"></aside>
   <div id="log" aria-live="polite"></div>
   <div id="toast" hidden></div>
+  <div id="loading" role="status" hidden>Drawing the map sheet…</div>
 
   <section id="orders" aria-label="Orders">
     <div id="selbar">
@@ -79,7 +80,7 @@
         <h3>Overlay</h3>
         <p>Orders are drawn as on an acetate overlay: blue for friendly, red for enemy, black for targets. Blue lines with arrowheads are routes (long dashes for a rush, dots for a crawl); a heavy arrow with a solid head is an assault. OBJ marks the objective of a bounding drill. Dashed blue lines run from the shooters to a suppression target, a black cross in a circle. 40MM marks a grenade launcher target.</p>
         <h3>Map key</h3>
-        <p>The map is read like a military topographic map. White is open ground. Light green with small tufts is tall grass, which hides a man lying prone. Green is woods and hedgerows. Brown lines are contours, one meter apart, with a heavier, numbered index contour every five meters; numbers with a dot are hilltop heights. Solid black blocks are buildings. A black line with ticks is a stone wall, which gives hard cover to a kneeling or prone man. The double line is a dirt road. Grid lines are 100 meters apart; point at the map to read the 8-digit grid reference.</p>
+        <p>The sheet covers 3 by 3 kilometers in nine 1-kilometer grid squares, in standard US military map colors. White is open ground. Light green with tufts is tall grass, which hides a man lying prone. Green is woods and hedgerows; rows of small green circles are orchards, green row lines are vineyards. Blue lines are streams, which run in shallow gullies that give cover; blue areas are ponds and cannot be crossed. Red-brown lines are contours 5 meters apart, with a heavier, numbered index contour every 25 meters; numbers with a dot are hilltop heights. Black blocks are buildings. A black line with ticks is a stone wall, which gives hard cover to a kneeling or prone man. The red road is a paved road; the dashed double lines are dirt tracks. Point at the map to read the 8-digit grid reference. Zoomed out, your men gather into one counter per fire team, then one for the squad, in the standard unit symbol: a rectangle with an infantry X for friendly, a diamond for enemy.</p>
         <h3>Camera</h3>
         <p>Drag to pan. Use the wheel or pinch to zoom. <kbd>Space</kbd> pauses; you can give orders while paused.</p>
       </div>

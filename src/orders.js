@@ -50,7 +50,21 @@ function orderMove(s, x, y, mode) {
 function teamMove(team, x, y, mode, heading) {
   const act = team.members.filter(commandable);
   if (!act.length) return;
-  if (heading == null) { const c = centroid(act); heading = angleTo(c.x, c.y, x, y); }
+  const c = centroid(act);
+  if (heading == null) heading = angleTo(c.x, c.y, x, y);
+  // On a long move the team plots one route and each man keeps station on it.
+  if (dist(c.x, c.y, x, y) > 120) {
+    const route = G.map.findPath(c.x, c.y, x, y);
+    if (route) {
+      act.forEach((s, i) => {
+        if (!commandable(s)) return;
+        const o = teamSlot(team.formation, i);
+        s.path = G.map.offsetPath(s.x, s.y, route, o.x, o.y);
+        s.moveMode = mode; s.faceAngle = null;
+      });
+      return;
+    }
+  }
   act.forEach((s, i) => {
     const o = teamSlot(team.formation, i), w = rotateOffset(o.x, o.y, heading);
     orderMove(s, x + w.x, y + w.y, mode);

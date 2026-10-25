@@ -1,12 +1,18 @@
 'use strict';
-// Drawing: a pre-rendered map sheet in the style of a military topographic map,
-// seen straight down, with units, fire and orders drawn over it each frame.
+// Drawing: a printed military map sheet on a planning table, with game pieces and
+// overlay graphics on top. The sheet is drawn at three levels of detail: the whole
+// sheet with its margin, then tiles of 600 m and 200 m drawn on demand as you zoom in.
 
-const R = { canvas: null, ctx: null, w: 0, h: 0, dpr: 1, cam: { x: MAP_W / 2, y: MAP_H / 2, zoom: 4 }, terrain: null, minZoom: 1 };
-const PXM = 5; // map sheet pixels per meter
+const R = {
+  canvas: null, ctx: null, w: 0, h: 0, dpr: 1, cam: { x: MAP_W / 2, y: MAP_H / 2, zoom: 1 },
+  sheet: null, tiles: new Map(), queue: [], minZoom: 0.1, table: null, grain: null,
+};
 // Collar (margin) around the map body, in meters, holding the marginal information.
-const SHEET = { ml: 26, mr: 26, mt: 24, mb: 52 };
+const SHEET = { ml: 170, mr: 170, mt: 200, mb: 480 };
 const SHEET_W = MAP_W + SHEET.ml + SHEET.mr, SHEET_H = MAP_H + SHEET.mt + SHEET.mb;
+const SHEET_PPM = 0.55; // whole-sheet pixels per meter
+const LEVELS = [null, { ppm: 1.4, size: 600, label: 11 }, { ppm: 4, size: 200, label: 12 }];
+const TILE_CACHE = 28;
 
 function initRender(canvas) {
   R.canvas = canvas;
@@ -41,10 +47,10 @@ function clampCam() {
   c.x = clamp(c.x, x0, x1); c.y = clamp(c.y, y0, y1);
 }
 
-function fitCamera(focus) {
-  R.cam.zoom = Math.max(R.minZoom, Math.min(R.w / (R.w < 600 ? 90 : 130), R.h / 100));
+function fitCamera(focus, zoom) {
+  R.cam.zoom = zoom || Math.max(R.minZoom, R.w / 1100);
   R.cam.x = focus ? focus.x : MAP_W / 2;
-  R.cam.y = focus ? focus.y - 25 : MAP_H / 2;
+  R.cam.y = focus ? focus.y - 60 / R.cam.zoom : MAP_H / 2;
   clampCam();
 }
 
@@ -57,157 +63,46 @@ function toWorld(sx, sy) {
   return { x: R.cam.x + (sx - R.w / 2) / z, y: R.cam.y + (sy - R.h / 2) / z };
 }
 
-// ---------------------------------------------------------------- terrain sheet
-// Drawn flat, straight down, in the standard colors of US military topographic maps
-// (FM 3-25.26): black for man-made features and the grid, red-brown for contours and
-// elevations, green for vegetation. Index contours every 5 m.
+// ---------------------------------------------------------------- map colors
+// Standard colors of US military topographic maps (FM 3-25.26): black for man-made
+// features and the grid, red-brown for contours and elevations, blue for water,
+// green for vegetation, red for main roads. Contours every 5 m, index every 25 m.
 const MAPC = {
-  paper: [250, 249, 243],
-  plowed: [244, 240, 228],
-  grass: [228, 240, 206],
+  paper: [247, 245, 236],
+  plowed: [243, 239, 226],
+  grass: [226, 239, 204],
   woods: [190, 220, 164],
-  woodsEdge: [128, 172, 104],
+  woodsEdge: [132, 176, 108],
+  orchard: [214, 233, 194],
+  vineyard: [218, 234, 198],
+  water: [176, 220, 244],
+  waterEdge: [40, 140, 205],
   contour: [168, 84, 50],
 };
-const CONTOUR_INTERVAL = 1, INDEX_EVERY = 5;
+const CONTOUR_INTERVAL = 5, INDEX_EVERY = 5;
+const MAP_INK = '#161616', BLUE_LINE = 'rgb(40,140,205)', RED_BROWN = 'rgb(168,84,50)';
+const CLASS_COLOR = (k) => k === TER.WOODS ? MAPC.woods : k === TER.GRASS ? MAPC.grass : k === TER.PLOWED ? MAPC.plowed
+  : k === TER.ORCHARD ? MAPC.orchard : k === TER.VINEYARD ? MAPC.vineyard : k === TER.POND ? MAPC.water : MAPC.paper;
 
-// Smoothed share of the cells around a point that are of one terrain kind.
-function terrainShare(map, mask, x, y) {
+// Ground class at a point: the class with the most weight among the four nearest
+// cells, which gives smooth edges to woods, fields and water at any zoom.
+function groundClass(map, x, y) {
   const fx = clamp(x / CELL - 0.5, 0, GW - 1.001), fy = clamp(y / CELL - 0.5, 0, GH - 1.001);
   const x0 = Math.floor(fx), y0 = Math.floor(fy), tx = fx - x0, ty = fy - y0, i = y0 * GW + x0;
-  return (mask[i] * (1 - tx) + mask[i + 1] * tx) * (1 - ty) + (mask[i + GW] * (1 - tx) + mask[i + GW + 1] * tx) * ty;
-}
-
-function buildTerrain(map) {
-  const W = MAP_W * PXM, H = MAP_H * PXM;
-  const c = document.createElement('canvas');
-  c.width = W; c.height = H;
-  const ctx = c.getContext('2d');
-  const img = ctx.createImageData(W, H), px = img.data;
-  const mask = (k) => { const a = new Float32Array(GW * GH); for (let i = 0; i < a.length; i++) a[i] = map.ter[i] === k ? 1 : 0; return a; };
-  const woods = mask(TER.WOODS), grass = mask(TER.GRASS), plowed = mask(TER.PLOWED);
-  const elev = new Float32Array(W * H);
-  for (let y = 0; y < H; y++) for (let x = 0; x < W; x++) elev[y * W + x] = map.elevAt((x + 0.5) / PXM, (y + 0.5) / PXM);
-  const level = (e, step) => Math.floor(e / step);
-
-  for (let y = 0; y < H; y++) {
-    for (let x = 0; x < W; x++) {
-      const i = y * W + x, wx = (x + 0.5) / PXM, wy = (y + 0.5) / PXM;
-      let col = MAPC.paper;
-      if (terrainShare(map, plowed, wx, wy) > 0.5) col = MAPC.plowed;
-      if (terrainShare(map, grass, wx, wy) > 0.5) col = MAPC.grass;
-      const w = terrainShare(map, woods, wx, wy);
-      if (w > 0.36) col = w < 0.46 ? MAPC.woodsEdge : MAPC.woods;
-      let [r, g, b] = col;
-      // Contours: ordinary lines one pixel wide, index lines two.
-      const e = elev[i];
-      const xr = Math.min(W - 1, x + 1), yd = Math.min(H - 1, y + 1);
-      const xr2 = Math.min(W - 1, x + 2), yd2 = Math.min(H - 1, y + 2);
-      const idx = INDEX_EVERY * CONTOUR_INTERVAL;
-      const onIndex = level(e, idx) !== level(elev[y * W + xr2], idx) || level(e, idx) !== level(elev[yd2 * W + x], idx);
-      const onLine = level(e, CONTOUR_INTERVAL) !== level(elev[y * W + xr], CONTOUR_INTERVAL) || level(e, CONTOUR_INTERVAL) !== level(elev[yd * W + x], CONTOUR_INTERVAL);
-      if (onIndex || onLine) {
-        const a = onIndex ? 0.95 : 0.6;
-        r = r * (1 - a) + MAPC.contour[0] * a; g = g * (1 - a) + MAPC.contour[1] * a; b = b * (1 - a) + MAPC.contour[2] * a;
-      }
-      px[i * 4] = r; px[i * 4 + 1] = g; px[i * 4 + 2] = b; px[i * 4 + 3] = 255;
-    }
-  }
-  ctx.putImageData(img, 0, 0);
-  ctx.scale(PXM, PXM);
-  ctx.lineCap = 'round'; ctx.lineJoin = 'round';
-
-  // Tall grass: scattered tufts, the scrub symbol.
-  ctx.strokeStyle = '#6f9a52'; ctx.lineWidth = 0.18;
-  for (let cy = 0; cy < GH; cy++) for (let cx = 0; cx < GW; cx++) {
-    if (map.ter[cy * GW + cx] !== TER.GRASS || (cx * 7 + cy * 13) % 9 !== 0) continue;
-    const x = (cx + 0.5) * CELL, y = (cy + 0.5) * CELL;
-    ctx.beginPath();
-    ctx.moveTo(x - 0.5, y - 0.6); ctx.lineTo(x, y); ctx.lineTo(x + 0.5, y - 0.6);
-    ctx.moveTo(x, y - 0.8); ctx.lineTo(x, y);
-    ctx.moveTo(x - 0.7, y); ctx.lineTo(x + 0.7, y);
-    ctx.stroke();
-  }
-
-  const pts = [];
-  for (let cx = 0; cx < GW; cx++) {
-    let s = 0, n = 0;
-    for (let k = -3; k <= 3; k++) { const v = map.roadY[clamp(cx + k, 0, GW - 1)]; s += v; n++; }
-    pts.push({ x: (cx + 0.5) * CELL, y: Math.floor(s / n / CELL) * CELL + CELL });
-  }
-  pts.unshift({ x: 0, y: pts[0].y }); pts.push({ x: MAP_W, y: pts[pts.length - 1].y });
-  const road = () => { ctx.beginPath(); pts.forEach((p, i) => i ? ctx.lineTo(p.x, p.y) : ctx.moveTo(p.x, p.y)); ctx.stroke(); };
-  // Unimproved (dirt) road: dashed black double line.
-  ctx.strokeStyle = '#1b1b1b'; ctx.lineWidth = 4.2; ctx.setLineDash([3, 1.6]); road();
-  ctx.strokeStyle = 'rgb(' + MAPC.paper.join(',') + ')'; ctx.lineWidth = 3.4; ctx.setLineDash([]); road();
-
-  // Stone walls: black line with ticks on one side, traced cell to cell and straightened.
-  ctx.strokeStyle = '#1b1b1b';
-  for (const line of wallLines(map)) {
-    ctx.lineWidth = 0.45;
-    ctx.beginPath(); line.forEach((p, i) => i ? ctx.lineTo(p.x, p.y) : ctx.moveTo(p.x, p.y)); ctx.stroke();
-    ctx.lineWidth = 0.22;
-    ctx.beginPath();
-    for (let i = 1; i < line.length; i++) {
-      const a = line[i - 1], b = line[i], len = dist(a.x, a.y, b.x, b.y);
-      const nx = -(b.y - a.y) / len, ny = (b.x - a.x) / len;
-      for (let d = 0.6; d < len; d += 1.2) {
-        const tx = a.x + (b.x - a.x) * d / len, ty = a.y + (b.y - a.y) * d / len;
-        ctx.moveTo(tx, ty); ctx.lineTo(tx + nx * 0.7, ty + ny * 0.7);
-      }
-    }
-    ctx.stroke();
-  }
-
-  // Buildings: solid black.
-  ctx.fillStyle = '#161616';
-  for (const bd of map.buildings) ctx.fillRect(bd.x0 + 0.2, bd.y0 + 0.2, bd.x1 - bd.x0 - 0.4, bd.y1 - bd.y0 - 0.4);
-
-  // Grid: 100 m squares. Northing lines are counted from the south edge.
-  ctx.strokeStyle = 'rgba(10,10,10,0.8)'; ctx.lineWidth = 0.3;
-  for (let x = 100; x < MAP_W; x += 100) { ctx.beginPath(); ctx.moveTo(x, 0); ctx.lineTo(x, MAP_H); ctx.stroke(); }
-  for (let n = 100; n < MAP_H; n += 100) { ctx.beginPath(); ctx.moveTo(0, MAP_H - n); ctx.lineTo(MAP_W, MAP_H - n); ctx.stroke(); }
-
-  // Elevation figures: index contour values and spot heights at hilltops, in meters.
-  const base = map.elevBase;
-  const halo = (text, x, y, color, size) => {
-    ctx.font = '600 ' + size + 'px "IBM Plex Mono", ui-monospace, monospace';
-    ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
-    ctx.lineWidth = 0.6; ctx.strokeStyle = 'rgba(250,249,243,0.95)';
-    ctx.strokeText(text, x, y);
-    ctx.fillStyle = color; ctx.fillText(text, x, y);
-  };
-  const labels = [];
-  const idxStep = INDEX_EVERY * CONTOUR_INTERVAL;
-  for (let y = 12; y < MAP_H - 6; y += 7) for (let x = 10; x < MAP_W - 10; x += 7) {
-    const e = map.elevAt(x, y), lv = Math.round(e / idxStep) * idxStep;
-    if (lv <= 0 || Math.abs(e - lv) > 0.06) continue;
-    if (labels.some(l => dist(l.x, l.y, x, y) < 45) || map.terAt(x, y) === TER.BUILDING) continue;
-    labels.push({ x, y });
-    halo(String(Math.round(base + lv)), x, y, 'rgb(' + MAPC.contour.join(',') + ')', 2.6);
-  }
-  const peaks = [];
-  for (let cy = 4; cy < GH - 4; cy += 2) for (let cx = 4; cx < GW - 4; cx += 2) {
-    const e = map.elev[cy * GW + cx];
-    let top = true;
-    for (let j = -8; j <= 8 && top; j++) for (let i = -8; i <= 8; i++) {
-      if (!map.inGrid(cx + i, cy + j) || (!i && !j)) continue;
-      if (map.elev[(cy + j) * GW + cx + i] > e) { top = false; break; }
-    }
-    if (top && !peaks.some(p => dist(p.x, p.y, (cx + 0.5) * CELL, (cy + 0.5) * CELL) < 30)) peaks.push({ x: (cx + 0.5) * CELL, y: (cy + 0.5) * CELL, e });
-  }
-  for (const p of peaks.slice(0, 4)) {
-    ctx.fillStyle = 'rgb(' + MAPC.contour.join(',') + ')';
-    ctx.beginPath(); ctx.arc(p.x, p.y, 0.45, 0, Math.PI * 2); ctx.fill();
-    halo(String(Math.round(base + p.e)), p.x + 3.2, p.y - 1.8, 'rgb(' + MAPC.contour.join(',') + ')', 2.4);
-  }
-  map.peak = peaks.length ? Math.round(base + Math.max(...peaks.map(p => p.e))) : Math.round(base);
-  R.terrain = c;
-  buildSheet(map, c);
+  const cls = (k) => k === TER.WOODS || k === TER.GRASS || k === TER.PLOWED || k === TER.ORCHARD || k === TER.VINEYARD || k === TER.POND ? k : 0;
+  const a = cls(map.ter[i]), b = cls(map.ter[i + 1]), c = cls(map.ter[i + GW]), d = cls(map.ter[i + GW + 1]);
+  if (a === b && b === c && c === d) return a;
+  const w = new Map();
+  w.set(a, (w.get(a) || 0) + (1 - tx) * (1 - ty)); w.set(b, (w.get(b) || 0) + tx * (1 - ty));
+  w.set(c, (w.get(c) || 0) + (1 - tx) * ty); w.set(d, (w.get(d) || 0) + tx * ty);
+  let best = 0, bw = -1;
+  for (const [k, v] of w) if (v > bw) { bw = v; best = k; }
+  return best;
 }
 
 // Wall cells joined into chains, then simplified so diagonal walls draw straight.
 function wallLines(map) {
+  if (map._walls) return map._walls;
   const isWall = (cx, cy) => map.inGrid(cx, cy) && map.ter[cy * GW + cx] === TER.WALL;
   const nbrs = (cx, cy) => {
     const out = [];
@@ -228,212 +123,343 @@ function wallLines(map) {
     }
     return pts.map(([x, y]) => ({ x: (x + 0.5) * CELL, y: (y + 0.5) * CELL }));
   };
-  // Start at chain ends first so each wall traces in one piece.
   for (const pass of [1, 0]) {
     for (let cy = 0; cy < GH; cy++) for (let cx = 0; cx < GW; cx++) {
       if (!isWall(cx, cy) || seen.has(key(cx, cy))) continue;
       if (pass && nbrs(cx, cy).length > 1) continue;
       const pts = trace(cx, cy);
-      lines.push(pts.length > 1 ? simplifyLine(pts, 2.2) : [{ x: pts[0].x - 0.6, y: pts[0].y }, { x: pts[0].x + 0.6, y: pts[0].y }]);
+      lines.push(pts.length > 1 ? simplifyLine(pts, 4.4) : [{ x: pts[0].x - 1.2, y: pts[0].y }, { x: pts[0].x + 1.2, y: pts[0].y }]);
     }
   }
+  map._walls = lines;
   return lines;
 }
 
-// Douglas-Peucker line simplification.
-function simplifyLine(pts, tol) {
-  if (pts.length < 3) return pts;
-  const a = pts[0], b = pts[pts.length - 1], len = Math.max(1e-6, dist(a.x, a.y, b.x, b.y));
-  let worst = 0, wi = 0;
-  for (let i = 1; i < pts.length - 1; i++) {
-    const d = Math.abs((b.x - a.x) * (a.y - pts[i].y) - (a.x - pts[i].x) * (b.y - a.y)) / len;
-    if (d > worst) { worst = d; wi = i; }
+// ---------------------------------------------------------------- drawing a piece of the map
+// Draws the map body for the region (x0, y0, w, h meters) into ctx at ppm pixels per meter.
+// level 0 is the whole sheet; 1 and 2 are the closer tiles and carry more detail.
+function drawMapRegion(ctx, map, x0, y0, w, h, ppm, level) {
+  const W = Math.ceil(w * ppm), H = Math.ceil(h * ppm);
+  const img = ctx.createImageData(W, H), px = img.data;
+  const elev = new Float32Array((W + 2) * (H + 2)), cls = new Uint8Array(W * H);
+  for (let y = 0; y < H + 2; y++) for (let x = 0; x < W + 2; x++) elev[y * (W + 2) + x] = map.elevAt(x0 + (x - 0.5) / ppm, y0 + (y - 0.5) / ppm);
+  for (let y = 0; y < H; y++) for (let x = 0; x < W; x++) cls[y * W + x] = groundClass(map, x0 + (x + 0.5) / ppm, y0 + (y + 0.5) / ppm);
+  const ci = CONTOUR_INTERVAL, ii = CONTOUR_INTERVAL * INDEX_EVERY;
+  for (let y = 0; y < H; y++) {
+    for (let x = 0; x < W; x++) {
+      const i = y * W + x, k = cls[i];
+      let col = CLASS_COLOR(k);
+      // Outline woods and water where they meet other ground.
+      if (k === TER.WOODS || k === TER.POND) {
+        const edge = (x > 0 && cls[i - 1] !== k) || (x < W - 1 && cls[i + 1] !== k) || (y > 0 && cls[i - W] !== k) || (y < H - 1 && cls[i + W] !== k);
+        if (edge && (k === TER.POND || level > 0)) col = k === TER.POND ? MAPC.waterEdge : MAPC.woodsEdge;
+      }
+      let [r, g, b] = col;
+      if (k !== TER.POND) {
+        const e = elev[(y + 1) * (W + 2) + x + 1], er = elev[(y + 1) * (W + 2) + x + 2], ed = elev[(y + 2) * (W + 2) + x + 1];
+        const onIndex = Math.floor(e / ii) !== Math.floor(er / ii) || Math.floor(e / ii) !== Math.floor(ed / ii);
+        const onLine = Math.floor(e / ci) !== Math.floor(er / ci) || Math.floor(e / ci) !== Math.floor(ed / ci);
+        if (onIndex || onLine) {
+          const a = onIndex ? 1 : level === 0 ? 0.45 : 0.7;
+          r = r * (1 - a) + MAPC.contour[0] * a; g = g * (1 - a) + MAPC.contour[1] * a; b = b * (1 - a) + MAPC.contour[2] * a;
+        }
+        // Heavier index contours on close tiles.
+        if (level === 2 && !onIndex) {
+          const el = elev[(y + 1) * (W + 2) + x], eu = elev[y * (W + 2) + x + 1];
+          if (Math.floor(e / ii) !== Math.floor(el / ii) || Math.floor(e / ii) !== Math.floor(eu / ii)) {
+            r = r * 0.15 + MAPC.contour[0] * 0.85; g = g * 0.15 + MAPC.contour[1] * 0.85; b = b * 0.15 + MAPC.contour[2] * 0.85;
+          }
+        }
+      }
+      px[i * 4] = r; px[i * 4 + 1] = g; px[i * 4 + 2] = b; px[i * 4 + 3] = 255;
+    }
   }
-  if (worst <= tol) return [a, b];
-  return simplifyLine(pts.slice(0, wi + 1), tol).slice(0, -1).concat(simplifyLine(pts.slice(wi), tol));
-}
+  ctx.putImageData(img, 0, 0);
 
-// 8-digit grid reference (10 m precision) for a map point.
-function gridRef(x, y) {
-  const e = Math.floor((G.grid.e * 1000 + x) / 10) % 10000;
-  const n = Math.floor((G.grid.n * 1000 + (MAP_H - y)) / 10) % 10000;
-  return String(e).padStart(4, '0') + ' ' + String(n).padStart(4, '0');
+  ctx.save();
+  ctx.setTransform(ppm, 0, 0, ppm, -x0 * ppm, -y0 * ppm);
+  ctx.lineCap = 'round'; ctx.lineJoin = 'round';
+  const pxm = 1 / ppm; // one pixel in meters
+  const inBox = (x, y, m) => x > x0 - m && x < x0 + w + m && y > y0 - m && y < y0 + h + m;
+  const lineIn = (pts, m) => pts.some(p => inBox(p.x, p.y, m + 200));
+  const stroke = (pts) => { ctx.beginPath(); pts.forEach((p, i) => i ? ctx.lineTo(p.x, p.y) : ctx.moveTo(p.x, p.y)); ctx.stroke(); };
+
+  // Vegetation symbols on close tiles: orchard trees in rows, vine rows, grass tufts.
+  if (level > 0) {
+    const c0 = map.cellOf(x0, y0), c1 = map.cellOf(x0 + w, y0 + h);
+    const step = level === 2 ? 2 : 4;
+    ctx.lineWidth = Math.max(0.25, 0.8 * pxm);
+    for (let cy = c0.cy; cy <= c1.cy; cy += step) for (let cx = c0.cx; cx <= c1.cx; cx += step) {
+      const k = map.ter[cy * GW + cx], x = (cx + 0.5) * CELL, y = (cy + 0.5) * CELL;
+      if (k === TER.ORCHARD) {
+        ctx.strokeStyle = '#4f8a3a';
+        ctx.beginPath(); ctx.arc(x, y, Math.max(1.2, 2.2 * pxm), 0, Math.PI * 2); ctx.stroke();
+      } else if (k === TER.VINEYARD) {
+        ctx.strokeStyle = '#4f8a3a';
+        ctx.beginPath(); ctx.moveTo(x - CELL * step * 0.35, y); ctx.lineTo(x + CELL * step * 0.35, y); ctx.stroke();
+      } else if (k === TER.GRASS && level === 2 && (cx * 7 + cy * 13) % 5 === 0) {
+        ctx.strokeStyle = '#6f9a52';
+        const s = 1.4;
+        ctx.beginPath();
+        ctx.moveTo(x - s, y - s); ctx.lineTo(x, y); ctx.lineTo(x + s, y - s);
+        ctx.moveTo(x - s * 1.4, y); ctx.lineTo(x + s * 1.4, y);
+        ctx.stroke();
+      }
+    }
+  }
+
+  // Streams: blue lines, wider downstream.
+  ctx.strokeStyle = BLUE_LINE;
+  for (const s of map.streams) {
+    if (!lineIn(s.pts, 0)) continue;
+    ctx.lineWidth = Math.max(s.width, 1.3 * pxm);
+    stroke(s.pts);
+  }
+
+  // Roads: the paved road red with black casing; dirt tracks a dashed black double line.
+  for (const r of map.roads) {
+    if (!lineIn(r.pts, 0)) continue;
+    if (r.kind === 'paved') {
+      ctx.strokeStyle = MAP_INK; ctx.lineWidth = Math.max(9, 4.2 * pxm); stroke(r.pts);
+      ctx.strokeStyle = '#d0362a'; ctx.lineWidth = Math.max(6.4, 2.4 * pxm); stroke(r.pts);
+    } else {
+      ctx.strokeStyle = MAP_INK; ctx.lineWidth = Math.max(6, 3.4 * pxm);
+      ctx.setLineDash([Math.max(8, 6 * pxm), Math.max(4, 3 * pxm)]); stroke(r.pts); ctx.setLineDash([]);
+      ctx.strokeStyle = 'rgb(' + MAPC.paper.join(',') + ')'; ctx.lineWidth = Math.max(4.4, 1.8 * pxm); stroke(r.pts);
+    }
+  }
+
+  // Stone walls: black line, ticked on close tiles.
+  ctx.strokeStyle = MAP_INK;
+  for (const line of wallLines(map)) {
+    if (!lineIn(line, 0)) continue;
+    ctx.lineWidth = Math.max(0.7, 1 * pxm);
+    stroke(line);
+    if (level !== 2) continue;
+    ctx.lineWidth = Math.max(0.35, 0.7 * pxm);
+    ctx.beginPath();
+    for (let i = 1; i < line.length; i++) {
+      const a = line[i - 1], b = line[i], len = dist(a.x, a.y, b.x, b.y);
+      const nx = -(b.y - a.y) / len, ny = (b.x - a.x) / len;
+      for (let d = 1; d < len; d += 2.4) {
+        const tx = a.x + (b.x - a.x) * d / len, ty = a.y + (b.y - a.y) * d / len;
+        ctx.moveTo(tx, ty); ctx.lineTo(tx + nx * 1.3, ty + ny * 1.3);
+      }
+    }
+    ctx.stroke();
+  }
+
+  // Buildings: solid black.
+  ctx.fillStyle = MAP_INK;
+  for (const bd of map.buildings) {
+    if (!inBox(bd.x0, bd.y0, 20)) continue;
+    const m = Math.min(0.4, (bd.x1 - bd.x0) / 6);
+    ctx.fillRect(bd.x0 + m, bd.y0 + m, Math.max(bd.x1 - bd.x0 - 2 * m, 1.5 * pxm), Math.max(bd.y1 - bd.y0 - 2 * m, 1.5 * pxm));
+  }
+
+  // Grid: 1 km squares.
+  ctx.strokeStyle = 'rgba(10,10,10,0.85)'; ctx.lineWidth = Math.max(1.2, 0.9 * pxm);
+  for (let x = 1000; x < MAP_W; x += 1000) { ctx.beginPath(); ctx.moveTo(x, 0); ctx.lineTo(x, MAP_H); ctx.stroke(); }
+  for (let n = 1000; n < MAP_H; n += 1000) { ctx.beginPath(); ctx.moveTo(0, MAP_H - n); ctx.lineTo(MAP_W, MAP_H - n); ctx.stroke(); }
+
+  // Lettering: sized in screen pixels for each level, as each would be printed.
+  const fs = (level === 0 ? 10 : LEVELS[level].label) * pxm;
+  const halo = (text, x, y, color, size, font) => {
+    ctx.font = font || '600 ' + size + 'px "IBM Plex Mono", ui-monospace, monospace';
+    ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+    ctx.lineWidth = size * 0.3; ctx.strokeStyle = 'rgba(247,245,236,0.95)';
+    ctx.strokeText(text, x, y);
+    ctx.fillStyle = color; ctx.fillText(text, x, y);
+  };
+  for (const l of map.contourLabels) if (inBox(l.x, l.y, 30)) halo(String(Math.round(map.elevBase + l.v)), l.x, l.y, RED_BROWN, fs);
+  for (const p of map.peaks.slice(0, level === 0 ? 6 : 12)) {
+    if (!inBox(p.x, p.y, 40)) continue;
+    ctx.fillStyle = RED_BROWN;
+    ctx.beginPath(); ctx.arc(p.x, p.y, 2.2 * pxm, 0, Math.PI * 2); ctx.fill();
+    halo(String(Math.round(map.elevBase + p.e)), p.x + fs * 1.6, p.y - fs * 0.8, RED_BROWN, fs);
+  }
+  for (const pl of map.places) {
+    if (pl.kind === 'farm' && level === 0) continue;
+    if (!inBox(pl.x, pl.y, 200)) continue;
+    const size = pl.kind === 'village' ? fs * 1.45 : fs * 0.95;
+    const font = (pl.kind === 'village' ? '700 ' : 'italic 600 ') + size + 'px "Saira Condensed", "Arial Narrow", sans-serif';
+    halo(pl.kind === 'village' ? pl.name.toUpperCase() : pl.name, pl.x, pl.y - (pl.kind === 'village' ? 40 : 0), MAP_INK, size, font);
+  }
+  ctx.restore();
 }
 
 // ---------------------------------------------------------------- the printed sheet
-// The map body is set into a paper sheet with a collar of marginal information:
-// sheet name, grid values, legend, graphic scale, declination diagram. Paper grain
-// and fold creases make it read as a physical map on the planning table.
-function buildSheet(map, body) {
-  const W = SHEET_W * PXM, H = SHEET_H * PXM;
+// The whole sheet: map body at low detail inside a collar of marginal information
+// (sheet name, grid values, legend, graphic scale, declination diagram).
+function buildTerrain(map) {
+  R.tiles.clear(); R.queue = [];
+  const P = SHEET_PPM;
+  const body = document.createElement('canvas');
+  body.width = Math.ceil(MAP_W * P); body.height = Math.ceil(MAP_H * P);
+  drawMapRegion(body.getContext('2d'), map, 0, 0, MAP_W, MAP_H, P, 0);
+
   const c = document.createElement('canvas');
-  c.width = W; c.height = H;
+  c.width = Math.ceil(SHEET_W * P); c.height = Math.ceil(SHEET_H * P);
   const ctx = c.getContext('2d');
   ctx.fillStyle = 'rgb(' + MAPC.paper.join(',') + ')';
-  ctx.fillRect(0, 0, W, H);
-  ctx.drawImage(body, SHEET.ml * PXM, SHEET.mt * PXM);
+  ctx.fillRect(0, 0, c.width, c.height);
+  ctx.drawImage(body, Math.round(SHEET.ml * P), Math.round(SHEET.mt * P));
 
   ctx.save();
-  ctx.scale(PXM, PXM);
+  ctx.scale(P, P);
   ctx.translate(SHEET.ml, SHEET.mt);
-  const ink = '#161616', brown = 'rgb(' + MAPC.contour.join(',') + ')';
   const text = (t, x, y, size, opts) => {
     opts = opts || {};
     ctx.font = (opts.weight || 600) + ' ' + size + 'px ' + (opts.serif ? '"Saira Condensed", "Arial Narrow", sans-serif' : '"IBM Plex Mono", ui-monospace, monospace');
-    ctx.fillStyle = opts.color || ink;
+    ctx.fillStyle = opts.color || MAP_INK;
     ctx.textAlign = opts.align || 'left'; ctx.textBaseline = opts.base || 'alphabetic';
     ctx.fillText(t, x, y);
   };
-
-  // Neatline
-  ctx.strokeStyle = ink; ctx.lineWidth = 0.5;
+  ctx.strokeStyle = MAP_INK; ctx.lineWidth = 3;
   ctx.strokeRect(0, 0, MAP_W, MAP_H);
 
-  // Grid values in the margin: small leading digit, large principal digits.
-  const gridLabel = (v, x, y, align) => {
-    const s = String(v).padStart(3, '0');
-    ctx.font = '600 1.7px "IBM Plex Mono", monospace';
-    const small = ctx.measureText(s[0]).width;
-    ctx.font = '700 2.8px "IBM Plex Mono", monospace';
-    const big = ctx.measureText(s.slice(1)).width;
-    const x0 = align === 'center' ? x - (small + big) / 2 : align === 'right' ? x - small - big : x;
-    text(s[0], x0, y - 1, 1.7);
-    text(s.slice(1), x0 + small, y, 2.8, { weight: 700 });
+  // Grid values: small 100 km digit, large principal digits; full values at the corners.
+  const gridLabel = (lead, v, x, y, align) => {
+    const big = String(v).padStart(2, '0');
+    ctx.font = '600 22px "IBM Plex Mono", monospace';
+    const sw = ctx.measureText(String(lead)).width;
+    ctx.font = '700 40px "IBM Plex Mono", monospace';
+    const bw = ctx.measureText(big).width;
+    const x0 = align === 'center' ? x - (sw + bw) / 2 : align === 'right' ? x - sw - bw : x;
+    text(String(lead), x0, y - 16, 22);
+    text(big, x0 + sw, y, 40, { weight: 700 });
   };
-  for (let x = 0; x <= MAP_W; x += 100) {
-    ctx.lineWidth = 0.3;
-    ctx.beginPath(); ctx.moveTo(x, -1.6); ctx.lineTo(x, 0); ctx.moveTo(x, MAP_H); ctx.lineTo(x, MAP_H + 1.6); ctx.stroke();
-    const v = G.grid.e * 10 + x / 100;
-    gridLabel(v, x, -2.4, 'center');
-    gridLabel(v, x, MAP_H + 4.6, 'center');
+  for (let x = 0; x <= MAP_W; x += 1000) {
+    const v = G.grid.e + x / 1000;
+    gridLabel(G.grid.le, v, x, -14, 'center');
+    gridLabel(G.grid.le, v, x, MAP_H + 50, 'center');
   }
-  for (let n = 0; n <= MAP_H; n += 100) {
-    const y = MAP_H - n;
-    ctx.beginPath(); ctx.moveTo(-1.6, y); ctx.lineTo(0, y); ctx.moveTo(MAP_W, y); ctx.lineTo(MAP_W + 1.6, y); ctx.stroke();
-    const v = G.grid.n * 10 + n / 100;
-    gridLabel(v, -2.2, y + 1, 'right');
-    gridLabel(v, MAP_W + 2.2, y + 1, 'left');
+  for (let n = 0; n <= MAP_H; n += 1000) {
+    const y = MAP_H - n, v = G.grid.n + n / 1000;
+    gridLabel(G.grid.ln, v, -14, y + 14, 'right');
+    gridLabel(G.grid.ln, v, MAP_W + 14, y + 14, 'left');
+  }
+  text(G.grid.le + String(G.grid.e).padStart(2, '0') + '000mE.', 0, -64, 20, { weight: 600 });
+  text(G.grid.ln + String(G.grid.n).padStart(2, '0') + '000mN.', -14, MAP_H + 92, 20, { weight: 600, align: 'right' });
+  // 100 m ticks along the neatline.
+  ctx.lineWidth = 2;
+  for (let m = 100; m < MAP_W; m += 100) {
+    ctx.beginPath(); ctx.moveTo(m, 0); ctx.lineTo(m, -12); ctx.moveTo(m, MAP_H); ctx.lineTo(m, MAP_H + 12);
+    ctx.moveTo(0, m); ctx.lineTo(-12, m); ctx.moveTo(MAP_W, m); ctx.lineTo(MAP_W + 12, m); ctx.stroke();
   }
 
-  // Title block
-  text('SQUAD TACTICAL MAP', 0, -12, 2.4, { weight: 700 });
-  text('SERIES T25 · EDITION 1', 0, -9, 1.6, { weight: 500 });
-  text('HILL ' + map.peak, MAP_W / 2, -10, 5, { weight: 700, serif: true, align: 'center' });
-  text('SHEET ' + String(G.settings ? G.settings.seed : 0).padStart(5, '0'), MAP_W, -12, 2.4, { weight: 700, align: 'right' });
-  text('1:2 500 TRAINING SHEET', MAP_W, -9, 1.6, { weight: 500, align: 'right' });
+  // Title block.
+  text('SQUAD TACTICAL MAP', 0, -140, 34, { weight: 700 });
+  text('SERIES T25 · EDITION 1', 0, -104, 22, { weight: 500 });
+  text(('HILL ' + map.peak).toUpperCase(), MAP_W / 2, -118, 76, { weight: 700, serif: true, align: 'center' });
+  text('SHEET ' + String(G.settings ? G.settings.seed : 0).padStart(5, '0'), MAP_W, -140, 34, { weight: 700, align: 'right' });
+  text('1:25 000 · 3 × 3 KM', MAP_W, -104, 22, { weight: 500, align: 'right' });
 
-  // Legend, bottom left
-  const ly = MAP_H + 10;
-  text('LEGEND', 0, ly, 1.9, { weight: 700 });
+  // Legend, bottom left.
+  const ly = MAP_H + 160;
+  text('LEGEND', 0, ly, 26, { weight: 700 });
   const rows = [
-    ['woods', 'Woods, hedgerow'], ['grass', 'Tall grass, scrub'], ['building', 'Building'], ['wall', 'Stone wall'],
-    ['road', 'Unimproved road'], ['index', 'Index contour'], ['contour', 'Contour, 1 m'], ['spot', 'Spot elevation'],
+    ['woods', 'Woods, hedgerow'], ['grass', 'Tall grass, scrub'], ['orchard', 'Orchard'], ['vineyard', 'Vineyard'],
+    ['paved', 'Hard surface road'], ['road', 'Unimproved road'], ['wall', 'Stone wall'], ['building', 'Building'],
+    ['stream', 'Stream'], ['pond', 'Pond'], ['index', 'Index contour (25 m)'], ['contour', 'Contour (5 m)'],
   ];
   rows.forEach(([k, label], i) => {
     const col = Math.floor(i / 4), row = i % 4;
-    const x = col * 46, y = ly + 3.6 + row * 4.4;
+    const x = col * 560, y = ly + 50 + row * 56;
     ctx.save();
-    if (k === 'woods') { ctx.fillStyle = 'rgb(' + MAPC.woods.join(',') + ')'; ctx.fillRect(x, y - 1.2, 7, 2.6); }
-    else if (k === 'grass') {
-      ctx.fillStyle = 'rgb(' + MAPC.grass.join(',') + ')'; ctx.fillRect(x, y - 1.2, 7, 2.6);
-      ctx.strokeStyle = '#6f9a52'; ctx.lineWidth = 0.18;
-      ctx.beginPath(); ctx.moveTo(x + 3, y - 0.5); ctx.lineTo(x + 3.5, y + 0.1); ctx.lineTo(x + 4, y - 0.5); ctx.moveTo(x + 2.8, y + 0.1); ctx.lineTo(x + 4.2, y + 0.1); ctx.stroke();
-    }
-    else if (k === 'building') { ctx.fillStyle = ink; ctx.fillRect(x + 2, y - 1.2, 3, 2.4); }
-    else if (k === 'wall') {
-      ctx.strokeStyle = ink; ctx.lineWidth = 0.45;
-      ctx.beginPath(); ctx.moveTo(x, y); ctx.lineTo(x + 7, y); ctx.stroke();
-      ctx.lineWidth = 0.22; ctx.beginPath();
-      for (let t = 0.6; t < 7; t += 1.2) { ctx.moveTo(x + t, y); ctx.lineTo(x + t, y + 0.7); }
-      ctx.stroke();
-    } else if (k === 'road') {
-      ctx.strokeStyle = ink; ctx.lineWidth = 0.22; ctx.setLineDash([1.2, 0.6]);
-      ctx.beginPath(); ctx.moveTo(x, y - 0.7); ctx.lineTo(x + 7, y - 0.7); ctx.moveTo(x, y + 0.7); ctx.lineTo(x + 7, y + 0.7); ctx.stroke();
-    } else if (k === 'index' || k === 'contour') {
-      ctx.strokeStyle = brown; ctx.lineWidth = k === 'index' ? 0.4 : 0.2;
-      ctx.beginPath(); ctx.moveTo(x, y + 0.6); ctx.bezierCurveTo(x + 2, y - 1, x + 5, y + 1.5, x + 7, y - 0.4); ctx.stroke();
-    } else if (k === 'spot') {
-      ctx.fillStyle = brown; ctx.beginPath(); ctx.arc(x + 2, y, 0.45, 0, Math.PI * 2); ctx.fill();
-      text(String(map.peak), x + 3, y + 0.7, 1.7, { color: brown });
-    }
+    const sw = (c) => { ctx.fillStyle = 'rgb(' + c.join(',') + ')'; ctx.fillRect(x, y - 16, 90, 32); };
+    ctx.lineCap = 'round';
+    if (k === 'woods') sw(MAPC.woods);
+    else if (k === 'grass') sw(MAPC.grass);
+    else if (k === 'orchard') { sw(MAPC.orchard); ctx.strokeStyle = '#4f8a3a'; ctx.lineWidth = 2; for (let t = 12; t < 90; t += 22) { ctx.beginPath(); ctx.arc(x + t, y, 5, 0, Math.PI * 2); ctx.stroke(); } }
+    else if (k === 'vineyard') { sw(MAPC.vineyard); ctx.strokeStyle = '#4f8a3a'; ctx.lineWidth = 2; for (const dy of [-8, 0, 8]) { ctx.beginPath(); ctx.moveTo(x + 6, y + dy); ctx.lineTo(x + 84, y + dy); ctx.stroke(); } }
+    else if (k === 'paved') { ctx.strokeStyle = MAP_INK; ctx.lineWidth = 16; ctx.beginPath(); ctx.moveTo(x, y); ctx.lineTo(x + 90, y); ctx.stroke(); ctx.strokeStyle = '#d0362a'; ctx.lineWidth = 10; ctx.stroke(); }
+    else if (k === 'road') { ctx.strokeStyle = MAP_INK; ctx.lineWidth = 12; ctx.setLineDash([14, 7]); ctx.beginPath(); ctx.moveTo(x, y); ctx.lineTo(x + 90, y); ctx.stroke(); ctx.setLineDash([]); ctx.strokeStyle = 'rgb(' + MAPC.paper.join(',') + ')'; ctx.lineWidth = 7; ctx.stroke(); }
+    else if (k === 'wall') { ctx.strokeStyle = MAP_INK; ctx.lineWidth = 3; ctx.beginPath(); ctx.moveTo(x, y); ctx.lineTo(x + 90, y); ctx.stroke(); ctx.lineWidth = 2; ctx.beginPath(); for (let t = 6; t < 90; t += 12) { ctx.moveTo(x + t, y); ctx.lineTo(x + t, y + 8); } ctx.stroke(); }
+    else if (k === 'building') { ctx.fillStyle = MAP_INK; ctx.fillRect(x + 30, y - 14, 30, 28); }
+    else if (k === 'stream') { ctx.strokeStyle = BLUE_LINE; ctx.lineWidth = 5; ctx.beginPath(); ctx.moveTo(x, y + 8); ctx.bezierCurveTo(x + 30, y - 16, x + 60, y + 16, x + 90, y - 6); ctx.stroke(); }
+    else if (k === 'pond') { ctx.fillStyle = 'rgb(' + MAPC.water.join(',') + ')'; ctx.strokeStyle = BLUE_LINE; ctx.lineWidth = 3; ctx.beginPath(); ctx.ellipse(x + 45, y, 40, 15, 0, 0, Math.PI * 2); ctx.fill(); ctx.stroke(); }
+    else if (k === 'index' || k === 'contour') { ctx.strokeStyle = RED_BROWN; ctx.lineWidth = k === 'index' ? 5 : 2.5; ctx.beginPath(); ctx.moveTo(x, y + 8); ctx.bezierCurveTo(x + 30, y - 16, x + 60, y + 16, x + 90, y - 6); ctx.stroke(); }
     ctx.restore();
-    text(label, x + 9, y + 0.7, 1.9, { weight: 500, serif: true });
+    text(label, x + 110, y + 9, 26, { weight: 500, serif: true });
   });
 
-  // Graphic scale, bottom center
-  const sx = MAP_W / 2 - 50, sy = MAP_H + 13;
-  text('GRAPHIC SCALE', MAP_W / 2, sy - 2.2, 1.7, { weight: 700, align: 'center' });
-  ctx.strokeStyle = ink; ctx.lineWidth = 0.2;
+  // Graphic scale, bottom center.
+  const sx = MAP_W / 2 - 500, sy = MAP_H + 120;
+  text('GRAPHIC SCALE', MAP_W / 2, sy - 22, 24, { weight: 700, align: 'center' });
+  ctx.strokeStyle = MAP_INK; ctx.lineWidth = 2;
   for (let i = 0; i < 10; i++) {
-    ctx.fillStyle = i % 2 ? 'rgb(' + MAPC.paper.join(',') + ')' : ink;
-    ctx.fillRect(sx + i * 10, sy, 10, 1.1); ctx.strokeRect(sx + i * 10, sy, 10, 1.1);
+    ctx.fillStyle = i % 2 ? 'rgb(' + MAPC.paper.join(',') + ')' : MAP_INK;
+    ctx.fillRect(sx + i * 100, sy, 100, 14); ctx.strokeRect(sx + i * 100, sy, 100, 14);
   }
-  for (let m = 0; m <= 100; m += 20) text(String(m), sx + m, sy + 3.6, 1.6, { align: 'center' });
-  text('METERS', sx + 104, sy + 1.2, 1.6, { weight: 700 });
-  text('CONTOUR INTERVAL 1 METER', MAP_W / 2, sy + 8, 1.8, { weight: 700, align: 'center' });
-  text('ELEVATIONS IN METERS ABOVE MEAN SEA LEVEL', MAP_W / 2, sy + 11, 1.5, { weight: 500, align: 'center' });
-  text('GRID: 100 METER SQUARES', MAP_W / 2, sy + 14, 1.5, { weight: 500, align: 'center' });
-  text('TO GIVE A GRID REFERENCE: READ RIGHT, THEN UP', MAP_W / 2, sy + 17, 1.5, { weight: 500, align: 'center' });
-
-  // Declination diagram, bottom right
-  const dx = MAP_W - 22, dy = MAP_H + 34;
-  const gm = map.gmAngle;
+  for (let m = 0; m <= 1000; m += 200) text(String(m), sx + m, sy + 44, 22, { align: 'center' });
+  text('METERS', sx + 1030, sy + 14, 22, { weight: 700 });
+  // The declination diagram and notes sit at the bottom right.
+  const nx = MAP_W - 520;
+  text('CONTOUR INTERVAL 5 METERS', nx, MAP_H + 200, 24, { weight: 700 });
+  text('ELEVATIONS IN METERS ABOVE MEAN SEA LEVEL', nx, MAP_H + 234, 19, { weight: 500 });
+  text('GRID: 1000 METER SQUARES', nx, MAP_H + 262, 19, { weight: 500 });
+  text('TO GIVE A GRID REFERENCE: READ RIGHT, THEN UP', nx, MAP_H + 290, 19, { weight: 500 });
+  const dx = MAP_W - 70, dy = MAP_H + 440, gm = map.gmAngle;
   const ray = (deg, len) => ({ x: dx + Math.sin(deg * Math.PI / 180) * len, y: dy - Math.cos(deg * Math.PI / 180) * len });
-  ctx.strokeStyle = ink; ctx.lineWidth = 0.25;
-  const tn = ray(0, 20), gn = ray(-1.2, 20), mn = ray(gm, 18);
+  ctx.strokeStyle = MAP_INK; ctx.lineWidth = 3;
+  const tn = ray(0, 120), gn = ray(-1.2, 120), mn = ray(gm, 108);
   for (const p of [tn, gn, mn]) { ctx.beginPath(); ctx.moveTo(dx, dy); ctx.lineTo(p.x, p.y); ctx.stroke(); }
-  ctx.fillStyle = ink;
-  // True north: star. Grid north: GN. Magnetic north: half arrowhead.
+  ctx.fillStyle = MAP_INK;
   ctx.beginPath();
-  for (let i = 0; i < 10; i++) { const a = -Math.PI / 2 + i * Math.PI / 5, rr = i % 2 ? 0.5 : 1.2; ctx.lineTo(tn.x + Math.cos(a) * rr, tn.y - 0.6 + Math.sin(a) * rr); }
+  for (let i = 0; i < 10; i++) { const a = -Math.PI / 2 + i * Math.PI / 5, rr = i % 2 ? 4 : 10; ctx.lineTo(tn.x + Math.cos(a) * rr, tn.y - 6 + Math.sin(a) * rr); }
   ctx.fill();
-  text('GN', gn.x - 1.2, gn.y - 0.6, 1.6, { weight: 700, align: 'right' });
-  ctx.beginPath(); ctx.moveTo(mn.x, mn.y); ctx.lineTo(mn.x + 1.2, mn.y + 2.6); ctx.lineTo(mn.x, mn.y + 2.2); ctx.fill();
-  text('MN', mn.x + 1.4, mn.y + 0.5, 1.6, { weight: 700 });
-  text(gm.toFixed(1) + '° G-M ANGLE', dx + 9, dy - 4, 1.4, { weight: 500 });
-  text('GRID BEARINGS USED', dx + 9, dy - 2, 1.4, { weight: 500 });
+  text('GN', gn.x - 10, gn.y - 4, 20, { weight: 700, align: 'right' });
+  ctx.beginPath(); ctx.moveTo(mn.x, mn.y); ctx.lineTo(mn.x + 9, mn.y + 20); ctx.lineTo(mn.x, mn.y + 17); ctx.fill();
+  text('MN', mn.x + 12, mn.y + 6, 20, { weight: 700 });
+  text(Math.abs(gm).toFixed(1) + '° G-M ANGLE ' + (gm >= 0 ? 'EAST' : 'WEST'), nx, MAP_H + 330, 19, { weight: 500 });
+  text('GRID BEARINGS USED IN REPORTS', nx, MAP_H + 358, 19, { weight: 500 });
   ctx.restore();
-
-  // Paper grain
-  const n = document.createElement('canvas');
-  n.width = n.height = 256;
-  const nctx = n.getContext('2d'), nimg = nctx.createImageData(256, 256);
-  for (let i = 0; i < 256 * 256; i++) {
-    const v = 120 + Math.random() * 135;
-    nimg.data[i * 4] = v; nimg.data[i * 4 + 1] = v * 0.97; nimg.data[i * 4 + 2] = v * 0.9; nimg.data[i * 4 + 3] = 255;
-  }
-  nctx.putImageData(nimg, 0, 0);
-  ctx.save();
-  ctx.globalCompositeOperation = 'multiply';
-  ctx.globalAlpha = 0.07;
-  ctx.fillStyle = ctx.createPattern(n, 'repeat');
-  ctx.fillRect(0, 0, W, H);
-  ctx.restore();
-
-  // Fold creases: the sheet was folded in half both ways.
-  const crease = (x0, y0, x1, y1, vertical) => {
-    const g = vertical ? ctx.createLinearGradient(x0 - 14, 0, x0 + 14, 0) : ctx.createLinearGradient(0, y0 - 14, 0, y0 + 14);
-    g.addColorStop(0, 'rgba(60,50,30,0)'); g.addColorStop(0.48, 'rgba(60,50,30,0.07)');
-    g.addColorStop(0.5, 'rgba(255,255,250,0.25)'); g.addColorStop(0.53, 'rgba(60,50,30,0.04)'); g.addColorStop(1, 'rgba(60,50,30,0)');
-    ctx.fillStyle = g;
-    if (vertical) ctx.fillRect(x0 - 14, 0, 28, H); else ctx.fillRect(0, y0 - 14, W, 28);
-    ctx.strokeStyle = 'rgba(70,60,40,0.18)'; ctx.lineWidth = 1;
-    ctx.beginPath(); ctx.moveTo(x0, y0); ctx.lineTo(x1, y1); ctx.stroke();
-  };
-  crease(W / 2, 0, W / 2, H, true);
-  crease(0, H / 2, W, H / 2, false);
-  // Edge wear: slightly darker toward the sheet's edges.
-  const v = ctx.createRadialGradient(W / 2, H / 2, Math.min(W, H) * 0.45, W / 2, H / 2, Math.max(W, H) * 0.75);
-  v.addColorStop(0, 'rgba(120,96,50,0)'); v.addColorStop(1, 'rgba(120,96,50,0.12)');
-  ctx.fillStyle = v; ctx.fillRect(0, 0, W, H);
-
   R.sheet = c;
 }
 
+// ---------------------------------------------------------------- tiles
+function levelFor(zoom) { return zoom < 0.95 ? 0 : zoom < 2.8 ? 1 : 2; }
+
+function tileFor(level, i, j) {
+  const key = level + ':' + i + ':' + j;
+  let t = R.tiles.get(key);
+  if (t) { t.used = performance.now(); return t.canvas ? t : null; }
+  R.tiles.set(key, { level, i, j, canvas: null, used: performance.now() });
+  R.queue.push(key);
+  return null;
+}
+
+// Draw at most a few missing tiles per frame so panning never stalls.
+function drawQueuedTiles(budgetMs) {
+  const start = performance.now();
+  while (R.queue.length && performance.now() - start < budgetMs) {
+    // Nearest to the view center first.
+    R.queue.sort((a, b) => tileDist(b) - tileDist(a));
+    const key = R.queue.pop(), t = R.tiles.get(key);
+    if (!t || t.canvas) continue;
+    const L = LEVELS[t.level], x0 = t.i * L.size, y0 = t.j * L.size;
+    const w = Math.min(L.size, MAP_W - x0), h = Math.min(L.size, MAP_H - y0);
+    const c = document.createElement('canvas');
+    c.width = Math.ceil(w * L.ppm); c.height = Math.ceil(h * L.ppm);
+    drawMapRegion(c.getContext('2d'), G.map, x0, y0, w, h, L.ppm, t.level);
+    t.canvas = c; t.w = w; t.h = h;
+  }
+  // Forget the least recently used tiles.
+  if (R.tiles.size > TILE_CACHE) {
+    const done = [...R.tiles.entries()].filter(([, t]) => t.canvas).sort((a, b) => a[1].used - b[1].used);
+    for (let k = 0; k < done.length && R.tiles.size > TILE_CACHE; k++) R.tiles.delete(done[k][0]);
+  }
+}
+function tileDist(key) {
+  const [l, i, j] = key.split(':').map(Number), L = LEVELS[l];
+  return Math.hypot((i + 0.5) * L.size - R.cam.x, (j + 0.5) * L.size - R.cam.y);
+}
+
 // ---------------------------------------------------------------- frame
+const TEAM_TAG = ['', '1', '2', '3', '4'];
 // Overlay colors follow US doctrine for graphics on a map overlay:
 // blue for friendly, red for enemy, black for fire support targets.
-const TEAM_TAG = ['', '1', '2', '3', '4'];
 const OVL = { blue: '#1f4fbf', red: '#c62828', black: '#161616' };
 
 function tableTexture() {
@@ -447,6 +473,15 @@ function tableTexture() {
     ctx.fillRect(Math.random() * 160, Math.random() * 160, 1 + Math.random() * 2, 1);
   }
   R.table = R.ctx.createPattern(c, 'repeat');
+  const n = document.createElement('canvas');
+  n.width = n.height = 256;
+  const nctx = n.getContext('2d'), nimg = nctx.createImageData(256, 256);
+  for (let i = 0; i < 256 * 256; i++) {
+    const v = 120 + Math.random() * 135;
+    nimg.data[i * 4] = v; nimg.data[i * 4 + 1] = v * 0.97; nimg.data[i * 4 + 2] = v * 0.9; nimg.data[i * 4 + 3] = 255;
+  }
+  nctx.putImageData(nimg, 0, 0);
+  R.grain = R.ctx.createPattern(n, 'repeat');
   return R.table;
 }
 
@@ -462,10 +497,11 @@ function render() {
     ctx.imageSmoothingEnabled = true;
     ctx.drawImage(R.sheet, o.x, o.y, SHEET_W * z, SHEET_H * z);
     ctx.restore();
+    drawTiles(ctx);
+    drawPaper(ctx);
   }
   drawEdgeLabels(ctx);
   drawOrdersOverlay(ctx);
-  drawContacts(ctx);
   drawProjectiles(ctx);
   drawEffects(ctx);
   drawUnits(ctx);
@@ -473,15 +509,59 @@ function render() {
   drawScale(ctx);
 }
 
+function drawTiles(ctx) {
+  const lvl = levelFor(R.cam.zoom);
+  if (!lvl || !G.map) return;
+  const L = LEVELS[lvl], a = toWorld(0, 0), b = toWorld(R.w, R.h);
+  const i0 = Math.max(0, Math.floor(a.x / L.size)), i1 = Math.min(Math.ceil(MAP_W / L.size) - 1, Math.floor(b.x / L.size));
+  const j0 = Math.max(0, Math.floor(a.y / L.size)), j1 = Math.min(Math.ceil(MAP_H / L.size) - 1, Math.floor(b.y / L.size));
+  for (let j = j0; j <= j1; j++) for (let i = i0; i <= i1; i++) {
+    const t = tileFor(lvl, i, j);
+    // While a close tile is being drawn, show the coarser one if it is ready.
+    if (!t && lvl === 2) {
+      const k = R.tiles.get('1:' + Math.floor(i * 200 / 600) + ':' + Math.floor(j * 200 / 600));
+      if (k && k.canvas) { const p = toScreen(k.i * 600, k.j * 600); ctx.drawImage(k.canvas, p.x, p.y, k.w * R.cam.zoom, k.h * R.cam.zoom); }
+      continue;
+    }
+    if (!t) continue;
+    const p = toScreen(i * L.size, j * L.size);
+    ctx.drawImage(t.canvas, p.x, p.y, t.w * R.cam.zoom + 0.5, t.h * R.cam.zoom + 0.5);
+  }
+  drawQueuedTiles(R.queue.length > 4 ? 30 : 14);
+}
+
+// Paper grain and fold creases, fixed to the sheet.
+function drawPaper(ctx) {
+  const z = R.cam.zoom, o = toScreen(-SHEET.ml, -SHEET.mt), w = SHEET_W * z, h = SHEET_H * z;
+  ctx.save();
+  ctx.globalCompositeOperation = 'multiply';
+  ctx.globalAlpha = 0.07;
+  if (R.grain.setTransform) R.grain.setTransform(new DOMMatrix([1, 0, 0, 1, o.x, o.y]));
+  ctx.fillStyle = R.grain;
+  ctx.fillRect(Math.max(0, o.x), Math.max(0, o.y), Math.min(R.w, o.x + w) - Math.max(0, o.x), Math.min(R.h, o.y + h) - Math.max(0, o.y));
+  ctx.restore();
+  const crease = (pos, vertical) => {
+    const g = vertical ? ctx.createLinearGradient(pos - 12, 0, pos + 12, 0) : ctx.createLinearGradient(0, pos - 12, 0, pos + 12);
+    g.addColorStop(0, 'rgba(60,50,30,0)'); g.addColorStop(0.47, 'rgba(60,50,30,0.08)');
+    g.addColorStop(0.5, 'rgba(255,255,250,0.3)'); g.addColorStop(0.54, 'rgba(60,50,30,0.04)'); g.addColorStop(1, 'rgba(60,50,30,0)');
+    ctx.fillStyle = g;
+    if (vertical) ctx.fillRect(pos - 12, Math.max(0, o.y), 24, Math.min(R.h, o.y + h) - Math.max(0, o.y));
+    else ctx.fillRect(Math.max(0, o.x), pos - 12, Math.min(R.w, o.x + w) - Math.max(0, o.x), 24);
+  };
+  crease(o.x + w / 2, true);
+  crease(o.y + h / 3, false);
+  crease(o.y + h * 2 / 3, false);
+}
+
 // When the margin is scrolled off screen, repeat the grid values along the screen edge.
 function drawEdgeLabels(ctx) {
   ctx.font = '600 12px "IBM Plex Mono", ui-monospace, monospace';
-  ctx.lineWidth = 3; ctx.strokeStyle = 'rgba(248,245,234,0.95)'; ctx.fillStyle = OVL.black;
+  ctx.lineWidth = 3; ctx.strokeStyle = 'rgba(247,245,236,0.95)'; ctx.fillStyle = OVL.black;
   const top = 56;
   if (toScreen(0, 0).y < top) {
     ctx.textAlign = 'left'; ctx.textBaseline = 'top';
-    for (let x = 100; x < MAP_W; x += 100) {
-      const p = toScreen(x, 0), t = String(G.grid.e * 10 + x / 100).padStart(3, '0');
+    for (let x = 1000; x < MAP_W; x += 1000) {
+      const p = toScreen(x, 0), t = String(G.grid.e + x / 1000).padStart(2, '0');
       if (p.x < 4 || p.x > R.w - 30) continue;
       ctx.strokeText(t, p.x + 3, top); ctx.fillText(t, p.x + 3, top);
     }
@@ -489,8 +569,8 @@ function drawEdgeLabels(ctx) {
   const left = R.w > 760 ? 306 : 4;
   if (toScreen(0, 0).x < left) {
     ctx.textAlign = 'left'; ctx.textBaseline = 'bottom';
-    for (let n = 100; n < MAP_H; n += 100) {
-      const p = toScreen(0, MAP_H - n), t = String(G.grid.n * 10 + n / 100).padStart(3, '0');
+    for (let n = 1000; n < MAP_H; n += 1000) {
+      const p = toScreen(0, MAP_H - n), t = String(G.grid.n + n / 1000).padStart(2, '0');
       if (p.y < top + 16 || p.y > R.h - 10) continue;
       ctx.strokeText(t, left, p.y - 2); ctx.fillText(t, left, p.y - 2);
     }
@@ -499,10 +579,12 @@ function drawEdgeLabels(ctx) {
 
 // Coordinate card: graphic scale at the current zoom and the grid reference under the cursor.
 function drawScale(ctx) {
-  const z = R.cam.zoom, len = 50 * z;
+  const z = R.cam.zoom;
+  const steps = [10, 25, 50, 100, 250, 500, 1000];
+  const m = steps.find(s => s * z >= 70) || 1000, len = m * z;
   const hv = G.ui.hover && G.ui.hoverIsPointer ? G.ui.hover : null;
-  const onMap = hv && hv.x >= 0 && hv.y >= 0 && hv.x <= MAP_W && hv.y <= MAP_H;
-  const w = Math.max(len + 70, 210), h = onMap ? 46 : 30;
+  const onMap = hv && G.map && hv.x >= 0 && hv.y >= 0 && hv.x <= MAP_W && hv.y <= MAP_H;
+  const w = Math.max(len + 70, 230), h = onMap ? 46 : 30;
   const x = Math.max(14, R.w - w - 10), y = R.h - (G.ui.panelH || 0) - h - 10;
   ctx.save();
   ctx.shadowColor = 'rgba(0,0,0,0.4)'; ctx.shadowBlur = 6; ctx.shadowOffsetX = 2; ctx.shadowOffsetY = 3;
@@ -517,13 +599,23 @@ function drawScale(ctx) {
   ctx.font = '600 11px "IBM Plex Mono", ui-monospace, monospace';
   ctx.textAlign = 'left'; ctx.textBaseline = 'bottom';
   ctx.fillText('0', x + 7, y + 14);
-  ctx.fillText('50 M', x + 10 + len - 14, y + 14);
+  ctx.textAlign = 'right';
+  ctx.fillText(m + ' M', x + 10 + len + 4, y + 14);
+  ctx.textAlign = 'left';
   if (onMap) {
     ctx.textBaseline = 'top';
     ctx.fillText('GR ' + gridRef(hv.x, hv.y) + '  ELEV ' + Math.round(G.map.elevBase + G.map.elevAt(hv.x, hv.y)) + ' M', x + 10, y + 26);
   }
 }
 
+// 8-digit grid reference (10 m precision) for a map point.
+function gridRef(x, y) {
+  const e = Math.floor((G.grid.e * 1000 + x) / 10) % 10000;
+  const n = Math.floor((G.grid.n * 1000 + (MAP_H - y)) / 10) % 10000;
+  return String(e).padStart(4, '0') + ' ' + String(n).padStart(4, '0');
+}
+
+// ---------------------------------------------------------------- pieces
 function unitRadius() { return clamp(R.cam.zoom * 1.6, 10, 17); }
 
 function enemyVisible(e) {
@@ -531,23 +623,144 @@ function enemyVisible(e) {
   return G.revealAll || (k && k.visible);
 }
 
+// What sits on the map at this zoom: each man as a round counter close in; farther out,
+// a square counter for each fire team; farther still, one for each squad.
+function pieceLevel() { return R.cam.zoom >= 2 ? 'man' : R.cam.zoom >= 0.7 ? 'team' : 'squad'; }
+
+function displayPieces() {
+  const level = pieceLevel(), out = [];
+  if (!G.squads.blue) return out;
+  const visible = (s) => s.side === 'blue' || enemyVisible(s);
+  if (level === 'man') {
+    for (const s of G.soldiers) if (!s.routed && visible(s)) out.push({ kind: 'man', x: s.x, y: s.y, side: s.side, soldier: s });
+  } else {
+    for (const sq of [G.squads.blue, G.squads.red]) {
+      const groups = level === 'team' ? [sq.hq, ...sq.teams].map(t => ({ team: t, men: t.members })) : [{ squad: sq, men: sq.all }];
+      for (const gr of groups) {
+        const seen = gr.men.filter(s => !s.routed && visible(s));
+        if (!seen.length) continue;
+        const live = seen.filter(s => s.active);
+        const c = centroid(live.length ? live : seen);
+        out.push({ kind: level, x: c.x, y: c.y, side: sq.side, team: gr.team, squad: gr.squad || sq, men: seen, live });
+      }
+    }
+  }
+  // Last known enemy positions, grouped the same way.
+  if (!G.revealAll) {
+    const lost = [];
+    for (const k of G.known.blue.values()) {
+      const e = G.byId.get(k.id);
+      if (!k.visible && e && e.active) lost.push({ k, e });
+    }
+    if (level === 'man') for (const { k } of lost) out.push({ kind: 'lost', x: k.x, y: k.y, side: 'red', billet: k.billet, age: G.time - k.t });
+    else {
+      const by = new Map();
+      for (const l of lost) {
+        const key = level === 'team' ? l.e.team : l.e.squad;
+        if (!by.has(key)) by.set(key, []);
+        by.get(key).push(l);
+      }
+      for (const [, list] of by) {
+        const c = centroid(list.map(l => l.k));
+        out.push({ kind: 'lost', x: c.x, y: c.y, side: 'red', unit: level, age: G.time - Math.max(...list.map(l => l.k.t)) });
+      }
+    }
+  }
+  return out;
+}
+
+function pieceAt(sx, sy) {
+  const r = (pieceLevel() === 'man' ? unitRadius() : 18) + 5;
+  let best = null, bd = Infinity;
+  for (const p of displayPieces()) {
+    if (p.kind === 'lost') continue;
+    const q = toScreen(p.x, p.y), d = Math.hypot(q.x - sx, q.y - sy);
+    const pen = d + (p.kind === 'man' && !p.soldier.alive ? 6 : 0) + (p.side === 'blue' ? 0 : 2);
+    if (d < r && pen < bd) { bd = pen; best = p; }
+  }
+  return best;
+}
+
 const PIECE_EDGE = { blue: '#3a7d96', red: '#a14646' };
 
-// A game piece: a thick disc with the billet symbol printed on its face.
+// A round counter for one man: a thick disc with the billet symbol on its face.
 // Picked-up (selected) pieces are lifted off the map and throw a longer shadow.
-function drawPiece(ctx, s, p, r, lifted) {
-  const th = Math.max(2, r * 0.22), lift = lifted ? 4 : 0, y = p.y - lift;
+function drawDisc(ctx, side, billet, x, py, r, lifted) {
+  const th = Math.max(2, r * 0.22), lift = lifted ? 4 : 0, y = py - lift;
   ctx.save();
   ctx.shadowColor = 'rgba(0,0,0,0.5)'; ctx.shadowBlur = 3 + lift * 2;
   ctx.shadowOffsetX = 1.5 + lift * 0.8; ctx.shadowOffsetY = 2 + lift * 1.2;
-  ctx.fillStyle = PIECE_EDGE[s.side];
-  ctx.beginPath(); ctx.arc(p.x, y + th, r, 0, Math.PI * 2); ctx.fill();
+  ctx.fillStyle = PIECE_EDGE[side];
+  ctx.beginPath(); ctx.arc(x, y + th, r, 0, Math.PI * 2); ctx.fill();
   ctx.restore();
-  ctx.fillStyle = PIECE_EDGE[s.side];
-  ctx.fillRect(p.x - r, y, r * 2, th);
-  drawSymbol(ctx, p.x, y, r, s.billet, { side: s.side });
+  ctx.fillStyle = PIECE_EDGE[side];
+  ctx.fillRect(x - r, y, r * 2, th);
+  drawSymbol(ctx, x, y, r, billet, { side });
   ctx.strokeStyle = 'rgba(255,255,255,0.45)'; ctx.lineWidth = 1.2;
-  ctx.beginPath(); ctx.arc(p.x, y, r - 2.2, Math.PI * 1.08, Math.PI * 1.55); ctx.stroke();
+  ctx.beginPath(); ctx.arc(x, y, r - 2.2, Math.PI * 1.08, Math.PI * 1.55); ctx.stroke();
+  return y;
+}
+
+// Unit symbol (MIL-STD-2525): friendly a rectangle, hostile a diamond, infantry an X,
+// with the echelon above: a circle with a slash for a team, a dot for a squad.
+function drawUnitSymbol(ctx, x, y, s, side, echelon, opts) {
+  opts = opts || {};
+  const fill = opts.fill != null ? opts.fill : SIDE_FILL[side], ink = opts.ink || MAP_INK;
+  ctx.save();
+  ctx.lineWidth = Math.max(1.4, s * 0.09);
+  ctx.strokeStyle = ink; ctx.fillStyle = fill;
+  if (opts.dashed) ctx.setLineDash([s * 0.22, s * 0.16]);
+  let top;
+  if (side === 'blue') {
+    const w = s * 1.5, h = s;
+    ctx.beginPath(); ctx.rect(x - w / 2, y - h / 2, w, h); ctx.fill(); ctx.stroke();
+    ctx.setLineDash([]);
+    ctx.beginPath(); ctx.moveTo(x - w / 2, y - h / 2); ctx.lineTo(x + w / 2, y + h / 2); ctx.moveTo(x + w / 2, y - h / 2); ctx.lineTo(x - w / 2, y + h / 2); ctx.stroke();
+    top = y - h / 2;
+  } else {
+    const d = s * 0.8;
+    ctx.beginPath(); ctx.moveTo(x, y - d); ctx.lineTo(x + d, y); ctx.lineTo(x, y + d); ctx.lineTo(x - d, y); ctx.closePath(); ctx.fill(); ctx.stroke();
+    ctx.setLineDash([]);
+    ctx.beginPath(); ctx.moveTo(x - d / 2, y - d / 2); ctx.lineTo(x + d / 2, y + d / 2); ctx.moveTo(x + d / 2, y - d / 2); ctx.lineTo(x - d / 2, y + d / 2); ctx.stroke();
+    top = y - d;
+  }
+  ctx.fillStyle = ink; ctx.strokeStyle = ink;
+  const ey = top - s * 0.28;
+  if (echelon === 'team') {
+    const rr = s * 0.16;
+    ctx.lineWidth = Math.max(1.2, s * 0.07);
+    ctx.beginPath(); ctx.arc(x, ey, rr, 0, Math.PI * 2); ctx.stroke();
+    ctx.beginPath(); ctx.moveTo(x - rr * 1.5, ey + rr * 1.5); ctx.lineTo(x + rr * 1.5, ey - rr * 1.5); ctx.stroke();
+  } else if (echelon === 'squad') {
+    ctx.beginPath(); ctx.arc(x, ey, s * 0.09, 0, Math.PI * 2); ctx.fill();
+  }
+  ctx.restore();
+}
+
+// A square cardboard counter for a fire team or squad, with its symbol and strength.
+function drawCounter(ctx, p, sx, sy, s, lifted) {
+  const lift = lifted ? 4 : 0, y = sy - lift, half = s * 1.25, th = Math.max(2, s * 0.14);
+  ctx.save();
+  ctx.shadowColor = 'rgba(0,0,0,0.5)'; ctx.shadowBlur = 3 + lift * 2;
+  ctx.shadowOffsetX = 1.5 + lift * 0.8; ctx.shadowOffsetY = 2 + lift * 1.2;
+  ctx.fillStyle = PIECE_EDGE[p.side];
+  ctx.fillRect(sx - half, y - half + th, half * 2, half * 2);
+  ctx.restore();
+  ctx.fillStyle = p.side === 'blue' ? '#e9f6fb' : '#fbeaea';
+  ctx.fillRect(sx - half, y - half, half * 2, half * 2);
+  ctx.strokeStyle = PIECE_EDGE[p.side]; ctx.lineWidth = 1.5;
+  ctx.strokeRect(sx - half + 0.75, y - half + 0.75, half * 2 - 1.5, half * 2 - 1.5);
+  drawUnitSymbol(ctx, sx, y - s * 0.05, s * 0.85, p.side, p.kind);
+  // Designation at the top left, effective strength at the bottom.
+  ctx.fillStyle = MAP_INK;
+  ctx.font = '700 ' + Math.round(s * 0.42) + 'px "IBM Plex Mono", ui-monospace, monospace';
+  ctx.textBaseline = 'alphabetic';
+  ctx.textAlign = 'center';
+  ctx.fillText(p.live.length + '/' + p.men.length, sx, y + half - s * 0.14);
+  if (p.kind === 'team') {
+    ctx.textAlign = 'left';
+    ctx.fillText(p.team.num ? String(p.team.num) : 'SL', sx - half + 3, y - half + s * 0.48);
+  }
   return y;
 }
 
@@ -569,74 +782,76 @@ function drawChit(ctx, x, y, size, label, bg, fg) {
 function drawUnits(ctx) {
   const r = unitRadius();
   const sel = new Set(selMembers(G.ui.sel));
-  const list = G.soldiers.filter(s => !s.routed && (s.side === 'blue' || enemyVisible(s)));
-  list.sort((a, b) => (a.alive ? 1 : 0) - (b.alive ? 1 : 0) || (sel.has(a) ? 1 : 0) - (sel.has(b) ? 1 : 0) || a.y - b.y);
+  const pieces = displayPieces();
+  const isSel = (p) => p.kind === 'man' ? sel.has(p.soldier) : p.men ? p.men.some(s => sel.has(s)) : false;
+  pieces.sort((a, b) => (a.kind === 'lost' ? -1 : 0) - (b.kind === 'lost' ? -1 : 0)
+    || (a.kind === 'man' && !a.soldier.alive ? -1 : 0) - (b.kind === 'man' && !b.soldier.alive ? -1 : 0)
+    || (isSel(a) ? 1 : 0) - (isSel(b) ? 1 : 0) || a.y - b.y);
   const chit = Math.max(9, r * 0.7);
-  for (const s of list) {
-    const p = toScreen(s.x, s.y);
-    if (p.x < -40 || p.y < -40 || p.x > R.w + 40 || p.y > R.h + 40) continue;
-    const down = !s.active, lifted = sel.has(s) && !down;
-    // Grease-pencil ring on the map around picked-up pieces.
-    if (sel.has(s)) {
-      ctx.strokeStyle = OVL.blue; ctx.lineWidth = 2.2;
-      ctx.beginPath(); ctx.arc(p.x + 0.5, p.y + 1, r + 6, 0, Math.PI * 2); ctx.stroke();
+  for (const p of pieces) {
+    const q = toScreen(p.x, p.y);
+    if (q.x < -50 || q.y < -50 || q.x > R.w + 50 || q.y > R.h + 50) continue;
+    if (p.kind === 'lost') {
+      ctx.save();
+      ctx.globalAlpha = clamp(1 - p.age / 50, 0.3, 0.9);
+      if (p.billet) drawSymbol(ctx, q.x, q.y, r, p.billet, { fill: 'rgba(255,255,255,0)', ink: OVL.red, dashed: true });
+      else drawUnitSymbol(ctx, q.x, q.y, r * 1.1, 'red', p.unit, { fill: 'rgba(255,255,255,0)', ink: OVL.red, dashed: true });
+      ctx.restore();
+      continue;
     }
-    // Facing: a notch on the map at the piece's front.
+    const lifted = isSel(p) && (p.kind !== 'man' || p.soldier.active);
+    if (isSel(p)) {
+      ctx.strokeStyle = OVL.blue; ctx.lineWidth = 2.2;
+      ctx.beginPath(); ctx.arc(q.x + 0.5, q.y + 1, (p.kind === 'man' ? r : 24) + 6, 0, Math.PI * 2); ctx.stroke();
+    }
+    if (p.kind !== 'man') {
+      const y = drawCounter(ctx, p, q.x, q.y, 14, lifted);
+      const pinned = p.live.filter(s => s.pinned).length, supp = p.live.filter(s => s.suppressed).length;
+      const chits = [];
+      if (p.live.length && pinned * 2 >= p.live.length) chits.push(['PIN', '#b3261e', '#fff']);
+      else if (p.live.length && supp * 2 >= p.live.length) chits.push(['SUP', '#e8871e', '#1b1405']);
+      if (p.live.some(s => s.moving)) chits.push(['MOV', '#f3eedc', MAP_INK]);
+      chits.forEach(([label, bg, fg], i) => drawChit(ctx, q.x + r * 0.7 + i * 3, y + r * 0.8 + i * (chit * 0.62), chit, label, bg, fg));
+      continue;
+    }
+    const s = p.soldier, down = !s.active;
     if (!down) {
       const a = s.facing, tip = r + 8;
       ctx.fillStyle = s.side === 'blue' ? OVL.blue : OVL.red;
       ctx.beginPath();
-      ctx.moveTo(p.x + Math.cos(a) * tip, p.y + Math.sin(a) * tip);
-      ctx.lineTo(p.x + Math.cos(a + 0.32) * (r + 2), p.y + Math.sin(a + 0.32) * (r + 2));
-      ctx.lineTo(p.x + Math.cos(a - 0.32) * (r + 2), p.y + Math.sin(a - 0.32) * (r + 2));
+      ctx.moveTo(q.x + Math.cos(a) * tip, q.y + Math.sin(a) * tip);
+      ctx.lineTo(q.x + Math.cos(a + 0.32) * (r + 2), q.y + Math.sin(a + 0.32) * (r + 2));
+      ctx.lineTo(q.x + Math.cos(a - 0.32) * (r + 2), q.y + Math.sin(a - 0.32) * (r + 2));
       ctx.closePath(); ctx.fill();
     }
-    const y = drawPiece(ctx, s, p, r, lifted);
+    const y = drawDisc(ctx, s.side, s.billet, q.x, q.y, r, lifted);
     // Operational condition (MIL-STD-2525): slash for a casualty, X for killed.
     if (down) {
       ctx.strokeStyle = OVL.black; ctx.lineWidth = 2.6; ctx.lineCap = 'round';
       const k = r + 4;
-      ctx.beginPath(); ctx.moveTo(p.x - k, y + k); ctx.lineTo(p.x + k, y - k);
-      if (s.health === 'kia') { ctx.moveTo(p.x - k, y - k); ctx.lineTo(p.x + k, y + k); }
+      ctx.beginPath(); ctx.moveTo(q.x - k, y + k); ctx.lineTo(q.x + k, y - k);
+      if (s.health === 'kia') { ctx.moveTo(q.x - k, y - k); ctx.lineTo(q.x + k, y + k); }
       ctx.stroke();
       continue;
     }
-    // Unique designation (fire team) to the right of the frame.
     if (s.team.num) {
       ctx.font = '700 ' + Math.round(r * 0.9) + 'px "Saira Condensed", "Arial Narrow", sans-serif';
       ctx.textAlign = 'left'; ctx.textBaseline = 'middle';
-      ctx.lineWidth = 3; ctx.strokeStyle = 'rgba(248,245,234,0.95)';
-      ctx.strokeText(TEAM_TAG[s.team.num], p.x + r + 3, y - r * 0.55);
+      ctx.lineWidth = 3; ctx.strokeStyle = 'rgba(247,245,236,0.95)';
+      ctx.strokeText(TEAM_TAG[s.team.num], q.x + r + 3, y - r * 0.55);
       ctx.fillStyle = s.side === 'blue' ? OVL.blue : OVL.red;
-      ctx.fillText(TEAM_TAG[s.team.num], p.x + r + 3, y - r * 0.55);
+      ctx.fillText(TEAM_TAG[s.team.num], q.x + r + 3, y - r * 0.55);
     }
-    // Status chits stacked at the lower right: posture, then suppression, wounds, ammunition.
     const chits = [[POSTURE[s.posture].short, '#f3eedc', OVL.black]];
     if (s.pinned) chits.push(['PIN', '#b3261e', '#fff']);
     else if (s.suppressed) chits.push(['SUP', '#e8871e', '#1b1405']);
     if (s.health === 'light') chits.push(['WIA', '#fff', '#b3261e']);
     if (s.side === 'blue' && s.inMag + s.mags === 0) chits.push(['AMO', '#ffd60a', OVL.black]);
-    chits.forEach(([label, bg, fg], i) => drawChit(ctx, p.x + r * 0.35 + i * 3, y + r * 0.45 + i * (chit * 0.62), chit, label, bg, fg));
+    chits.forEach(([label, bg, fg], i) => drawChit(ctx, q.x + r * 0.35 + i * 3, y + r * 0.45 + i * (chit * 0.62), chit, label, bg, fg));
   }
 }
 
-// Last known enemy positions: the symbol in a dashed frame (suspected), in red ink.
-function drawContacts(ctx) {
-  if (G.revealAll) return;
-  const r = unitRadius();
-  for (const k of G.known.blue.values()) {
-    if (k.visible) continue;
-    const e = G.byId.get(k.id);
-    if (!e || !e.active) continue;
-    const age = G.time - k.t;
-    const p = toScreen(k.x, k.y);
-    ctx.save();
-    ctx.globalAlpha = clamp(1 - age / 50, 0.3, 0.9);
-    drawSymbol(ctx, p.x, p.y, r, k.billet, { fill: 'rgba(255,255,255,0)', ink: OVL.red, dashed: true });
-    ctx.restore();
-  }
-}
-
+// ---------------------------------------------------------------- overlay graphics
 function arrowHead(ctx, from, to, size, filled) {
   const a = Math.atan2(to.y - from.y, to.x - from.x);
   ctx.beginPath();
@@ -654,7 +869,7 @@ function drawTarget(ctx, x, y, radius, label) {
   ctx.beginPath(); ctx.moveTo(p.x - rr - 4, p.y); ctx.lineTo(p.x + rr + 4, p.y); ctx.moveTo(p.x, p.y - rr - 4); ctx.lineTo(p.x, p.y + rr + 4); ctx.stroke();
   ctx.font = '700 11px "IBM Plex Mono", ui-monospace, monospace';
   ctx.textAlign = 'left'; ctx.textBaseline = 'bottom';
-  ctx.lineWidth = 3; ctx.strokeStyle = 'rgba(248,245,234,0.95)';
+  ctx.lineWidth = 3; ctx.strokeStyle = 'rgba(247,245,236,0.95)';
   ctx.strokeText(label, p.x + rr + 4, p.y - 3); ctx.fillStyle = OVL.black; ctx.fillText(label, p.x + rr + 4, p.y - 3);
 }
 
@@ -681,7 +896,7 @@ function drawOrdersOverlay(ctx) {
   // Objectives of bounding drills.
   for (const c of G.controllers) {
     if (c.members[0].side !== 'blue') continue;
-    const p = toScreen(c.dest.x, c.dest.y), rr = 16 * R.cam.zoom;
+    const p = toScreen(c.dest.x, c.dest.y), rr = Math.max(18, 16 * R.cam.zoom);
     ctx.strokeStyle = OVL.blue; ctx.lineWidth = 2.4;
     ctx.beginPath();
     for (let i = 0; i <= 24; i++) {
@@ -714,7 +929,7 @@ function drawOrdersOverlay(ctx) {
   // Sectors of fire for selected men told to watch a direction.
   for (const s of selSet) {
     if (!s.active || s.faceAngle == null) continue;
-    const p = toScreen(s.x, s.y), L = 35 * R.cam.zoom;
+    const p = toScreen(s.x, s.y), L = Math.max(60, 35 * R.cam.zoom);
     ctx.strokeStyle = OVL.blue; ctx.lineWidth = 1.4; ctx.globalAlpha = 0.8;
     ctx.beginPath();
     for (const d of [-0.6, 0.6]) { ctx.moveTo(p.x, p.y); ctx.lineTo(p.x + Math.cos(s.faceAngle + d) * L, p.y + Math.sin(s.faceAngle + d) * L); }
@@ -787,7 +1002,7 @@ function drawEffects(ctx) {
       ctx.fillStyle = 'rgba(232,135,30,' + (1 - f) + ')';
       ctx.beginPath(); ctx.arc(p.x, p.y, 4 + 5 * f, 0, Math.PI * 2); ctx.fill();
     } else if (e.type === 'blast') {
-      const p = toScreen(e.x, e.y), rr = (2 + e.r * 0.6 * Math.sqrt(f)) * z;
+      const p = toScreen(e.x, e.y), rr = Math.max(4, (2 + e.r * 0.6 * Math.sqrt(f)) * z);
       ctx.fillStyle = 'rgba(232,135,30,' + (0.75 * (1 - f)) + ')';
       ctx.beginPath(); ctx.arc(p.x, p.y, rr * 0.55, 0, Math.PI * 2); ctx.fill();
       ctx.strokeStyle = 'rgba(22,22,22,' + (0.7 * (1 - f)) + ')'; ctx.lineWidth = 1.5;
@@ -802,7 +1017,7 @@ function drawFloaters(ctx) {
   for (const f of G.floaters) {
     if (f.side === 'red' && !enemyVisible(G.byId.get(f.id))) continue;
     const p = toScreen(f.x, f.y), a = 1 - f.t / f.life, y = p.y - 26 - f.t * 14;
-    ctx.lineWidth = 3; ctx.strokeStyle = 'rgba(248,245,234,' + a + ')';
+    ctx.lineWidth = 3; ctx.strokeStyle = 'rgba(247,245,236,' + a + ')';
     ctx.strokeText(f.text, p.x, y);
     ctx.fillStyle = f.side === 'blue' ? 'rgba(31,79,191,' + a + ')' : 'rgba(198,40,40,' + a + ')';
     ctx.fillText(f.text, p.x, y);

@@ -1,12 +1,18 @@
 'use strict';
-// Terrain grid, procedural generation, line of sight, pathfinding and cover search.
+// Terrain grid for a 3 x 3 km sheet: procedural generation (relief, streams and ponds,
+// fields, woods, roads, villages, farms), line of sight, pathfinding and cover search.
+
+const PLACE_A = ['Bran', 'Hol', 'Mer', 'Ash', 'Kel', 'Dun', 'Fair', 'Stan', 'Wex', 'Oak', 'Mill', 'Thorn', 'Rock', 'Hal', 'Elm', 'Bram', 'Cold', 'Red'];
+const PLACE_B = ['ford', 'by', 'ton', 'wick', 'ham', 'field', 'dale', 'stead', 'bury', 'well', 'moor', 'ridge', 'cote', 'leigh'];
 
 class GameMap {
   constructor(seed) {
     this.ter = new Uint8Array(GW * GH);
     this.elev = new Float32Array(GW * GH);
     this.buildings = [];
-    this.trees = [];
+    this.roads = [];     // { kind: 'paved' | 'track', pts }
+    this.streams = [];   // { pts, width }
+    this.places = [];    // { name, x, y }
     setSeed(seed);
     this.generate();
   }
@@ -19,9 +25,9 @@ class GameMap {
     if (!this.inGrid(cx, cy)) return TER.OPEN;
     return this.ter[cy * GW + cx];
   }
-  passableCell(cx, cy) { return this.inGrid(cx, cy) && this.ter[cy * GW + cx] !== TER.BUILDING; }
+  passableCell(cx, cy) { return this.inGrid(cx, cy) && TERRAIN[this.ter[cy * GW + cx]].speed > 0; }
 
-  // Ground elevation in meters, interpolated between cell centers.
+  // Ground elevation in meters above the sheet's lowest ground, between cell centers.
   elevAt(x, y) {
     const fx = clamp(x / CELL - 0.5, 0, GW - 1.001), fy = clamp(y / CELL - 0.5, 0, GH - 1.001);
     const x0 = Math.floor(fx), y0 = Math.floor(fy), tx = fx - x0, ty = fy - y0;
@@ -33,143 +39,376 @@ class GameMap {
   // ---------------------------------------------------------------- generation
   generate() {
     this.genElevation();
+    this.genHydrology();
     this.genFields();
     this.genWoods();
-    this.genRoad();
-    this.genHamlet();
-    this.genTrees();
-    this.elevBase = randInt(8, 60) * 5; // height above sea level of the lowest ground
-    this.gmAngle = randRange(-6, 6); // grid-magnetic angle for the declination diagram
+    this.genRoads();
+    this.genVillages();
+    this.genFarms();
+    this.elevBase = randInt(6, 40) * 10; // height above sea level of the lowest ground
+    this.gmAngle = randRange(-6, 6);     // grid-magnetic angle for the declination diagram
+    this.findPeaks();
   }
 
-  genElevation() {
-    const octave = (nx, ny, amp) => {
-      const grid = [];
-      for (let j = 0; j <= ny; j++) { grid.push([]); for (let i = 0; i <= nx; i++) grid[j].push(rand()); }
-      return (u, v) => {
-        const fx = u * nx, fy = v * ny, i = Math.min(nx - 1, Math.floor(fx)), j = Math.min(ny - 1, Math.floor(fy));
-        const tx = smooth(fx - i), ty = smooth(fy - j);
-        const top = lerp(grid[j][i], grid[j][i + 1], tx), bot = lerp(grid[j + 1][i], grid[j + 1][i + 1], tx);
-        return lerp(top, bot, ty) * amp;
-      };
+  noise(nx, ny) {
+    const grid = new Float32Array((nx + 1) * (ny + 1));
+    for (let i = 0; i < grid.length; i++) grid[i] = rand();
+    return (u, v) => {
+      const fx = u * nx, fy = v * ny, i = Math.min(nx - 1, Math.floor(fx)), j = Math.min(ny - 1, Math.floor(fy));
+      const tx = smooth(fx - i), ty = smooth(fy - j), w = nx + 1;
+      const top = lerp(grid[j * w + i], grid[j * w + i + 1], tx), bot = lerp(grid[(j + 1) * w + i], grid[(j + 1) * w + i + 1], tx);
+      return lerp(top, bot, ty);
     };
-    const o1 = octave(4, 3, 7), o2 = octave(9, 7, 2.2), o3 = octave(18, 14, 0.6);
+  }
+
+  // Rolling hill country: broad hills, spurs and small folds, 60 to 120 m of relief.
+  genElevation() {
+    const relief = randRange(60, 110);
+    const oct = [[3, 0.55], [7, 0.26], [15, 0.12], [38, 0.05], [90, 0.015]].map(([n, a]) => ({ f: this.noise(n, n), a }));
+    let lo = Infinity, hi = -Infinity;
     for (let cy = 0; cy < GH; cy++) for (let cx = 0; cx < GW; cx++) {
       const u = (cx + 0.5) / GW, v = (cy + 0.5) / GH;
-      this.elev[cy * GW + cx] = o1(u, v) + o2(u, v) + o3(u, v);
+      let e = 0;
+      for (const o of oct) e += o.f(u, v) * o.a;
+      this.elev[cy * GW + cx] = e;
+      if (e < lo) lo = e; if (e > hi) hi = e;
     }
+    for (let i = 0; i < this.elev.length; i++) this.elev[i] = (this.elev[i] - lo) / (hi - lo) * relief;
   }
 
-  // Farm fields as Voronoi patches, bounded by tree lines, stone walls or nothing.
-  genFields() {
-    const kinds = [TER.OPEN, TER.OPEN, TER.PLOWED, TER.GRASS, TER.GRASS];
-    const seeds = [];
-    const n = randInt(9, 13);
-    for (let i = 0; i < n; i++) seeds.push({ x: randRange(0, MAP_W), y: randRange(0, MAP_H), k: pick(kinds) });
-    const owner = new Int16Array(GW * GH);
+  // Water runs downhill: each cell drains to its lowest neighbor. Cells draining a large
+  // enough area become streams; streams that end in a hollow fill it as a pond.
+  genHydrology() {
+    const N = GW * GH, e = this.elev;
+    // Priority flood from the map edge: fill each hollow up to its spill level, so water
+    // drained over the filled surface always finds its way off the sheet.
+    const fill = new Float32Array(N), seen = new Uint8Array(N), heap = new MinHeap();
+    for (let cx = 0; cx < GW; cx++) for (const cy of [0, GH - 1]) { const i = cy * GW + cx; if (!seen[i]) { seen[i] = 1; fill[i] = e[i]; heap.push(i, e[i]); } }
+    for (let cy = 1; cy < GH - 1; cy++) for (const cx of [0, GW - 1]) { const i = cy * GW + cx; seen[i] = 1; fill[i] = e[i]; heap.push(i, e[i]); }
+    const order = new Int32Array(N);
+    let on = 0;
+    while (heap.size) {
+      const c = heap.pop();
+      order[on++] = c;
+      const x = c % GW, y = Math.floor(c / GW);
+      for (let j = -1; j <= 1; j++) for (let k = -1; k <= 1; k++) {
+        if (!j && !k) continue;
+        const nx = x + k, ny = y + j;
+        if (!this.inGrid(nx, ny)) continue;
+        const n = ny * GW + nx;
+        if (seen[n]) continue;
+        seen[n] = 1;
+        fill[n] = Math.max(e[n], fill[c] + 0.0005);
+        heap.push(n, fill[n]);
+      }
+    }
+    // Each cell drains to its lowest neighbor on the filled surface; flow accumulates
+    // from the top of the flood order down.
+    const down = new Int32Array(N).fill(-1);
     for (let cy = 0; cy < GH; cy++) for (let cx = 0; cx < GW; cx++) {
-      const x = (cx + 0.5) * CELL, y = (cy + 0.5) * CELL;
+      const i = cy * GW + cx;
+      if (cx === 0 || cy === 0 || cx === GW - 1 || cy === GH - 1) continue;
+      let best = fill[i], bi = -1;
+      for (let j = -1; j <= 1; j++) for (let k = -1; k <= 1; k++) {
+        if (!j && !k) continue;
+        const n = (cy + j) * GW + cx + k;
+        if (fill[n] < best) { best = fill[n]; bi = n; }
+      }
+      down[i] = bi;
+    }
+    const acc = new Float32Array(N).fill(1);
+    for (let n = N - 1; n >= 0; n--) { const i = order[n]; if (down[i] >= 0) acc[down[i]] += acc[i]; }
+
+    // Ponds: the deeper parts of small filled hollows.
+    const pondSeen = new Uint8Array(N);
+    for (let i = 0; i < N; i++) {
+      if (pondSeen[i] || fill[i] - e[i] < 1.2) continue;
+      const region = [i], q = [i];
+      pondSeen[i] = 1;
+      while (q.length) {
+        const c = q.pop(), x = c % GW, y = Math.floor(c / GW);
+        for (const [dx, dy] of [[1, 0], [-1, 0], [0, 1], [0, -1]]) {
+          if (!this.inGrid(x + dx, y + dy)) continue;
+          const n = (y + dy) * GW + x + dx;
+          if (!pondSeen[n] && fill[n] - e[n] >= 0.6) { pondSeen[n] = 1; region.push(n); q.push(n); }
+        }
+      }
+      if (region.length >= 40 && region.length <= 2500) for (const c of region) this.ter[c] = TER.POND;
+    }
+
+    const T = 7000; // cells (about 0.11 km² of catchment) before water runs as a stream
+    const isStream = new Uint8Array(N);
+    for (let i = 0; i < N; i++) if (acc[i] >= T) isStream[i] = 1;
+
+    // Trace streams into polylines, from each source downhill to a junction or the edge.
+    const feeds = new Uint8Array(N);
+    for (let i = 0; i < N; i++) if (isStream[i] && down[i] >= 0) feeds[down[i]] = 1;
+    const traced = new Uint8Array(N);
+    for (let i = 0; i < N; i++) {
+      if (!isStream[i] || feeds[i]) continue;
+      const pts = [];
+      let c = i, width = 1.5;
+      while (c >= 0) {
+        pts.push({ x: (c % GW + 0.5) * CELL, y: (Math.floor(c / GW) + 0.5) * CELL });
+        width = Math.max(width, 1.5 + 3 * clamp(Math.log(acc[c] / T) / Math.log(30), 0, 1));
+        if (traced[c]) break;
+        traced[c] = 1;
+        c = down[c];
+      }
+      if (pts.length > 3) this.streams.push({ pts: simplifyLine(pts, 3), width });
+    }
+    // Streams cut small gullies: a meter or so below the banks.
+    const cut = new Float32Array(N);
+    for (let i = 0; i < N; i++) {
+      if (!traced[i] || this.ter[i] === TER.POND) continue;
+      this.ter[i] = TER.STREAM;
+      const cx = i % GW, cy = Math.floor(i / GW);
+      for (let j = -1; j <= 1; j++) for (let k = -1; k <= 1; k++) {
+        if (!this.inGrid(cx + k, cy + j)) continue;
+        const n = (cy + j) * GW + cx + k;
+        cut[n] = Math.max(cut[n], j || k ? 0.5 : 1.3);
+      }
+    }
+    for (let i = 0; i < N; i++) this.elev[i] -= cut[i];
+  }
+
+  isWet(i) { return this.ter[i] === TER.STREAM || this.ter[i] === TER.POND; }
+
+  // Farm fields as Voronoi patches on a jittered lattice, bounded by hedgerows, stone walls or nothing.
+  genFields() {
+    const S = 200, nx = Math.ceil(MAP_W / S) + 1, ny = Math.ceil(MAP_H / S) + 1;
+    const kinds = [[TER.OPEN, 3], [TER.PLOWED, 2.2], [TER.GRASS, 2.4], [TER.ORCHARD, 0.6], [TER.VINEYARD, 0.5]];
+    const total = kinds.reduce((n, k) => n + k[1], 0);
+    const pickKind = () => { let r = rand() * total; for (const [k, w] of kinds) { if ((r -= w) <= 0) return k; } return TER.OPEN; };
+    const seeds = [];
+    for (let j = 0; j < ny; j++) for (let i = 0; i < nx; i++) seeds.push({ x: (i + randRange(0.1, 0.9)) * S, y: (j + randRange(0.1, 0.9)) * S, k: pickKind() });
+    const owner = new Int32Array(GW * GH);
+    for (let cy = 0; cy < GH; cy++) for (let cx = 0; cx < GW; cx++) {
+      const x = (cx + 0.5) * CELL, y = (cy + 0.5) * CELL, li = Math.floor(x / S), lj = Math.floor(y / S);
       let best = 0, bd = Infinity;
-      for (let i = 0; i < n; i++) { const d = (seeds[i].x - x) ** 2 + (seeds[i].y - y) ** 2; if (d < bd) { bd = d; best = i; } }
-      owner[cy * GW + cx] = best;
-      this.ter[cy * GW + cx] = seeds[best].k;
+      for (let j = lj - 1; j <= lj + 1; j++) for (let i = li - 1; i <= li + 1; i++) {
+        if (i < 0 || j < 0 || i >= nx || j >= ny) continue;
+        const s = seeds[j * nx + i], d = (s.x - x) ** 2 + (s.y - y) ** 2;
+        if (d < bd) { bd = d; best = j * nx + i; }
+      }
+      const c = cy * GW + cx;
+      owner[c] = best;
+      if (!this.isWet(c)) this.ter[c] = seeds[best].k;
     }
     const edgeKind = new Map();
     const edgeFor = (a, b) => {
-      const key = Math.min(a, b) * 100 + Math.max(a, b);
-      if (!edgeKind.has(key)) {
-        const r = rand();
-        edgeKind.set(key, { kind: r < 0.4 ? TER.WOODS : r < 0.68 ? TER.WALL : -1, phase: randInt(0, 20) });
-      }
+      const key = Math.min(a, b) * 100000 + Math.max(a, b);
+      if (!edgeKind.has(key)) { const r = rand(); edgeKind.set(key, { kind: r < 0.45 ? TER.WOODS : r < 0.65 ? TER.WALL : -1, phase: randInt(0, 30) }); }
       return edgeKind.get(key);
     };
     for (let cy = 0; cy < GH - 1; cy++) for (let cx = 0; cx < GW - 1; cx++) {
-      const a = owner[cy * GW + cx];
-      const b = owner[cy * GW + cx + 1] !== a ? owner[cy * GW + cx + 1] : owner[(cy + 1) * GW + cx] !== a ? owner[(cy + 1) * GW + cx] : -1;
-      if (b < 0) continue;
+      const c = cy * GW + cx, a = owner[c];
+      const b = owner[c + 1] !== a ? owner[c + 1] : owner[c + GW] !== a ? owner[c + GW] : -1;
+      if (b < 0 || this.isWet(c)) continue;
       const e = edgeFor(a, b);
       if (e.kind < 0) continue;
       // Gaps let men pass walls and hedgerows without climbing.
-      if (e.kind === TER.WALL && (cx + cy + e.phase) % 16 < 2) continue;
-      if (e.kind === TER.WOODS && (cx * 3 + cy + e.phase) % 23 < 2) continue;
-      this.ter[cy * GW + cx] = e.kind;
+      if (e.kind === TER.WALL && (cx + cy + e.phase) % 22 < 2) continue;
+      if (e.kind === TER.WOODS && (cx * 3 + cy + e.phase) % 31 < 2) continue;
+      this.ter[c] = e.kind;
     }
   }
 
+  // Woods: large stands, more of them on steep ground and high ground.
   genWoods() {
-    const n = randInt(2, 3);
-    for (let k = 0; k < n; k++) {
-      const wx = randRange(20, MAP_W - 20), wy = randRange(30, MAP_H - 40), r = randRange(12, 24);
-      const lobes = [0, 1, 2, 3].map(() => ({ a: randRange(0, Math.PI * 2), s: randRange(0.15, 0.35) }));
-      for (let cy = 0; cy < GH; cy++) for (let cx = 0; cx < GW; cx++) {
-        const x = (cx + 0.5) * CELL, y = (cy + 0.5) * CELL;
-        const a = Math.atan2(y - wy, x - wx);
-        let rr = r;
-        for (const l of lobes) rr += r * l.s * Math.cos(a * 2 - l.a);
-        if (dist(x, y, wx, wy) < rr) this.ter[cy * GW + cx] = TER.WOODS;
+    const n1 = this.noise(6, 6), n2 = this.noise(17, 17);
+    let maxE = 0;
+    for (const v of this.elev) if (v > maxE) maxE = v;
+    for (let cy = 1; cy < GH - 1; cy++) for (let cx = 1; cx < GW - 1; cx++) {
+      const c = cy * GW + cx;
+      if (this.isWet(c)) continue;
+      const u = (cx + 0.5) / GW, v = (cy + 0.5) / GH;
+      const slope = Math.hypot(this.elev[c + 1] - this.elev[c - 1], this.elev[c + GW] - this.elev[c - GW]) / (2 * CELL);
+      const f = n1(u, v) * 0.7 + n2(u, v) * 0.3 + Math.min(0.18, slope * 1.5) + this.elev[c] / maxE * 0.08;
+      if (f > 0.74) this.ter[c] = TER.WOODS;
+    }
+  }
+
+  // Least-cost route for a road: avoids steep ground, woods and water.
+  routeRoad(sx, sy, tx, ty) {
+    const N = GW * GH, g = new Float32Array(N).fill(Infinity), came = new Int32Array(N).fill(-1), closed = new Uint8Array(N);
+    const heap = new MinHeap(), start = sy * GW + sx, end = ty * GW + tx;
+    const h = (i) => Math.hypot(i % GW - tx, Math.floor(i / GW) - ty) * 1.2;
+    g[start] = 0; heap.push(start, h(start));
+    while (heap.size) {
+      const cur = heap.pop();
+      if (cur === end) break;
+      if (closed[cur]) continue;
+      closed[cur] = 1;
+      const cx = cur % GW, cy = Math.floor(cur / GW);
+      for (let dy = -1; dy <= 1; dy++) for (let dx = -1; dx <= 1; dx++) {
+        if (!dx && !dy) continue;
+        const nx = cx + dx, ny = cy + dy;
+        if (!this.inGrid(nx, ny)) continue;
+        const ni = ny * GW + nx, k = this.ter[ni];
+        if (closed[ni] || k === TER.POND || k === TER.BUILDING) continue;
+        const grade = Math.abs(this.elev[ni] - this.elev[cur]) / CELL;
+        let cost = (dx && dy ? 1.414 : 1) * (1 + grade * grade * 400);
+        if (k === TER.WOODS) cost *= 2;
+        if (k === TER.STREAM) cost += 12;
+        if (k === TER.ROAD || k === TER.PAVED) cost *= 0.4;
+        const ng = g[cur] + cost;
+        if (ng < g[ni]) { g[ni] = ng; came[ni] = cur; heap.push(ni, ng + h(ni)); }
       }
     }
+    if (came[end] < 0) return null;
+    const cells = [];
+    for (let i = end; i !== -1; i = came[i]) cells.push(i);
+    return cells.reverse();
   }
 
-  genRoad() {
-    let y = randRange(65, 115);
-    this.roadY = [];
-    for (let cx = 0; cx < GW; cx++) {
-      y = clamp(y + gauss() * 0.5, 50, 130);
-      this.roadY.push(y);
-      const cy = Math.floor(y / CELL);
-      for (let d = 0; d < 2; d++) if (this.inGrid(cx, cy + d)) this.ter[(cy + d) * GW + cx] = TER.ROAD;
-    }
+  layRoad(cells, kind) {
+    const t = kind === 'paved' ? TER.PAVED : TER.ROAD;
+    for (const c of cells) if (this.ter[c] !== TER.PAVED) this.ter[c] = t;
+    const pts = cells.map(c => ({ x: (c % GW + 0.5) * CELL, y: (Math.floor(c / GW) + 0.5) * CELL }));
+    this.roads.push({ kind, pts: simplifyLine(pts, 2.5), cells });
   }
 
-  genHamlet() {
-    const center = randRange(50, MAP_W - 50);
-    const want = randInt(3, 6);
-    const roofs = ['#8a4b3a', '#6f6a63', '#7d5a44', '#5c5f66'];
-    for (let tries = 0; tries < 80 && this.buildings.length < want; tries++) {
-      const w = randInt(4, 7), h = randInt(3, 5);
-      const cx0 = Math.floor((center + randRange(-40, 40)) / CELL);
-      const roadCy = Math.floor(this.roadY[clamp(cx0, 0, GW - 1)] / CELL);
-      const north = chance(0.5);
-      const off = randInt(2, 4);
-      const cy0 = north ? roadCy - off - h : roadCy + 2 + off;
-      if (!this.footprintFree(cx0 - 1, cy0 - 1, w + 2, h + 2)) continue;
-      for (let j = 0; j < h; j++) for (let i = 0; i < w; i++) this.ter[(cy0 + j) * GW + cx0 + i] = TER.BUILDING;
-      const b = { cx: cx0, cy: cy0, w, h, x0: cx0 * CELL, y0: cy0 * CELL, x1: (cx0 + w) * CELL, y1: (cy0 + h) * CELL,
-        height: randRange(4.5, 7), roof: pick(roofs) };
-      this.buildings.push(b);
-      if (chance(0.4)) this.yardWall(b, north);
-    }
+  edgePoint(side) {
+    const r = randInt(Math.floor(GW * 0.2), Math.floor(GW * 0.8));
+    return side === 'w' ? [0, r] : side === 'e' ? [GW - 1, r] : side === 'n' ? [r, 0] : [r, GH - 1];
+  }
+
+  genRoads() {
+    const ew = chance(0.5);
+    const [a, b] = ew ? [this.edgePoint('w'), this.edgePoint('e')] : [this.edgePoint('n'), this.edgePoint('s')];
+    const main = this.routeRoad(a[0], a[1], b[0], b[1]);
+    if (main) this.layRoad(main, 'paved');
+    const [c, d] = ew ? [this.edgePoint('n'), this.edgePoint('s')] : [this.edgePoint('w'), this.edgePoint('e')];
+    const track = this.routeRoad(c[0], c[1], d[0], d[1]);
+    if (track) this.layRoad(track, 'track');
   }
 
   footprintFree(cx, cy, w, h) {
     for (let j = 0; j < h; j++) for (let i = 0; i < w; i++) {
       if (!this.inGrid(cx + i, cy + j)) return false;
       const t = this.ter[(cy + j) * GW + cx + i];
-      if (t === TER.BUILDING || t === TER.ROAD) return false;
+      if (t === TER.BUILDING || t === TER.ROAD || t === TER.PAVED || t === TER.STREAM || t === TER.POND) return false;
     }
     return true;
   }
 
-  yardWall(b, north) {
-    const m = 3, x0 = b.cx - m, y0 = b.cy - m, x1 = b.cx + b.w + m - 1, y1 = b.cy + b.h + m - 1;
-    const gateX = b.cx + Math.floor(b.w / 2);
+  placeBuilding(cx, cy, w, h) {
+    if (!this.footprintFree(cx - 1, cy - 1, w + 2, h + 2)) return null;
+    for (let j = -1; j <= h; j++) for (let i = -1; i <= w; i++) {
+      const c = (cy + j) * GW + cx + i;
+      const inside = i >= 0 && j >= 0 && i < w && j < h;
+      if (inside) this.ter[c] = TER.BUILDING;
+      else if (this.ter[c] !== TER.WALL) this.ter[c] = TER.OPEN; // a cleared yard around the house
+    }
+    const b = { cx, cy, w, h, x0: cx * CELL, y0: cy * CELL, x1: (cx + w) * CELL, y1: (cy + h) * CELL, height: randRange(4.5, 8) };
+    this.buildings.push(b);
+    return b;
+  }
+
+  yardWall(b) {
+    const m = 2, x0 = b.cx - m, y0 = b.cy - m, x1 = b.cx + b.w + m - 1, y1 = b.cy + b.h + m - 1;
+    const gate = randInt(0, 3);
     for (let cy = y0; cy <= y1; cy++) for (let cx = x0; cx <= x1; cx++) {
       if (!this.inGrid(cx, cy)) continue;
       const edge = cx === x0 || cx === x1 || cy === y0 || cy === y1;
       if (!edge) continue;
-      const roadSide = north ? cy === y1 : cy === y0;
-      if (roadSide && Math.abs(cx - gateX) <= 1) continue;
-      const i = cy * GW + cx;
-      if (this.ter[i] !== TER.ROAD && this.ter[i] !== TER.BUILDING) this.ter[i] = TER.WALL;
+      const gx = b.cx + Math.floor(b.w / 2), gy = b.cy + Math.floor(b.h / 2);
+      if ((gate === 0 && cy === y0 && Math.abs(cx - gx) <= 0) || (gate === 1 && cy === y1 && Math.abs(cx - gx) <= 0) ||
+          (gate === 2 && cx === x0 && Math.abs(cy - gy) <= 0) || (gate === 3 && cx === x1 && Math.abs(cy - gy) <= 0)) continue;
+      const i = cy * GW + cx, k = this.ter[i];
+      if (k !== TER.ROAD && k !== TER.PAVED && k !== TER.BUILDING && !this.isWet(i)) this.ter[i] = TER.WALL;
     }
   }
 
-  genTrees() {
-    for (let cy = 0; cy < GH; cy++) for (let cx = 0; cx < GW; cx++) {
-      if (this.ter[cy * GW + cx] !== TER.WOODS || !chance(0.8)) continue;
-      this.trees.push({ x: (cx + randRange(0.1, 0.9)) * CELL, y: (cy + randRange(0.1, 0.9)) * CELL,
-        r: randRange(1.6, 2.9), h: randRange(6, 10), tone: randRange(-1, 1) });
+  placeName() {
+    for (let i = 0; i < 20; i++) {
+      const n = pick(PLACE_A) + pick(PLACE_B);
+      if (!this.places.some(p => p.name === n)) return n;
+    }
+    return pick(PLACE_A) + pick(PLACE_B);
+  }
+
+  // Villages strung along the roads, houses facing the road with yards and walls.
+  genVillages() {
+    const along = this.roads.flatMap(r => r.cells.map(c => ({ c, kind: r.kind })));
+    const want = randInt(2, 4);
+    for (let tries = 0; tries < 60 && this.places.length < want; tries++) {
+      const pick0 = along[randInt(0, along.length - 1)];
+      if (!pick0) break;
+      const vx = (pick0.c % GW + 0.5) * CELL, vy = (Math.floor(pick0.c / GW) + 0.5) * CELL;
+      if (vx < 250 || vy < 250 || vx > MAP_W - 250 || vy > MAP_H - 250) continue;
+      if (this.places.some(p => dist(p.x, p.y, vx, vy) < 800)) continue;
+      const near = along.filter(a => dist((a.c % GW + 0.5) * CELL, (Math.floor(a.c / GW) + 0.5) * CELL, vx, vy) < 160);
+      let built = 0;
+      for (let k = 0; k < 80 && built < randInt(9, 18); k++) {
+        const a = pick(near), ax = a.c % GW, ay = Math.floor(a.c / GW);
+        const w = randInt(2, 4), h = randInt(2, 3), side = chance(0.5) ? 1 : -1, off = randInt(2, 4);
+        const horiz = chance(0.5);
+        const cx = horiz ? ax - Math.floor(w / 2) : ax + (side > 0 ? off : -off - w);
+        const cy = horiz ? ay + (side > 0 ? off : -off - h) : ay - Math.floor(h / 2);
+        const b = this.placeBuilding(cx, cy, w, h);
+        if (!b) continue;
+        built++;
+        if (chance(0.3)) this.yardWall(b);
+      }
+      if (built >= 5) this.places.push({ name: this.placeName(), x: vx, y: vy, kind: 'village' });
+    }
+  }
+
+  // Outlying farms, each with a track to the nearest road.
+  genFarms() {
+    const roadCells = this.roads.flatMap(r => r.cells);
+    const want = randInt(6, 10);
+    let made = 0;
+    for (let tries = 0; tries < 80 && made < want; tries++) {
+      const x = randRange(150, MAP_W - 150), y = randRange(150, MAP_H - 150);
+      if (this.places.some(p => dist(p.x, p.y, x, y) < (p.kind === 'village' ? 450 : 350))) continue;
+      const c = this.cellOf(x, y);
+      if (TERRAIN[this.ter[c.cy * GW + c.cx]].speed === 0 || this.ter[c.cy * GW + c.cx] === TER.WOODS) continue;
+      const b = this.placeBuilding(c.cx, c.cy, randInt(3, 5), randInt(2, 3));
+      if (!b) continue;
+      for (let k = 0; k < randInt(0, 2); k++) this.placeBuilding(c.cx + randInt(-6, 6), c.cy + randInt(4, 7) * (chance(0.5) ? 1 : -1), randInt(2, 3), 2);
+      if (chance(0.4)) this.yardWall(b);
+      made++;
+      this.places.push({ name: this.placeName() + ' Farm', x: b.x1 + 6, y: b.y0, kind: 'farm' });
+      // Track to the nearest road cell.
+      let best = -1, bd = Infinity;
+      for (let i = 0; i < roadCells.length; i += 3) {
+        const rc = roadCells[i], d = (rc % GW - c.cx) ** 2 + (Math.floor(rc / GW) - c.cy) ** 2;
+        if (d < bd) { bd = d; best = rc; }
+      }
+      const sx = c.cx + Math.floor(b.w / 2), sy = c.cy + b.h + 1;
+      if (best >= 0 && this.inGrid(sx, sy)) {
+        const path = this.routeRoad(sx, sy, best % GW, Math.floor(best / GW));
+        if (path && path.length > 2) this.layRoad(path, 'track');
+      }
+    }
+  }
+
+  // Hilltops for spot elevations and the sheet name; index contour label sites.
+  findPeaks() {
+    const R = 50, peaks = [];
+    for (let cy = R; cy < GH - R; cy += 5) for (let cx = R; cx < GW - R; cx += 5) {
+      const e = this.elev[cy * GW + cx];
+      let top = true;
+      for (let j = -R; j <= R && top; j += 5) for (let i = -R; i <= R; i += 5) {
+        if ((i || j) && this.elev[(cy + j) * GW + cx + i] > e) { top = false; break; }
+      }
+      if (top) peaks.push({ x: (cx + 0.5) * CELL, y: (cy + 0.5) * CELL, e });
+    }
+    peaks.sort((a, b) => b.e - a.e);
+    this.peaks = [];
+    for (const p of peaks) if (!this.peaks.some(q => dist(p.x, p.y, q.x, q.y) < 350)) this.peaks.push(p);
+    this.peak = this.peaks.length ? Math.round(this.elevBase + this.peaks[0].e) : this.elevBase;
+    this.contourLabels = [];
+    for (let y = 60; y < MAP_H - 60; y += 24) for (let x = 60; x < MAP_W - 60; x += 24) {
+      const e = this.elevAt(x, y), lv = Math.round(e / 25) * 25;
+      if (lv <= 0 || Math.abs(e - lv) > 0.3) continue;
+      if (this.contourLabels.some(l => dist(l.x, l.y, x, y) < 380)) continue;
+      const k = this.terAt(x, y);
+      if (k === TER.BUILDING || k === TER.PAVED || k === TER.ROAD) continue;
+      this.contourLabels.push({ x, y, v: lv });
     }
   }
 
@@ -180,7 +419,7 @@ class GameMap {
     const d = dist(ax, ay, bx, by);
     if (d < 0.75) return 1;
     const ga = this.elevAt(ax, ay) + za, gb = this.elevAt(bx, by) + zb;
-    const n = Math.ceil(d / 0.8);
+    const n = Math.ceil(d / 1.6);
     let dens = 0, last = -1;
     for (let i = 1; i < n; i++) {
       const t = i / n, x = ax + (bx - ax) * t, y = ay + (by - ay) * t;
@@ -198,8 +437,8 @@ class GameMap {
       if (T.solid) return 0;
       if (T.density) {
         // A man at the edge of cover can see out of it; his own cell counts less.
-        const w = fromA < 1.5 ? 0.25 : fromB < 1.5 ? 0.5 : 1;
-        dens += T.density * w;
+        const w = fromA < CELL * 0.75 ? 0.25 : fromB < CELL * 0.75 ? 0.5 : 1;
+        dens += T.density * CELL * w;
         if (dens >= 1) return 0;
       }
     }
@@ -208,8 +447,9 @@ class GameMap {
 
   // ---------------------------------------------------------------- pathfinding
   nearestPassable(cx, cy) {
+    cx = clamp(cx, 0, GW - 1); cy = clamp(cy, 0, GH - 1);
     if (this.passableCell(cx, cy) && this.ter[cy * GW + cx] !== TER.WALL) return { cx, cy };
-    for (let r = 1; r < 12; r++) {
+    for (let r = 1; r < 16; r++) {
       for (let j = -r; j <= r; j++) for (let i = -r; i <= r; i++) {
         if (Math.max(Math.abs(i), Math.abs(j)) !== r) continue;
         const x = cx + i, y = cy + j;
@@ -220,19 +460,20 @@ class GameMap {
   }
 
   straightWalkable(ax, ay, bx, by) {
-    const d = dist(ax, ay, bx, by), n = Math.ceil(d / 0.7);
+    const d = dist(ax, ay, bx, by), n = Math.ceil(d / 1.2);
     for (let i = 0; i <= n; i++) {
       const t = i / n, x = ax + (bx - ax) * t, y = ay + (by - ay) * t;
       const k = this.terAt(x, y);
-      if (k === TER.BUILDING || k === TER.WALL) return false;
+      if (k === TER.BUILDING || k === TER.WALL || k === TER.POND) return false;
       // Keep clear of building corners so men do not clip through them.
-      if (this.terAt(x + 0.6, y) === TER.BUILDING || this.terAt(x - 0.6, y) === TER.BUILDING ||
-          this.terAt(x, y + 0.6) === TER.BUILDING || this.terAt(x, y - 0.6) === TER.BUILDING) return false;
+      if (this.terAt(x + 1, y) === TER.BUILDING || this.terAt(x - 1, y) === TER.BUILDING ||
+          this.terAt(x, y + 1) === TER.BUILDING || this.terAt(x, y - 1) === TER.BUILDING) return false;
     }
     return true;
   }
 
-  // A* over the grid; cost is travel time. Returns waypoints in meters, or null.
+  // A* over the grid; cost is travel time. Long routes use a weighted heuristic,
+  // which finds a good route much faster than the strictly shortest one.
   findPath(sx, sy, tx, ty) {
     tx = clamp(tx, 1, MAP_W - 1); ty = clamp(ty, 1, MAP_H - 1);
     const s = this.cellOf(sx, sy), t0 = this.cellOf(tx, ty);
@@ -240,7 +481,8 @@ class GameMap {
     const exact = t.cx === t0.cx && t.cy === t0.cy;
     const goal = exact ? { x: tx, y: ty } : { x: (t.cx + 0.5) * CELL, y: (t.cy + 0.5) * CELL };
     if (s.cx === t.cx && s.cy === t.cy) return [goal];
-    if (this.straightWalkable(sx, sy, goal.x, goal.y) && dist(sx, sy, goal.x, goal.y) < 40) return [goal];
+    const straight = dist(sx, sy, goal.x, goal.y);
+    if (straight < 60 && this.straightWalkable(sx, sy, goal.x, goal.y)) return [goal];
 
     const N = GW * GH, start = s.cy * GW + s.cx, end = t.cy * GW + t.cx;
     const g = this._g || (this._g = new Float32Array(N));
@@ -248,18 +490,19 @@ class GameMap {
     const closed = this._closed || (this._closed = new Uint8Array(N));
     g.fill(Infinity); came.fill(-1); closed.fill(0);
     const heap = new MinHeap();
+    const wgt = straight > 150 ? 1.6 : 1;
     const h = (i) => {
       const dx = Math.abs((i % GW) - t.cx), dy = Math.abs(Math.floor(i / GW) - t.cy);
-      return (Math.max(dx, dy) + 0.414 * Math.min(dx, dy)) * CELL / 1.15;
+      return (Math.max(dx, dy) + 0.414 * Math.min(dx, dy)) * CELL / 1.2 * wgt;
     };
     g[start] = 0;
     heap.push(start, h(start));
-    let found = false;
-    while (heap.size) {
+    let found = false, expanded = 0;
+    while (heap.size && expanded < 250000) {
       const cur = heap.pop();
       if (cur === end) { found = true; break; }
       if (closed[cur]) continue;
-      closed[cur] = 1;
+      closed[cur] = 1; expanded++;
       const cx = cur % GW, cy = Math.floor(cur / GW);
       for (let dy = -1; dy <= 1; dy++) for (let dx = -1; dx <= 1; dx++) {
         if (!dx && !dy) continue;
@@ -282,13 +525,32 @@ class GameMap {
     const out = [];
     let ax = sx, ay = sy, i = 0;
     while (i < cells.length - 1) {
-      let j = Math.min(cells.length - 1, i + 30);
+      let j = Math.min(cells.length - 1, i + 25);
       while (j > i + 1 && !this.straightWalkable(ax, ay, cells[j].x, cells[j].y)) j--;
       out.push(cells[j]);
       ax = cells[j].x; ay = cells[j].y; i = j;
     }
     if (!out.length) out.push(goal);
     return out;
+  }
+
+  // A route for a man keeping station on a leader's route: the leader's waypoints
+  // shifted by his formation offset, with short detours where the shifted line is blocked.
+  offsetPath(sx, sy, lead, ox, oy) {
+    const pts = [];
+    let px = sx, py = sy;
+    for (let k = 0; k < lead.length; k++) {
+      const prev = k ? lead[k - 1] : null, cur = lead[k];
+      const h = prev ? angleTo(prev.x, prev.y, cur.x, cur.y) : angleTo(sx - ox, sy - oy, cur.x, cur.y);
+      const w = rotateOffset(ox, oy, h);
+      const c = this.nearestPassable(Math.floor((cur.x + w.x) / CELL), Math.floor((cur.y + w.y) / CELL));
+      const q = k === lead.length - 1 && TERRAIN[this.terAt(cur.x + w.x, cur.y + w.y)].speed > 0 && this.terAt(cur.x + w.x, cur.y + w.y) !== TER.WALL
+        ? { x: cur.x + w.x, y: cur.y + w.y } : { x: (c.cx + 0.5) * CELL, y: (c.cy + 0.5) * CELL };
+      if (this.straightWalkable(px, py, q.x, q.y)) pts.push(q);
+      else { const d = this.findPath(px, py, q.x, q.y); if (d) pts.push(...d); else pts.push(q); }
+      px = q.x; py = q.y;
+    }
+    return pts;
   }
 
   // ---------------------------------------------------------------- cover
@@ -306,14 +568,16 @@ class GameMap {
       const d = dist(x, y, px, py);
       if (d > radius) continue;
       const a = angleTo(px, py, tx, ty), ca = Math.cos(a), sa = Math.sin(a);
-      const k1 = this.terAt(px + ca * 1.8, py + sa * 1.8), k2 = this.terAt(px + ca * 3.4, py + sa * 3.4);
+      const k1 = this.terAt(px + ca * CELL * 0.9, py + sa * CELL * 0.9), k2 = this.terAt(px + ca * CELL * 1.7, py + sa * CELL * 1.7);
       let score = 0, posture = 'prone';
       if (k1 === TER.WALL || k2 === TER.WALL) { score += 6; posture = 'kneel'; }
       else if (k1 === TER.BUILDING || k2 === TER.BUILDING) { score += 3.5; posture = 'kneel'; }
-      if (k === TER.WOODS) { score += 2.5; if (posture === 'prone' && score < 3) posture = 'prone'; }
-      else if (k === TER.GRASS) score += 1.2;
+      if (k === TER.WOODS) score += 2.5;
+      else if (k === TER.GRASS || k === TER.VINEYARD) score += 1.2;
+      else if (k === TER.ORCHARD) score += 0.8;
+      else if (k === TER.STREAM) score += 1.6; // the gully
       // Defilade: ground rising toward the threat.
-      if (this.elevAt(px + ca * 5, py + sa * 5) - this.elevAt(px, py) > 0.45) score += 1.5;
+      if (this.elevAt(px + ca * 6, py + sa * 6) - this.elevAt(px, py) > 0.45) score += 1.5;
       score -= d * 0.12;
       score -= Math.max(0, dThreat - dist(px, py, tx, ty)) * 0.04;
       if (reserved) for (const p of reserved) if (dist(p.x, p.y, px, py) < 3.5) score -= 4;
@@ -357,4 +621,17 @@ class MinHeap {
     }
     return top;
   }
+}
+
+// Douglas-Peucker line simplification.
+function simplifyLine(pts, tol) {
+  if (pts.length < 3) return pts;
+  const a = pts[0], b = pts[pts.length - 1], len = Math.max(1e-6, dist(a.x, a.y, b.x, b.y));
+  let worst = 0, wi = 0;
+  for (let i = 1; i < pts.length - 1; i++) {
+    const d = Math.abs((b.x - a.x) * (a.y - pts[i].y) - (a.x - pts[i].x) * (b.y - a.y)) / len;
+    if (d > worst) { worst = d; wi = i; }
+  }
+  if (worst <= tol) return [a, b];
+  return simplifyLine(pts.slice(0, wi + 1), tol).slice(0, -1).concat(simplifyLine(pts.slice(wi), tol));
 }

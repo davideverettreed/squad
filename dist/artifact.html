@@ -117,6 +117,12 @@ button { font: inherit; color: inherit; }
   padding: 8px 14px; border-radius: 3px; max-width: calc(100% - 32px); text-align: center; pointer-events: none;
 }
 
+#loading {
+  position: absolute; z-index: 30; left: 50%; top: 45%; transform: translate(-50%, -50%);
+  background: #f8f5ea; color: #161616; border: 1px solid #161616; box-shadow: 0 6px 18px rgba(0, 0, 0, 0.45);
+  font: 600 14px/1.2 var(--mono); letter-spacing: 0.04em; padding: 12px 18px;
+}
+
 /* ---------------- orders */
 #orders {
   position: absolute; z-index: 5; left: 0; right: 0; bottom: 0;
@@ -223,6 +229,7 @@ kbd { font: 600 12px/1 var(--mono); border: 1px solid var(--line); border-bottom
   <aside id="roster" aria-label="Squad roster"></aside>
   <div id="log" aria-live="polite"></div>
   <div id="toast" hidden></div>
+  <div id="loading" role="status" hidden>Drawing the map sheet…</div>
 
   <section id="orders" aria-label="Orders">
     <div id="selbar">
@@ -272,7 +279,7 @@ kbd { font: 600 12px/1 var(--mono); border: 1px solid var(--line); border-bottom
         <h3>Overlay</h3>
         <p>Orders are drawn as on an acetate overlay: blue for friendly, red for enemy, black for targets. Blue lines with arrowheads are routes (long dashes for a rush, dots for a crawl); a heavy arrow with a solid head is an assault. OBJ marks the objective of a bounding drill. Dashed blue lines run from the shooters to a suppression target, a black cross in a circle. 40MM marks a grenade launcher target.</p>
         <h3>Map key</h3>
-        <p>The map is read like a military topographic map. White is open ground. Light green with small tufts is tall grass, which hides a man lying prone. Green is woods and hedgerows. Brown lines are contours, one meter apart, with a heavier, numbered index contour every five meters; numbers with a dot are hilltop heights. Solid black blocks are buildings. A black line with ticks is a stone wall, which gives hard cover to a kneeling or prone man. The double line is a dirt road. Grid lines are 100 meters apart; point at the map to read the 8-digit grid reference.</p>
+        <p>The sheet covers 3 by 3 kilometers in nine 1-kilometer grid squares, in standard US military map colors. White is open ground. Light green with tufts is tall grass, which hides a man lying prone. Green is woods and hedgerows; rows of small green circles are orchards, green row lines are vineyards. Blue lines are streams, which run in shallow gullies that give cover; blue areas are ponds and cannot be crossed. Red-brown lines are contours 5 meters apart, with a heavier, numbered index contour every 25 meters; numbers with a dot are hilltop heights. Black blocks are buildings. A black line with ticks is a stone wall, which gives hard cover to a kneeling or prone man. The red road is a paved road; the dashed double lines are dirt tracks. Point at the map to read the 8-digit grid reference. Zoomed out, your men gather into one counter per fire team, then one for the squad, in the standard unit symbol: a rectangle with an infantry X for friendly, a diamond for enemy.</p>
         <h3>Camera</h3>
         <p>Drag to pan. Use the wheel or pinch to zoom. <kbd>Space</kbd> pauses; you can give orders while paused.</p>
       </div>
@@ -361,23 +368,31 @@ function fmtClock(t) {
 // Weapon figures are game abstractions tuned for play, loosely scaled from
 // published effective ranges and rates of fire; they are not ballistic tables.
 
-const CELL = 2;                 // meters per grid cell
-const MAP_W = 240, MAP_H = 180; // meters
+const CELL = 4;                    // meters per terrain cell
+const MAP_W = 3000, MAP_H = 3000;  // meters: nine 1 km grid squares
 const GW = MAP_W / CELL, GH = MAP_H / CELL;
 
-const TER = { OPEN: 0, GRASS: 1, WOODS: 2, ROAD: 3, BUILDING: 4, WALL: 5, PLOWED: 6 };
+const TER = {
+  OPEN: 0, GRASS: 1, WOODS: 2, ROAD: 3, BUILDING: 4, WALL: 5, PLOWED: 6,
+  ORCHARD: 7, VINEYARD: 8, STREAM: 9, POND: 10, PAVED: 11,
+};
 
 // losH: height above ground the feature blocks sight to.
-// density: share of sight blocked per cell crossed (vegetation).
+// density: share of sight blocked per meter of the feature crossed (vegetation).
 // cover: share of rounds stopped for a man inside or behind it.
 const TERRAIN = [
-  { name: 'Open field',   speed: 1.0,  losH: 0,   density: 0,    cover: 0,   conceal: 0 },
-  { name: 'Tall grass',   speed: 0.8,  losH: 0.9, density: 0.2,  cover: 0,   conceal: 0.5 },
-  { name: 'Woods',        speed: 0.6,  losH: 10,  density: 0.28, cover: 0.3, conceal: 0.6 },
-  { name: 'Dirt road',    speed: 1.15, losH: 0,   density: 0,    cover: 0,   conceal: 0 },
-  { name: 'Building',     speed: 0,    losH: 6.5, solid: true,   cover: 1,   conceal: 1 },
-  { name: 'Stone wall',   speed: 0.3,  losH: 1.0, solid: true,   cover: 0.9, conceal: 0.3 },
-  { name: 'Plowed field', speed: 0.85, losH: 0,   density: 0,    cover: 0,   conceal: 0.1 },
+  { name: 'Open field',   speed: 1.0,  losH: 0,   density: 0,     cover: 0,   conceal: 0 },
+  { name: 'Tall grass',   speed: 0.8,  losH: 0.9, density: 0.1,   cover: 0,   conceal: 0.5 },
+  { name: 'Woods',        speed: 0.6,  losH: 12,  density: 0.14,  cover: 0.3, conceal: 0.6 },
+  { name: 'Dirt road',    speed: 1.15, losH: 0,   density: 0,     cover: 0,   conceal: 0 },
+  { name: 'Building',     speed: 0,    losH: 6.5, solid: true,    cover: 1,   conceal: 1 },
+  { name: 'Stone wall',   speed: 0.3,  losH: 1.0, solid: true,    cover: 0.9, conceal: 0.3 },
+  { name: 'Plowed field', speed: 0.85, losH: 0,   density: 0,     cover: 0,   conceal: 0.1 },
+  { name: 'Orchard',      speed: 0.9,  losH: 4,   density: 0.035, cover: 0.1, conceal: 0.3 },
+  { name: 'Vineyard',     speed: 0.7,  losH: 1.6, density: 0.07,  cover: 0.05, conceal: 0.4 },
+  { name: 'Stream',       speed: 0.35, losH: 0,   density: 0,     cover: 0,   conceal: 0.2 },
+  { name: 'Pond',         speed: 0,    losH: 0,   density: 0,     cover: 0,   conceal: 0 },
+  { name: 'Paved road',   speed: 1.2,  losH: 0,   density: 0,     cover: 0,   conceal: 0 },
 ];
 
 // eye: sight height. center: center of mass. size: relative target size.
@@ -505,14 +520,20 @@ function squadLeaderSlot(form) {
 
 // ---- src/map.js
 'use strict';
-// Terrain grid, procedural generation, line of sight, pathfinding and cover search.
+// Terrain grid for a 3 x 3 km sheet: procedural generation (relief, streams and ponds,
+// fields, woods, roads, villages, farms), line of sight, pathfinding and cover search.
+
+const PLACE_A = ['Bran', 'Hol', 'Mer', 'Ash', 'Kel', 'Dun', 'Fair', 'Stan', 'Wex', 'Oak', 'Mill', 'Thorn', 'Rock', 'Hal', 'Elm', 'Bram', 'Cold', 'Red'];
+const PLACE_B = ['ford', 'by', 'ton', 'wick', 'ham', 'field', 'dale', 'stead', 'bury', 'well', 'moor', 'ridge', 'cote', 'leigh'];
 
 class GameMap {
   constructor(seed) {
     this.ter = new Uint8Array(GW * GH);
     this.elev = new Float32Array(GW * GH);
     this.buildings = [];
-    this.trees = [];
+    this.roads = [];     // { kind: 'paved' | 'track', pts }
+    this.streams = [];   // { pts, width }
+    this.places = [];    // { name, x, y }
     setSeed(seed);
     this.generate();
   }
@@ -525,9 +546,9 @@ class GameMap {
     if (!this.inGrid(cx, cy)) return TER.OPEN;
     return this.ter[cy * GW + cx];
   }
-  passableCell(cx, cy) { return this.inGrid(cx, cy) && this.ter[cy * GW + cx] !== TER.BUILDING; }
+  passableCell(cx, cy) { return this.inGrid(cx, cy) && TERRAIN[this.ter[cy * GW + cx]].speed > 0; }
 
-  // Ground elevation in meters, interpolated between cell centers.
+  // Ground elevation in meters above the sheet's lowest ground, between cell centers.
   elevAt(x, y) {
     const fx = clamp(x / CELL - 0.5, 0, GW - 1.001), fy = clamp(y / CELL - 0.5, 0, GH - 1.001);
     const x0 = Math.floor(fx), y0 = Math.floor(fy), tx = fx - x0, ty = fy - y0;
@@ -539,143 +560,376 @@ class GameMap {
   // ---------------------------------------------------------------- generation
   generate() {
     this.genElevation();
+    this.genHydrology();
     this.genFields();
     this.genWoods();
-    this.genRoad();
-    this.genHamlet();
-    this.genTrees();
-    this.elevBase = randInt(8, 60) * 5; // height above sea level of the lowest ground
-    this.gmAngle = randRange(-6, 6); // grid-magnetic angle for the declination diagram
+    this.genRoads();
+    this.genVillages();
+    this.genFarms();
+    this.elevBase = randInt(6, 40) * 10; // height above sea level of the lowest ground
+    this.gmAngle = randRange(-6, 6);     // grid-magnetic angle for the declination diagram
+    this.findPeaks();
   }
 
-  genElevation() {
-    const octave = (nx, ny, amp) => {
-      const grid = [];
-      for (let j = 0; j <= ny; j++) { grid.push([]); for (let i = 0; i <= nx; i++) grid[j].push(rand()); }
-      return (u, v) => {
-        const fx = u * nx, fy = v * ny, i = Math.min(nx - 1, Math.floor(fx)), j = Math.min(ny - 1, Math.floor(fy));
-        const tx = smooth(fx - i), ty = smooth(fy - j);
-        const top = lerp(grid[j][i], grid[j][i + 1], tx), bot = lerp(grid[j + 1][i], grid[j + 1][i + 1], tx);
-        return lerp(top, bot, ty) * amp;
-      };
+  noise(nx, ny) {
+    const grid = new Float32Array((nx + 1) * (ny + 1));
+    for (let i = 0; i < grid.length; i++) grid[i] = rand();
+    return (u, v) => {
+      const fx = u * nx, fy = v * ny, i = Math.min(nx - 1, Math.floor(fx)), j = Math.min(ny - 1, Math.floor(fy));
+      const tx = smooth(fx - i), ty = smooth(fy - j), w = nx + 1;
+      const top = lerp(grid[j * w + i], grid[j * w + i + 1], tx), bot = lerp(grid[(j + 1) * w + i], grid[(j + 1) * w + i + 1], tx);
+      return lerp(top, bot, ty);
     };
-    const o1 = octave(4, 3, 7), o2 = octave(9, 7, 2.2), o3 = octave(18, 14, 0.6);
+  }
+
+  // Rolling hill country: broad hills, spurs and small folds, 60 to 120 m of relief.
+  genElevation() {
+    const relief = randRange(60, 110);
+    const oct = [[3, 0.55], [7, 0.26], [15, 0.12], [38, 0.05], [90, 0.015]].map(([n, a]) => ({ f: this.noise(n, n), a }));
+    let lo = Infinity, hi = -Infinity;
     for (let cy = 0; cy < GH; cy++) for (let cx = 0; cx < GW; cx++) {
       const u = (cx + 0.5) / GW, v = (cy + 0.5) / GH;
-      this.elev[cy * GW + cx] = o1(u, v) + o2(u, v) + o3(u, v);
+      let e = 0;
+      for (const o of oct) e += o.f(u, v) * o.a;
+      this.elev[cy * GW + cx] = e;
+      if (e < lo) lo = e; if (e > hi) hi = e;
     }
+    for (let i = 0; i < this.elev.length; i++) this.elev[i] = (this.elev[i] - lo) / (hi - lo) * relief;
   }
 
-  // Farm fields as Voronoi patches, bounded by tree lines, stone walls or nothing.
-  genFields() {
-    const kinds = [TER.OPEN, TER.OPEN, TER.PLOWED, TER.GRASS, TER.GRASS];
-    const seeds = [];
-    const n = randInt(9, 13);
-    for (let i = 0; i < n; i++) seeds.push({ x: randRange(0, MAP_W), y: randRange(0, MAP_H), k: pick(kinds) });
-    const owner = new Int16Array(GW * GH);
+  // Water runs downhill: each cell drains to its lowest neighbor. Cells draining a large
+  // enough area become streams; streams that end in a hollow fill it as a pond.
+  genHydrology() {
+    const N = GW * GH, e = this.elev;
+    // Priority flood from the map edge: fill each hollow up to its spill level, so water
+    // drained over the filled surface always finds its way off the sheet.
+    const fill = new Float32Array(N), seen = new Uint8Array(N), heap = new MinHeap();
+    for (let cx = 0; cx < GW; cx++) for (const cy of [0, GH - 1]) { const i = cy * GW + cx; if (!seen[i]) { seen[i] = 1; fill[i] = e[i]; heap.push(i, e[i]); } }
+    for (let cy = 1; cy < GH - 1; cy++) for (const cx of [0, GW - 1]) { const i = cy * GW + cx; seen[i] = 1; fill[i] = e[i]; heap.push(i, e[i]); }
+    const order = new Int32Array(N);
+    let on = 0;
+    while (heap.size) {
+      const c = heap.pop();
+      order[on++] = c;
+      const x = c % GW, y = Math.floor(c / GW);
+      for (let j = -1; j <= 1; j++) for (let k = -1; k <= 1; k++) {
+        if (!j && !k) continue;
+        const nx = x + k, ny = y + j;
+        if (!this.inGrid(nx, ny)) continue;
+        const n = ny * GW + nx;
+        if (seen[n]) continue;
+        seen[n] = 1;
+        fill[n] = Math.max(e[n], fill[c] + 0.0005);
+        heap.push(n, fill[n]);
+      }
+    }
+    // Each cell drains to its lowest neighbor on the filled surface; flow accumulates
+    // from the top of the flood order down.
+    const down = new Int32Array(N).fill(-1);
     for (let cy = 0; cy < GH; cy++) for (let cx = 0; cx < GW; cx++) {
-      const x = (cx + 0.5) * CELL, y = (cy + 0.5) * CELL;
+      const i = cy * GW + cx;
+      if (cx === 0 || cy === 0 || cx === GW - 1 || cy === GH - 1) continue;
+      let best = fill[i], bi = -1;
+      for (let j = -1; j <= 1; j++) for (let k = -1; k <= 1; k++) {
+        if (!j && !k) continue;
+        const n = (cy + j) * GW + cx + k;
+        if (fill[n] < best) { best = fill[n]; bi = n; }
+      }
+      down[i] = bi;
+    }
+    const acc = new Float32Array(N).fill(1);
+    for (let n = N - 1; n >= 0; n--) { const i = order[n]; if (down[i] >= 0) acc[down[i]] += acc[i]; }
+
+    // Ponds: the deeper parts of small filled hollows.
+    const pondSeen = new Uint8Array(N);
+    for (let i = 0; i < N; i++) {
+      if (pondSeen[i] || fill[i] - e[i] < 1.2) continue;
+      const region = [i], q = [i];
+      pondSeen[i] = 1;
+      while (q.length) {
+        const c = q.pop(), x = c % GW, y = Math.floor(c / GW);
+        for (const [dx, dy] of [[1, 0], [-1, 0], [0, 1], [0, -1]]) {
+          if (!this.inGrid(x + dx, y + dy)) continue;
+          const n = (y + dy) * GW + x + dx;
+          if (!pondSeen[n] && fill[n] - e[n] >= 0.6) { pondSeen[n] = 1; region.push(n); q.push(n); }
+        }
+      }
+      if (region.length >= 40 && region.length <= 2500) for (const c of region) this.ter[c] = TER.POND;
+    }
+
+    const T = 7000; // cells (about 0.11 km² of catchment) before water runs as a stream
+    const isStream = new Uint8Array(N);
+    for (let i = 0; i < N; i++) if (acc[i] >= T) isStream[i] = 1;
+
+    // Trace streams into polylines, from each source downhill to a junction or the edge.
+    const feeds = new Uint8Array(N);
+    for (let i = 0; i < N; i++) if (isStream[i] && down[i] >= 0) feeds[down[i]] = 1;
+    const traced = new Uint8Array(N);
+    for (let i = 0; i < N; i++) {
+      if (!isStream[i] || feeds[i]) continue;
+      const pts = [];
+      let c = i, width = 1.5;
+      while (c >= 0) {
+        pts.push({ x: (c % GW + 0.5) * CELL, y: (Math.floor(c / GW) + 0.5) * CELL });
+        width = Math.max(width, 1.5 + 3 * clamp(Math.log(acc[c] / T) / Math.log(30), 0, 1));
+        if (traced[c]) break;
+        traced[c] = 1;
+        c = down[c];
+      }
+      if (pts.length > 3) this.streams.push({ pts: simplifyLine(pts, 3), width });
+    }
+    // Streams cut small gullies: a meter or so below the banks.
+    const cut = new Float32Array(N);
+    for (let i = 0; i < N; i++) {
+      if (!traced[i] || this.ter[i] === TER.POND) continue;
+      this.ter[i] = TER.STREAM;
+      const cx = i % GW, cy = Math.floor(i / GW);
+      for (let j = -1; j <= 1; j++) for (let k = -1; k <= 1; k++) {
+        if (!this.inGrid(cx + k, cy + j)) continue;
+        const n = (cy + j) * GW + cx + k;
+        cut[n] = Math.max(cut[n], j || k ? 0.5 : 1.3);
+      }
+    }
+    for (let i = 0; i < N; i++) this.elev[i] -= cut[i];
+  }
+
+  isWet(i) { return this.ter[i] === TER.STREAM || this.ter[i] === TER.POND; }
+
+  // Farm fields as Voronoi patches on a jittered lattice, bounded by hedgerows, stone walls or nothing.
+  genFields() {
+    const S = 200, nx = Math.ceil(MAP_W / S) + 1, ny = Math.ceil(MAP_H / S) + 1;
+    const kinds = [[TER.OPEN, 3], [TER.PLOWED, 2.2], [TER.GRASS, 2.4], [TER.ORCHARD, 0.6], [TER.VINEYARD, 0.5]];
+    const total = kinds.reduce((n, k) => n + k[1], 0);
+    const pickKind = () => { let r = rand() * total; for (const [k, w] of kinds) { if ((r -= w) <= 0) return k; } return TER.OPEN; };
+    const seeds = [];
+    for (let j = 0; j < ny; j++) for (let i = 0; i < nx; i++) seeds.push({ x: (i + randRange(0.1, 0.9)) * S, y: (j + randRange(0.1, 0.9)) * S, k: pickKind() });
+    const owner = new Int32Array(GW * GH);
+    for (let cy = 0; cy < GH; cy++) for (let cx = 0; cx < GW; cx++) {
+      const x = (cx + 0.5) * CELL, y = (cy + 0.5) * CELL, li = Math.floor(x / S), lj = Math.floor(y / S);
       let best = 0, bd = Infinity;
-      for (let i = 0; i < n; i++) { const d = (seeds[i].x - x) ** 2 + (seeds[i].y - y) ** 2; if (d < bd) { bd = d; best = i; } }
-      owner[cy * GW + cx] = best;
-      this.ter[cy * GW + cx] = seeds[best].k;
+      for (let j = lj - 1; j <= lj + 1; j++) for (let i = li - 1; i <= li + 1; i++) {
+        if (i < 0 || j < 0 || i >= nx || j >= ny) continue;
+        const s = seeds[j * nx + i], d = (s.x - x) ** 2 + (s.y - y) ** 2;
+        if (d < bd) { bd = d; best = j * nx + i; }
+      }
+      const c = cy * GW + cx;
+      owner[c] = best;
+      if (!this.isWet(c)) this.ter[c] = seeds[best].k;
     }
     const edgeKind = new Map();
     const edgeFor = (a, b) => {
-      const key = Math.min(a, b) * 100 + Math.max(a, b);
-      if (!edgeKind.has(key)) {
-        const r = rand();
-        edgeKind.set(key, { kind: r < 0.4 ? TER.WOODS : r < 0.68 ? TER.WALL : -1, phase: randInt(0, 20) });
-      }
+      const key = Math.min(a, b) * 100000 + Math.max(a, b);
+      if (!edgeKind.has(key)) { const r = rand(); edgeKind.set(key, { kind: r < 0.45 ? TER.WOODS : r < 0.65 ? TER.WALL : -1, phase: randInt(0, 30) }); }
       return edgeKind.get(key);
     };
     for (let cy = 0; cy < GH - 1; cy++) for (let cx = 0; cx < GW - 1; cx++) {
-      const a = owner[cy * GW + cx];
-      const b = owner[cy * GW + cx + 1] !== a ? owner[cy * GW + cx + 1] : owner[(cy + 1) * GW + cx] !== a ? owner[(cy + 1) * GW + cx] : -1;
-      if (b < 0) continue;
+      const c = cy * GW + cx, a = owner[c];
+      const b = owner[c + 1] !== a ? owner[c + 1] : owner[c + GW] !== a ? owner[c + GW] : -1;
+      if (b < 0 || this.isWet(c)) continue;
       const e = edgeFor(a, b);
       if (e.kind < 0) continue;
       // Gaps let men pass walls and hedgerows without climbing.
-      if (e.kind === TER.WALL && (cx + cy + e.phase) % 16 < 2) continue;
-      if (e.kind === TER.WOODS && (cx * 3 + cy + e.phase) % 23 < 2) continue;
-      this.ter[cy * GW + cx] = e.kind;
+      if (e.kind === TER.WALL && (cx + cy + e.phase) % 22 < 2) continue;
+      if (e.kind === TER.WOODS && (cx * 3 + cy + e.phase) % 31 < 2) continue;
+      this.ter[c] = e.kind;
     }
   }
 
+  // Woods: large stands, more of them on steep ground and high ground.
   genWoods() {
-    const n = randInt(2, 3);
-    for (let k = 0; k < n; k++) {
-      const wx = randRange(20, MAP_W - 20), wy = randRange(30, MAP_H - 40), r = randRange(12, 24);
-      const lobes = [0, 1, 2, 3].map(() => ({ a: randRange(0, Math.PI * 2), s: randRange(0.15, 0.35) }));
-      for (let cy = 0; cy < GH; cy++) for (let cx = 0; cx < GW; cx++) {
-        const x = (cx + 0.5) * CELL, y = (cy + 0.5) * CELL;
-        const a = Math.atan2(y - wy, x - wx);
-        let rr = r;
-        for (const l of lobes) rr += r * l.s * Math.cos(a * 2 - l.a);
-        if (dist(x, y, wx, wy) < rr) this.ter[cy * GW + cx] = TER.WOODS;
+    const n1 = this.noise(6, 6), n2 = this.noise(17, 17);
+    let maxE = 0;
+    for (const v of this.elev) if (v > maxE) maxE = v;
+    for (let cy = 1; cy < GH - 1; cy++) for (let cx = 1; cx < GW - 1; cx++) {
+      const c = cy * GW + cx;
+      if (this.isWet(c)) continue;
+      const u = (cx + 0.5) / GW, v = (cy + 0.5) / GH;
+      const slope = Math.hypot(this.elev[c + 1] - this.elev[c - 1], this.elev[c + GW] - this.elev[c - GW]) / (2 * CELL);
+      const f = n1(u, v) * 0.7 + n2(u, v) * 0.3 + Math.min(0.18, slope * 1.5) + this.elev[c] / maxE * 0.08;
+      if (f > 0.74) this.ter[c] = TER.WOODS;
+    }
+  }
+
+  // Least-cost route for a road: avoids steep ground, woods and water.
+  routeRoad(sx, sy, tx, ty) {
+    const N = GW * GH, g = new Float32Array(N).fill(Infinity), came = new Int32Array(N).fill(-1), closed = new Uint8Array(N);
+    const heap = new MinHeap(), start = sy * GW + sx, end = ty * GW + tx;
+    const h = (i) => Math.hypot(i % GW - tx, Math.floor(i / GW) - ty) * 1.2;
+    g[start] = 0; heap.push(start, h(start));
+    while (heap.size) {
+      const cur = heap.pop();
+      if (cur === end) break;
+      if (closed[cur]) continue;
+      closed[cur] = 1;
+      const cx = cur % GW, cy = Math.floor(cur / GW);
+      for (let dy = -1; dy <= 1; dy++) for (let dx = -1; dx <= 1; dx++) {
+        if (!dx && !dy) continue;
+        const nx = cx + dx, ny = cy + dy;
+        if (!this.inGrid(nx, ny)) continue;
+        const ni = ny * GW + nx, k = this.ter[ni];
+        if (closed[ni] || k === TER.POND || k === TER.BUILDING) continue;
+        const grade = Math.abs(this.elev[ni] - this.elev[cur]) / CELL;
+        let cost = (dx && dy ? 1.414 : 1) * (1 + grade * grade * 400);
+        if (k === TER.WOODS) cost *= 2;
+        if (k === TER.STREAM) cost += 12;
+        if (k === TER.ROAD || k === TER.PAVED) cost *= 0.4;
+        const ng = g[cur] + cost;
+        if (ng < g[ni]) { g[ni] = ng; came[ni] = cur; heap.push(ni, ng + h(ni)); }
       }
     }
+    if (came[end] < 0) return null;
+    const cells = [];
+    for (let i = end; i !== -1; i = came[i]) cells.push(i);
+    return cells.reverse();
   }
 
-  genRoad() {
-    let y = randRange(65, 115);
-    this.roadY = [];
-    for (let cx = 0; cx < GW; cx++) {
-      y = clamp(y + gauss() * 0.5, 50, 130);
-      this.roadY.push(y);
-      const cy = Math.floor(y / CELL);
-      for (let d = 0; d < 2; d++) if (this.inGrid(cx, cy + d)) this.ter[(cy + d) * GW + cx] = TER.ROAD;
-    }
+  layRoad(cells, kind) {
+    const t = kind === 'paved' ? TER.PAVED : TER.ROAD;
+    for (const c of cells) if (this.ter[c] !== TER.PAVED) this.ter[c] = t;
+    const pts = cells.map(c => ({ x: (c % GW + 0.5) * CELL, y: (Math.floor(c / GW) + 0.5) * CELL }));
+    this.roads.push({ kind, pts: simplifyLine(pts, 2.5), cells });
   }
 
-  genHamlet() {
-    const center = randRange(50, MAP_W - 50);
-    const want = randInt(3, 6);
-    const roofs = ['#8a4b3a', '#6f6a63', '#7d5a44', '#5c5f66'];
-    for (let tries = 0; tries < 80 && this.buildings.length < want; tries++) {
-      const w = randInt(4, 7), h = randInt(3, 5);
-      const cx0 = Math.floor((center + randRange(-40, 40)) / CELL);
-      const roadCy = Math.floor(this.roadY[clamp(cx0, 0, GW - 1)] / CELL);
-      const north = chance(0.5);
-      const off = randInt(2, 4);
-      const cy0 = north ? roadCy - off - h : roadCy + 2 + off;
-      if (!this.footprintFree(cx0 - 1, cy0 - 1, w + 2, h + 2)) continue;
-      for (let j = 0; j < h; j++) for (let i = 0; i < w; i++) this.ter[(cy0 + j) * GW + cx0 + i] = TER.BUILDING;
-      const b = { cx: cx0, cy: cy0, w, h, x0: cx0 * CELL, y0: cy0 * CELL, x1: (cx0 + w) * CELL, y1: (cy0 + h) * CELL,
-        height: randRange(4.5, 7), roof: pick(roofs) };
-      this.buildings.push(b);
-      if (chance(0.4)) this.yardWall(b, north);
-    }
+  edgePoint(side) {
+    const r = randInt(Math.floor(GW * 0.2), Math.floor(GW * 0.8));
+    return side === 'w' ? [0, r] : side === 'e' ? [GW - 1, r] : side === 'n' ? [r, 0] : [r, GH - 1];
+  }
+
+  genRoads() {
+    const ew = chance(0.5);
+    const [a, b] = ew ? [this.edgePoint('w'), this.edgePoint('e')] : [this.edgePoint('n'), this.edgePoint('s')];
+    const main = this.routeRoad(a[0], a[1], b[0], b[1]);
+    if (main) this.layRoad(main, 'paved');
+    const [c, d] = ew ? [this.edgePoint('n'), this.edgePoint('s')] : [this.edgePoint('w'), this.edgePoint('e')];
+    const track = this.routeRoad(c[0], c[1], d[0], d[1]);
+    if (track) this.layRoad(track, 'track');
   }
 
   footprintFree(cx, cy, w, h) {
     for (let j = 0; j < h; j++) for (let i = 0; i < w; i++) {
       if (!this.inGrid(cx + i, cy + j)) return false;
       const t = this.ter[(cy + j) * GW + cx + i];
-      if (t === TER.BUILDING || t === TER.ROAD) return false;
+      if (t === TER.BUILDING || t === TER.ROAD || t === TER.PAVED || t === TER.STREAM || t === TER.POND) return false;
     }
     return true;
   }
 
-  yardWall(b, north) {
-    const m = 3, x0 = b.cx - m, y0 = b.cy - m, x1 = b.cx + b.w + m - 1, y1 = b.cy + b.h + m - 1;
-    const gateX = b.cx + Math.floor(b.w / 2);
+  placeBuilding(cx, cy, w, h) {
+    if (!this.footprintFree(cx - 1, cy - 1, w + 2, h + 2)) return null;
+    for (let j = -1; j <= h; j++) for (let i = -1; i <= w; i++) {
+      const c = (cy + j) * GW + cx + i;
+      const inside = i >= 0 && j >= 0 && i < w && j < h;
+      if (inside) this.ter[c] = TER.BUILDING;
+      else if (this.ter[c] !== TER.WALL) this.ter[c] = TER.OPEN; // a cleared yard around the house
+    }
+    const b = { cx, cy, w, h, x0: cx * CELL, y0: cy * CELL, x1: (cx + w) * CELL, y1: (cy + h) * CELL, height: randRange(4.5, 8) };
+    this.buildings.push(b);
+    return b;
+  }
+
+  yardWall(b) {
+    const m = 2, x0 = b.cx - m, y0 = b.cy - m, x1 = b.cx + b.w + m - 1, y1 = b.cy + b.h + m - 1;
+    const gate = randInt(0, 3);
     for (let cy = y0; cy <= y1; cy++) for (let cx = x0; cx <= x1; cx++) {
       if (!this.inGrid(cx, cy)) continue;
       const edge = cx === x0 || cx === x1 || cy === y0 || cy === y1;
       if (!edge) continue;
-      const roadSide = north ? cy === y1 : cy === y0;
-      if (roadSide && Math.abs(cx - gateX) <= 1) continue;
-      const i = cy * GW + cx;
-      if (this.ter[i] !== TER.ROAD && this.ter[i] !== TER.BUILDING) this.ter[i] = TER.WALL;
+      const gx = b.cx + Math.floor(b.w / 2), gy = b.cy + Math.floor(b.h / 2);
+      if ((gate === 0 && cy === y0 && Math.abs(cx - gx) <= 0) || (gate === 1 && cy === y1 && Math.abs(cx - gx) <= 0) ||
+          (gate === 2 && cx === x0 && Math.abs(cy - gy) <= 0) || (gate === 3 && cx === x1 && Math.abs(cy - gy) <= 0)) continue;
+      const i = cy * GW + cx, k = this.ter[i];
+      if (k !== TER.ROAD && k !== TER.PAVED && k !== TER.BUILDING && !this.isWet(i)) this.ter[i] = TER.WALL;
     }
   }
 
-  genTrees() {
-    for (let cy = 0; cy < GH; cy++) for (let cx = 0; cx < GW; cx++) {
-      if (this.ter[cy * GW + cx] !== TER.WOODS || !chance(0.8)) continue;
-      this.trees.push({ x: (cx + randRange(0.1, 0.9)) * CELL, y: (cy + randRange(0.1, 0.9)) * CELL,
-        r: randRange(1.6, 2.9), h: randRange(6, 10), tone: randRange(-1, 1) });
+  placeName() {
+    for (let i = 0; i < 20; i++) {
+      const n = pick(PLACE_A) + pick(PLACE_B);
+      if (!this.places.some(p => p.name === n)) return n;
+    }
+    return pick(PLACE_A) + pick(PLACE_B);
+  }
+
+  // Villages strung along the roads, houses facing the road with yards and walls.
+  genVillages() {
+    const along = this.roads.flatMap(r => r.cells.map(c => ({ c, kind: r.kind })));
+    const want = randInt(2, 4);
+    for (let tries = 0; tries < 60 && this.places.length < want; tries++) {
+      const pick0 = along[randInt(0, along.length - 1)];
+      if (!pick0) break;
+      const vx = (pick0.c % GW + 0.5) * CELL, vy = (Math.floor(pick0.c / GW) + 0.5) * CELL;
+      if (vx < 250 || vy < 250 || vx > MAP_W - 250 || vy > MAP_H - 250) continue;
+      if (this.places.some(p => dist(p.x, p.y, vx, vy) < 800)) continue;
+      const near = along.filter(a => dist((a.c % GW + 0.5) * CELL, (Math.floor(a.c / GW) + 0.5) * CELL, vx, vy) < 160);
+      let built = 0;
+      for (let k = 0; k < 80 && built < randInt(9, 18); k++) {
+        const a = pick(near), ax = a.c % GW, ay = Math.floor(a.c / GW);
+        const w = randInt(2, 4), h = randInt(2, 3), side = chance(0.5) ? 1 : -1, off = randInt(2, 4);
+        const horiz = chance(0.5);
+        const cx = horiz ? ax - Math.floor(w / 2) : ax + (side > 0 ? off : -off - w);
+        const cy = horiz ? ay + (side > 0 ? off : -off - h) : ay - Math.floor(h / 2);
+        const b = this.placeBuilding(cx, cy, w, h);
+        if (!b) continue;
+        built++;
+        if (chance(0.3)) this.yardWall(b);
+      }
+      if (built >= 5) this.places.push({ name: this.placeName(), x: vx, y: vy, kind: 'village' });
+    }
+  }
+
+  // Outlying farms, each with a track to the nearest road.
+  genFarms() {
+    const roadCells = this.roads.flatMap(r => r.cells);
+    const want = randInt(6, 10);
+    let made = 0;
+    for (let tries = 0; tries < 80 && made < want; tries++) {
+      const x = randRange(150, MAP_W - 150), y = randRange(150, MAP_H - 150);
+      if (this.places.some(p => dist(p.x, p.y, x, y) < (p.kind === 'village' ? 450 : 350))) continue;
+      const c = this.cellOf(x, y);
+      if (TERRAIN[this.ter[c.cy * GW + c.cx]].speed === 0 || this.ter[c.cy * GW + c.cx] === TER.WOODS) continue;
+      const b = this.placeBuilding(c.cx, c.cy, randInt(3, 5), randInt(2, 3));
+      if (!b) continue;
+      for (let k = 0; k < randInt(0, 2); k++) this.placeBuilding(c.cx + randInt(-6, 6), c.cy + randInt(4, 7) * (chance(0.5) ? 1 : -1), randInt(2, 3), 2);
+      if (chance(0.4)) this.yardWall(b);
+      made++;
+      this.places.push({ name: this.placeName() + ' Farm', x: b.x1 + 6, y: b.y0, kind: 'farm' });
+      // Track to the nearest road cell.
+      let best = -1, bd = Infinity;
+      for (let i = 0; i < roadCells.length; i += 3) {
+        const rc = roadCells[i], d = (rc % GW - c.cx) ** 2 + (Math.floor(rc / GW) - c.cy) ** 2;
+        if (d < bd) { bd = d; best = rc; }
+      }
+      const sx = c.cx + Math.floor(b.w / 2), sy = c.cy + b.h + 1;
+      if (best >= 0 && this.inGrid(sx, sy)) {
+        const path = this.routeRoad(sx, sy, best % GW, Math.floor(best / GW));
+        if (path && path.length > 2) this.layRoad(path, 'track');
+      }
+    }
+  }
+
+  // Hilltops for spot elevations and the sheet name; index contour label sites.
+  findPeaks() {
+    const R = 50, peaks = [];
+    for (let cy = R; cy < GH - R; cy += 5) for (let cx = R; cx < GW - R; cx += 5) {
+      const e = this.elev[cy * GW + cx];
+      let top = true;
+      for (let j = -R; j <= R && top; j += 5) for (let i = -R; i <= R; i += 5) {
+        if ((i || j) && this.elev[(cy + j) * GW + cx + i] > e) { top = false; break; }
+      }
+      if (top) peaks.push({ x: (cx + 0.5) * CELL, y: (cy + 0.5) * CELL, e });
+    }
+    peaks.sort((a, b) => b.e - a.e);
+    this.peaks = [];
+    for (const p of peaks) if (!this.peaks.some(q => dist(p.x, p.y, q.x, q.y) < 350)) this.peaks.push(p);
+    this.peak = this.peaks.length ? Math.round(this.elevBase + this.peaks[0].e) : this.elevBase;
+    this.contourLabels = [];
+    for (let y = 60; y < MAP_H - 60; y += 24) for (let x = 60; x < MAP_W - 60; x += 24) {
+      const e = this.elevAt(x, y), lv = Math.round(e / 25) * 25;
+      if (lv <= 0 || Math.abs(e - lv) > 0.3) continue;
+      if (this.contourLabels.some(l => dist(l.x, l.y, x, y) < 380)) continue;
+      const k = this.terAt(x, y);
+      if (k === TER.BUILDING || k === TER.PAVED || k === TER.ROAD) continue;
+      this.contourLabels.push({ x, y, v: lv });
     }
   }
 
@@ -686,7 +940,7 @@ class GameMap {
     const d = dist(ax, ay, bx, by);
     if (d < 0.75) return 1;
     const ga = this.elevAt(ax, ay) + za, gb = this.elevAt(bx, by) + zb;
-    const n = Math.ceil(d / 0.8);
+    const n = Math.ceil(d / 1.6);
     let dens = 0, last = -1;
     for (let i = 1; i < n; i++) {
       const t = i / n, x = ax + (bx - ax) * t, y = ay + (by - ay) * t;
@@ -704,8 +958,8 @@ class GameMap {
       if (T.solid) return 0;
       if (T.density) {
         // A man at the edge of cover can see out of it; his own cell counts less.
-        const w = fromA < 1.5 ? 0.25 : fromB < 1.5 ? 0.5 : 1;
-        dens += T.density * w;
+        const w = fromA < CELL * 0.75 ? 0.25 : fromB < CELL * 0.75 ? 0.5 : 1;
+        dens += T.density * CELL * w;
         if (dens >= 1) return 0;
       }
     }
@@ -714,8 +968,9 @@ class GameMap {
 
   // ---------------------------------------------------------------- pathfinding
   nearestPassable(cx, cy) {
+    cx = clamp(cx, 0, GW - 1); cy = clamp(cy, 0, GH - 1);
     if (this.passableCell(cx, cy) && this.ter[cy * GW + cx] !== TER.WALL) return { cx, cy };
-    for (let r = 1; r < 12; r++) {
+    for (let r = 1; r < 16; r++) {
       for (let j = -r; j <= r; j++) for (let i = -r; i <= r; i++) {
         if (Math.max(Math.abs(i), Math.abs(j)) !== r) continue;
         const x = cx + i, y = cy + j;
@@ -726,19 +981,20 @@ class GameMap {
   }
 
   straightWalkable(ax, ay, bx, by) {
-    const d = dist(ax, ay, bx, by), n = Math.ceil(d / 0.7);
+    const d = dist(ax, ay, bx, by), n = Math.ceil(d / 1.2);
     for (let i = 0; i <= n; i++) {
       const t = i / n, x = ax + (bx - ax) * t, y = ay + (by - ay) * t;
       const k = this.terAt(x, y);
-      if (k === TER.BUILDING || k === TER.WALL) return false;
+      if (k === TER.BUILDING || k === TER.WALL || k === TER.POND) return false;
       // Keep clear of building corners so men do not clip through them.
-      if (this.terAt(x + 0.6, y) === TER.BUILDING || this.terAt(x - 0.6, y) === TER.BUILDING ||
-          this.terAt(x, y + 0.6) === TER.BUILDING || this.terAt(x, y - 0.6) === TER.BUILDING) return false;
+      if (this.terAt(x + 1, y) === TER.BUILDING || this.terAt(x - 1, y) === TER.BUILDING ||
+          this.terAt(x, y + 1) === TER.BUILDING || this.terAt(x, y - 1) === TER.BUILDING) return false;
     }
     return true;
   }
 
-  // A* over the grid; cost is travel time. Returns waypoints in meters, or null.
+  // A* over the grid; cost is travel time. Long routes use a weighted heuristic,
+  // which finds a good route much faster than the strictly shortest one.
   findPath(sx, sy, tx, ty) {
     tx = clamp(tx, 1, MAP_W - 1); ty = clamp(ty, 1, MAP_H - 1);
     const s = this.cellOf(sx, sy), t0 = this.cellOf(tx, ty);
@@ -746,7 +1002,8 @@ class GameMap {
     const exact = t.cx === t0.cx && t.cy === t0.cy;
     const goal = exact ? { x: tx, y: ty } : { x: (t.cx + 0.5) * CELL, y: (t.cy + 0.5) * CELL };
     if (s.cx === t.cx && s.cy === t.cy) return [goal];
-    if (this.straightWalkable(sx, sy, goal.x, goal.y) && dist(sx, sy, goal.x, goal.y) < 40) return [goal];
+    const straight = dist(sx, sy, goal.x, goal.y);
+    if (straight < 60 && this.straightWalkable(sx, sy, goal.x, goal.y)) return [goal];
 
     const N = GW * GH, start = s.cy * GW + s.cx, end = t.cy * GW + t.cx;
     const g = this._g || (this._g = new Float32Array(N));
@@ -754,18 +1011,19 @@ class GameMap {
     const closed = this._closed || (this._closed = new Uint8Array(N));
     g.fill(Infinity); came.fill(-1); closed.fill(0);
     const heap = new MinHeap();
+    const wgt = straight > 150 ? 1.6 : 1;
     const h = (i) => {
       const dx = Math.abs((i % GW) - t.cx), dy = Math.abs(Math.floor(i / GW) - t.cy);
-      return (Math.max(dx, dy) + 0.414 * Math.min(dx, dy)) * CELL / 1.15;
+      return (Math.max(dx, dy) + 0.414 * Math.min(dx, dy)) * CELL / 1.2 * wgt;
     };
     g[start] = 0;
     heap.push(start, h(start));
-    let found = false;
-    while (heap.size) {
+    let found = false, expanded = 0;
+    while (heap.size && expanded < 250000) {
       const cur = heap.pop();
       if (cur === end) { found = true; break; }
       if (closed[cur]) continue;
-      closed[cur] = 1;
+      closed[cur] = 1; expanded++;
       const cx = cur % GW, cy = Math.floor(cur / GW);
       for (let dy = -1; dy <= 1; dy++) for (let dx = -1; dx <= 1; dx++) {
         if (!dx && !dy) continue;
@@ -788,13 +1046,32 @@ class GameMap {
     const out = [];
     let ax = sx, ay = sy, i = 0;
     while (i < cells.length - 1) {
-      let j = Math.min(cells.length - 1, i + 30);
+      let j = Math.min(cells.length - 1, i + 25);
       while (j > i + 1 && !this.straightWalkable(ax, ay, cells[j].x, cells[j].y)) j--;
       out.push(cells[j]);
       ax = cells[j].x; ay = cells[j].y; i = j;
     }
     if (!out.length) out.push(goal);
     return out;
+  }
+
+  // A route for a man keeping station on a leader's route: the leader's waypoints
+  // shifted by his formation offset, with short detours where the shifted line is blocked.
+  offsetPath(sx, sy, lead, ox, oy) {
+    const pts = [];
+    let px = sx, py = sy;
+    for (let k = 0; k < lead.length; k++) {
+      const prev = k ? lead[k - 1] : null, cur = lead[k];
+      const h = prev ? angleTo(prev.x, prev.y, cur.x, cur.y) : angleTo(sx - ox, sy - oy, cur.x, cur.y);
+      const w = rotateOffset(ox, oy, h);
+      const c = this.nearestPassable(Math.floor((cur.x + w.x) / CELL), Math.floor((cur.y + w.y) / CELL));
+      const q = k === lead.length - 1 && TERRAIN[this.terAt(cur.x + w.x, cur.y + w.y)].speed > 0 && this.terAt(cur.x + w.x, cur.y + w.y) !== TER.WALL
+        ? { x: cur.x + w.x, y: cur.y + w.y } : { x: (c.cx + 0.5) * CELL, y: (c.cy + 0.5) * CELL };
+      if (this.straightWalkable(px, py, q.x, q.y)) pts.push(q);
+      else { const d = this.findPath(px, py, q.x, q.y); if (d) pts.push(...d); else pts.push(q); }
+      px = q.x; py = q.y;
+    }
+    return pts;
   }
 
   // ---------------------------------------------------------------- cover
@@ -812,14 +1089,16 @@ class GameMap {
       const d = dist(x, y, px, py);
       if (d > radius) continue;
       const a = angleTo(px, py, tx, ty), ca = Math.cos(a), sa = Math.sin(a);
-      const k1 = this.terAt(px + ca * 1.8, py + sa * 1.8), k2 = this.terAt(px + ca * 3.4, py + sa * 3.4);
+      const k1 = this.terAt(px + ca * CELL * 0.9, py + sa * CELL * 0.9), k2 = this.terAt(px + ca * CELL * 1.7, py + sa * CELL * 1.7);
       let score = 0, posture = 'prone';
       if (k1 === TER.WALL || k2 === TER.WALL) { score += 6; posture = 'kneel'; }
       else if (k1 === TER.BUILDING || k2 === TER.BUILDING) { score += 3.5; posture = 'kneel'; }
-      if (k === TER.WOODS) { score += 2.5; if (posture === 'prone' && score < 3) posture = 'prone'; }
-      else if (k === TER.GRASS) score += 1.2;
+      if (k === TER.WOODS) score += 2.5;
+      else if (k === TER.GRASS || k === TER.VINEYARD) score += 1.2;
+      else if (k === TER.ORCHARD) score += 0.8;
+      else if (k === TER.STREAM) score += 1.6; // the gully
       // Defilade: ground rising toward the threat.
-      if (this.elevAt(px + ca * 5, py + sa * 5) - this.elevAt(px, py) > 0.45) score += 1.5;
+      if (this.elevAt(px + ca * 6, py + sa * 6) - this.elevAt(px, py) > 0.45) score += 1.5;
       score -= d * 0.12;
       score -= Math.max(0, dThreat - dist(px, py, tx, ty)) * 0.04;
       if (reserved) for (const p of reserved) if (dist(p.x, p.y, px, py) < 3.5) score -= 4;
@@ -863,6 +1142,19 @@ class MinHeap {
     }
     return top;
   }
+}
+
+// Douglas-Peucker line simplification.
+function simplifyLine(pts, tol) {
+  if (pts.length < 3) return pts;
+  const a = pts[0], b = pts[pts.length - 1], len = Math.max(1e-6, dist(a.x, a.y, b.x, b.y));
+  let worst = 0, wi = 0;
+  for (let i = 1; i < pts.length - 1; i++) {
+    const d = Math.abs((b.x - a.x) * (a.y - pts[i].y) - (a.x - pts[i].x) * (b.y - a.y)) / len;
+    if (d > worst) { worst = d; wi = i; }
+  }
+  if (worst <= tol) return [a, b];
+  return simplifyLine(pts.slice(0, wi + 1), tol).slice(0, -1).concat(simplifyLine(pts.slice(wi), tol));
 }
 
 // ---- src/units.js
@@ -1046,7 +1338,7 @@ function placeSquad(sq, map, x, y, heading) {
 'use strict';
 // Spotting, direct fire, suppression, indirect fire (40mm, RPG, hand grenades) and wounds.
 
-const SPOT_RANGE = 520;
+const SPOT_RANGE = 800;
 
 function sightLine(a, b) {
   return G.map.los(a.x, a.y, POSTURE[a.posture].eye, b.x, b.y, POSTURE[b.posture].eye);
@@ -1078,7 +1370,7 @@ function updateSpotting() {
         const v = sightLine(o, e);
         if (v <= 0) continue;
         if (entry && entry.visible) { seenBy = o; break; }
-        let p = 0.55 * Math.pow(clamp(1 - d / 480, 0.04, 1), 1.4);
+        let p = 0.55 * Math.pow(clamp(1 - d / 760, 0.03, 1), 1.6);
         p *= POSTURE[e.posture].size + 0.1;
         if (e.moving) p *= e.moveMode === 'rush' ? 2.6 : e.moveMode === 'walk' ? 1.8 : 1.1;
         if (G.time - e.lastFired < 4) p *= 5;
@@ -1457,7 +1749,21 @@ function orderMove(s, x, y, mode) {
 function teamMove(team, x, y, mode, heading) {
   const act = team.members.filter(commandable);
   if (!act.length) return;
-  if (heading == null) { const c = centroid(act); heading = angleTo(c.x, c.y, x, y); }
+  const c = centroid(act);
+  if (heading == null) heading = angleTo(c.x, c.y, x, y);
+  // On a long move the team plots one route and each man keeps station on it.
+  if (dist(c.x, c.y, x, y) > 120) {
+    const route = G.map.findPath(c.x, c.y, x, y);
+    if (route) {
+      act.forEach((s, i) => {
+        if (!commandable(s)) return;
+        const o = teamSlot(team.formation, i);
+        s.path = G.map.offsetPath(s.x, s.y, route, o.x, o.y);
+        s.moveMode = mode; s.faceAngle = null;
+      });
+      return;
+    }
+  }
   act.forEach((s, i) => {
     const o = teamSlot(team.formation, i), w = rotateOffset(o.x, o.y, heading);
     orderMove(s, x + w.x, y + w.y, mode);
@@ -1987,14 +2293,20 @@ function symbolCanvas(billet, side, size) {
 
 // ---- src/render.js
 'use strict';
-// Drawing: a pre-rendered map sheet in the style of a military topographic map,
-// seen straight down, with units, fire and orders drawn over it each frame.
+// Drawing: a printed military map sheet on a planning table, with game pieces and
+// overlay graphics on top. The sheet is drawn at three levels of detail: the whole
+// sheet with its margin, then tiles of 600 m and 200 m drawn on demand as you zoom in.
 
-const R = { canvas: null, ctx: null, w: 0, h: 0, dpr: 1, cam: { x: MAP_W / 2, y: MAP_H / 2, zoom: 4 }, terrain: null, minZoom: 1 };
-const PXM = 5; // map sheet pixels per meter
+const R = {
+  canvas: null, ctx: null, w: 0, h: 0, dpr: 1, cam: { x: MAP_W / 2, y: MAP_H / 2, zoom: 1 },
+  sheet: null, tiles: new Map(), queue: [], minZoom: 0.1, table: null, grain: null,
+};
 // Collar (margin) around the map body, in meters, holding the marginal information.
-const SHEET = { ml: 26, mr: 26, mt: 24, mb: 52 };
+const SHEET = { ml: 170, mr: 170, mt: 200, mb: 480 };
 const SHEET_W = MAP_W + SHEET.ml + SHEET.mr, SHEET_H = MAP_H + SHEET.mt + SHEET.mb;
+const SHEET_PPM = 0.55; // whole-sheet pixels per meter
+const LEVELS = [null, { ppm: 1.4, size: 600, label: 11 }, { ppm: 4, size: 200, label: 12 }];
+const TILE_CACHE = 28;
 
 function initRender(canvas) {
   R.canvas = canvas;
@@ -2029,10 +2341,10 @@ function clampCam() {
   c.x = clamp(c.x, x0, x1); c.y = clamp(c.y, y0, y1);
 }
 
-function fitCamera(focus) {
-  R.cam.zoom = Math.max(R.minZoom, Math.min(R.w / (R.w < 600 ? 90 : 130), R.h / 100));
+function fitCamera(focus, zoom) {
+  R.cam.zoom = zoom || Math.max(R.minZoom, R.w / 1100);
   R.cam.x = focus ? focus.x : MAP_W / 2;
-  R.cam.y = focus ? focus.y - 25 : MAP_H / 2;
+  R.cam.y = focus ? focus.y - 60 / R.cam.zoom : MAP_H / 2;
   clampCam();
 }
 
@@ -2045,157 +2357,46 @@ function toWorld(sx, sy) {
   return { x: R.cam.x + (sx - R.w / 2) / z, y: R.cam.y + (sy - R.h / 2) / z };
 }
 
-// ---------------------------------------------------------------- terrain sheet
-// Drawn flat, straight down, in the standard colors of US military topographic maps
-// (FM 3-25.26): black for man-made features and the grid, red-brown for contours and
-// elevations, green for vegetation. Index contours every 5 m.
+// ---------------------------------------------------------------- map colors
+// Standard colors of US military topographic maps (FM 3-25.26): black for man-made
+// features and the grid, red-brown for contours and elevations, blue for water,
+// green for vegetation, red for main roads. Contours every 5 m, index every 25 m.
 const MAPC = {
-  paper: [250, 249, 243],
-  plowed: [244, 240, 228],
-  grass: [228, 240, 206],
+  paper: [247, 245, 236],
+  plowed: [243, 239, 226],
+  grass: [226, 239, 204],
   woods: [190, 220, 164],
-  woodsEdge: [128, 172, 104],
+  woodsEdge: [132, 176, 108],
+  orchard: [214, 233, 194],
+  vineyard: [218, 234, 198],
+  water: [176, 220, 244],
+  waterEdge: [40, 140, 205],
   contour: [168, 84, 50],
 };
-const CONTOUR_INTERVAL = 1, INDEX_EVERY = 5;
+const CONTOUR_INTERVAL = 5, INDEX_EVERY = 5;
+const MAP_INK = '#161616', BLUE_LINE = 'rgb(40,140,205)', RED_BROWN = 'rgb(168,84,50)';
+const CLASS_COLOR = (k) => k === TER.WOODS ? MAPC.woods : k === TER.GRASS ? MAPC.grass : k === TER.PLOWED ? MAPC.plowed
+  : k === TER.ORCHARD ? MAPC.orchard : k === TER.VINEYARD ? MAPC.vineyard : k === TER.POND ? MAPC.water : MAPC.paper;
 
-// Smoothed share of the cells around a point that are of one terrain kind.
-function terrainShare(map, mask, x, y) {
+// Ground class at a point: the class with the most weight among the four nearest
+// cells, which gives smooth edges to woods, fields and water at any zoom.
+function groundClass(map, x, y) {
   const fx = clamp(x / CELL - 0.5, 0, GW - 1.001), fy = clamp(y / CELL - 0.5, 0, GH - 1.001);
   const x0 = Math.floor(fx), y0 = Math.floor(fy), tx = fx - x0, ty = fy - y0, i = y0 * GW + x0;
-  return (mask[i] * (1 - tx) + mask[i + 1] * tx) * (1 - ty) + (mask[i + GW] * (1 - tx) + mask[i + GW + 1] * tx) * ty;
-}
-
-function buildTerrain(map) {
-  const W = MAP_W * PXM, H = MAP_H * PXM;
-  const c = document.createElement('canvas');
-  c.width = W; c.height = H;
-  const ctx = c.getContext('2d');
-  const img = ctx.createImageData(W, H), px = img.data;
-  const mask = (k) => { const a = new Float32Array(GW * GH); for (let i = 0; i < a.length; i++) a[i] = map.ter[i] === k ? 1 : 0; return a; };
-  const woods = mask(TER.WOODS), grass = mask(TER.GRASS), plowed = mask(TER.PLOWED);
-  const elev = new Float32Array(W * H);
-  for (let y = 0; y < H; y++) for (let x = 0; x < W; x++) elev[y * W + x] = map.elevAt((x + 0.5) / PXM, (y + 0.5) / PXM);
-  const level = (e, step) => Math.floor(e / step);
-
-  for (let y = 0; y < H; y++) {
-    for (let x = 0; x < W; x++) {
-      const i = y * W + x, wx = (x + 0.5) / PXM, wy = (y + 0.5) / PXM;
-      let col = MAPC.paper;
-      if (terrainShare(map, plowed, wx, wy) > 0.5) col = MAPC.plowed;
-      if (terrainShare(map, grass, wx, wy) > 0.5) col = MAPC.grass;
-      const w = terrainShare(map, woods, wx, wy);
-      if (w > 0.36) col = w < 0.46 ? MAPC.woodsEdge : MAPC.woods;
-      let [r, g, b] = col;
-      // Contours: ordinary lines one pixel wide, index lines two.
-      const e = elev[i];
-      const xr = Math.min(W - 1, x + 1), yd = Math.min(H - 1, y + 1);
-      const xr2 = Math.min(W - 1, x + 2), yd2 = Math.min(H - 1, y + 2);
-      const idx = INDEX_EVERY * CONTOUR_INTERVAL;
-      const onIndex = level(e, idx) !== level(elev[y * W + xr2], idx) || level(e, idx) !== level(elev[yd2 * W + x], idx);
-      const onLine = level(e, CONTOUR_INTERVAL) !== level(elev[y * W + xr], CONTOUR_INTERVAL) || level(e, CONTOUR_INTERVAL) !== level(elev[yd * W + x], CONTOUR_INTERVAL);
-      if (onIndex || onLine) {
-        const a = onIndex ? 0.95 : 0.6;
-        r = r * (1 - a) + MAPC.contour[0] * a; g = g * (1 - a) + MAPC.contour[1] * a; b = b * (1 - a) + MAPC.contour[2] * a;
-      }
-      px[i * 4] = r; px[i * 4 + 1] = g; px[i * 4 + 2] = b; px[i * 4 + 3] = 255;
-    }
-  }
-  ctx.putImageData(img, 0, 0);
-  ctx.scale(PXM, PXM);
-  ctx.lineCap = 'round'; ctx.lineJoin = 'round';
-
-  // Tall grass: scattered tufts, the scrub symbol.
-  ctx.strokeStyle = '#6f9a52'; ctx.lineWidth = 0.18;
-  for (let cy = 0; cy < GH; cy++) for (let cx = 0; cx < GW; cx++) {
-    if (map.ter[cy * GW + cx] !== TER.GRASS || (cx * 7 + cy * 13) % 9 !== 0) continue;
-    const x = (cx + 0.5) * CELL, y = (cy + 0.5) * CELL;
-    ctx.beginPath();
-    ctx.moveTo(x - 0.5, y - 0.6); ctx.lineTo(x, y); ctx.lineTo(x + 0.5, y - 0.6);
-    ctx.moveTo(x, y - 0.8); ctx.lineTo(x, y);
-    ctx.moveTo(x - 0.7, y); ctx.lineTo(x + 0.7, y);
-    ctx.stroke();
-  }
-
-  const pts = [];
-  for (let cx = 0; cx < GW; cx++) {
-    let s = 0, n = 0;
-    for (let k = -3; k <= 3; k++) { const v = map.roadY[clamp(cx + k, 0, GW - 1)]; s += v; n++; }
-    pts.push({ x: (cx + 0.5) * CELL, y: Math.floor(s / n / CELL) * CELL + CELL });
-  }
-  pts.unshift({ x: 0, y: pts[0].y }); pts.push({ x: MAP_W, y: pts[pts.length - 1].y });
-  const road = () => { ctx.beginPath(); pts.forEach((p, i) => i ? ctx.lineTo(p.x, p.y) : ctx.moveTo(p.x, p.y)); ctx.stroke(); };
-  // Unimproved (dirt) road: dashed black double line.
-  ctx.strokeStyle = '#1b1b1b'; ctx.lineWidth = 4.2; ctx.setLineDash([3, 1.6]); road();
-  ctx.strokeStyle = 'rgb(' + MAPC.paper.join(',') + ')'; ctx.lineWidth = 3.4; ctx.setLineDash([]); road();
-
-  // Stone walls: black line with ticks on one side, traced cell to cell and straightened.
-  ctx.strokeStyle = '#1b1b1b';
-  for (const line of wallLines(map)) {
-    ctx.lineWidth = 0.45;
-    ctx.beginPath(); line.forEach((p, i) => i ? ctx.lineTo(p.x, p.y) : ctx.moveTo(p.x, p.y)); ctx.stroke();
-    ctx.lineWidth = 0.22;
-    ctx.beginPath();
-    for (let i = 1; i < line.length; i++) {
-      const a = line[i - 1], b = line[i], len = dist(a.x, a.y, b.x, b.y);
-      const nx = -(b.y - a.y) / len, ny = (b.x - a.x) / len;
-      for (let d = 0.6; d < len; d += 1.2) {
-        const tx = a.x + (b.x - a.x) * d / len, ty = a.y + (b.y - a.y) * d / len;
-        ctx.moveTo(tx, ty); ctx.lineTo(tx + nx * 0.7, ty + ny * 0.7);
-      }
-    }
-    ctx.stroke();
-  }
-
-  // Buildings: solid black.
-  ctx.fillStyle = '#161616';
-  for (const bd of map.buildings) ctx.fillRect(bd.x0 + 0.2, bd.y0 + 0.2, bd.x1 - bd.x0 - 0.4, bd.y1 - bd.y0 - 0.4);
-
-  // Grid: 100 m squares. Northing lines are counted from the south edge.
-  ctx.strokeStyle = 'rgba(10,10,10,0.8)'; ctx.lineWidth = 0.3;
-  for (let x = 100; x < MAP_W; x += 100) { ctx.beginPath(); ctx.moveTo(x, 0); ctx.lineTo(x, MAP_H); ctx.stroke(); }
-  for (let n = 100; n < MAP_H; n += 100) { ctx.beginPath(); ctx.moveTo(0, MAP_H - n); ctx.lineTo(MAP_W, MAP_H - n); ctx.stroke(); }
-
-  // Elevation figures: index contour values and spot heights at hilltops, in meters.
-  const base = map.elevBase;
-  const halo = (text, x, y, color, size) => {
-    ctx.font = '600 ' + size + 'px "IBM Plex Mono", ui-monospace, monospace';
-    ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
-    ctx.lineWidth = 0.6; ctx.strokeStyle = 'rgba(250,249,243,0.95)';
-    ctx.strokeText(text, x, y);
-    ctx.fillStyle = color; ctx.fillText(text, x, y);
-  };
-  const labels = [];
-  const idxStep = INDEX_EVERY * CONTOUR_INTERVAL;
-  for (let y = 12; y < MAP_H - 6; y += 7) for (let x = 10; x < MAP_W - 10; x += 7) {
-    const e = map.elevAt(x, y), lv = Math.round(e / idxStep) * idxStep;
-    if (lv <= 0 || Math.abs(e - lv) > 0.06) continue;
-    if (labels.some(l => dist(l.x, l.y, x, y) < 45) || map.terAt(x, y) === TER.BUILDING) continue;
-    labels.push({ x, y });
-    halo(String(Math.round(base + lv)), x, y, 'rgb(' + MAPC.contour.join(',') + ')', 2.6);
-  }
-  const peaks = [];
-  for (let cy = 4; cy < GH - 4; cy += 2) for (let cx = 4; cx < GW - 4; cx += 2) {
-    const e = map.elev[cy * GW + cx];
-    let top = true;
-    for (let j = -8; j <= 8 && top; j++) for (let i = -8; i <= 8; i++) {
-      if (!map.inGrid(cx + i, cy + j) || (!i && !j)) continue;
-      if (map.elev[(cy + j) * GW + cx + i] > e) { top = false; break; }
-    }
-    if (top && !peaks.some(p => dist(p.x, p.y, (cx + 0.5) * CELL, (cy + 0.5) * CELL) < 30)) peaks.push({ x: (cx + 0.5) * CELL, y: (cy + 0.5) * CELL, e });
-  }
-  for (const p of peaks.slice(0, 4)) {
-    ctx.fillStyle = 'rgb(' + MAPC.contour.join(',') + ')';
-    ctx.beginPath(); ctx.arc(p.x, p.y, 0.45, 0, Math.PI * 2); ctx.fill();
-    halo(String(Math.round(base + p.e)), p.x + 3.2, p.y - 1.8, 'rgb(' + MAPC.contour.join(',') + ')', 2.4);
-  }
-  map.peak = peaks.length ? Math.round(base + Math.max(...peaks.map(p => p.e))) : Math.round(base);
-  R.terrain = c;
-  buildSheet(map, c);
+  const cls = (k) => k === TER.WOODS || k === TER.GRASS || k === TER.PLOWED || k === TER.ORCHARD || k === TER.VINEYARD || k === TER.POND ? k : 0;
+  const a = cls(map.ter[i]), b = cls(map.ter[i + 1]), c = cls(map.ter[i + GW]), d = cls(map.ter[i + GW + 1]);
+  if (a === b && b === c && c === d) return a;
+  const w = new Map();
+  w.set(a, (w.get(a) || 0) + (1 - tx) * (1 - ty)); w.set(b, (w.get(b) || 0) + tx * (1 - ty));
+  w.set(c, (w.get(c) || 0) + (1 - tx) * ty); w.set(d, (w.get(d) || 0) + tx * ty);
+  let best = 0, bw = -1;
+  for (const [k, v] of w) if (v > bw) { bw = v; best = k; }
+  return best;
 }
 
 // Wall cells joined into chains, then simplified so diagonal walls draw straight.
 function wallLines(map) {
+  if (map._walls) return map._walls;
   const isWall = (cx, cy) => map.inGrid(cx, cy) && map.ter[cy * GW + cx] === TER.WALL;
   const nbrs = (cx, cy) => {
     const out = [];
@@ -2216,212 +2417,343 @@ function wallLines(map) {
     }
     return pts.map(([x, y]) => ({ x: (x + 0.5) * CELL, y: (y + 0.5) * CELL }));
   };
-  // Start at chain ends first so each wall traces in one piece.
   for (const pass of [1, 0]) {
     for (let cy = 0; cy < GH; cy++) for (let cx = 0; cx < GW; cx++) {
       if (!isWall(cx, cy) || seen.has(key(cx, cy))) continue;
       if (pass && nbrs(cx, cy).length > 1) continue;
       const pts = trace(cx, cy);
-      lines.push(pts.length > 1 ? simplifyLine(pts, 2.2) : [{ x: pts[0].x - 0.6, y: pts[0].y }, { x: pts[0].x + 0.6, y: pts[0].y }]);
+      lines.push(pts.length > 1 ? simplifyLine(pts, 4.4) : [{ x: pts[0].x - 1.2, y: pts[0].y }, { x: pts[0].x + 1.2, y: pts[0].y }]);
     }
   }
+  map._walls = lines;
   return lines;
 }
 
-// Douglas-Peucker line simplification.
-function simplifyLine(pts, tol) {
-  if (pts.length < 3) return pts;
-  const a = pts[0], b = pts[pts.length - 1], len = Math.max(1e-6, dist(a.x, a.y, b.x, b.y));
-  let worst = 0, wi = 0;
-  for (let i = 1; i < pts.length - 1; i++) {
-    const d = Math.abs((b.x - a.x) * (a.y - pts[i].y) - (a.x - pts[i].x) * (b.y - a.y)) / len;
-    if (d > worst) { worst = d; wi = i; }
+// ---------------------------------------------------------------- drawing a piece of the map
+// Draws the map body for the region (x0, y0, w, h meters) into ctx at ppm pixels per meter.
+// level 0 is the whole sheet; 1 and 2 are the closer tiles and carry more detail.
+function drawMapRegion(ctx, map, x0, y0, w, h, ppm, level) {
+  const W = Math.ceil(w * ppm), H = Math.ceil(h * ppm);
+  const img = ctx.createImageData(W, H), px = img.data;
+  const elev = new Float32Array((W + 2) * (H + 2)), cls = new Uint8Array(W * H);
+  for (let y = 0; y < H + 2; y++) for (let x = 0; x < W + 2; x++) elev[y * (W + 2) + x] = map.elevAt(x0 + (x - 0.5) / ppm, y0 + (y - 0.5) / ppm);
+  for (let y = 0; y < H; y++) for (let x = 0; x < W; x++) cls[y * W + x] = groundClass(map, x0 + (x + 0.5) / ppm, y0 + (y + 0.5) / ppm);
+  const ci = CONTOUR_INTERVAL, ii = CONTOUR_INTERVAL * INDEX_EVERY;
+  for (let y = 0; y < H; y++) {
+    for (let x = 0; x < W; x++) {
+      const i = y * W + x, k = cls[i];
+      let col = CLASS_COLOR(k);
+      // Outline woods and water where they meet other ground.
+      if (k === TER.WOODS || k === TER.POND) {
+        const edge = (x > 0 && cls[i - 1] !== k) || (x < W - 1 && cls[i + 1] !== k) || (y > 0 && cls[i - W] !== k) || (y < H - 1 && cls[i + W] !== k);
+        if (edge && (k === TER.POND || level > 0)) col = k === TER.POND ? MAPC.waterEdge : MAPC.woodsEdge;
+      }
+      let [r, g, b] = col;
+      if (k !== TER.POND) {
+        const e = elev[(y + 1) * (W + 2) + x + 1], er = elev[(y + 1) * (W + 2) + x + 2], ed = elev[(y + 2) * (W + 2) + x + 1];
+        const onIndex = Math.floor(e / ii) !== Math.floor(er / ii) || Math.floor(e / ii) !== Math.floor(ed / ii);
+        const onLine = Math.floor(e / ci) !== Math.floor(er / ci) || Math.floor(e / ci) !== Math.floor(ed / ci);
+        if (onIndex || onLine) {
+          const a = onIndex ? 1 : level === 0 ? 0.45 : 0.7;
+          r = r * (1 - a) + MAPC.contour[0] * a; g = g * (1 - a) + MAPC.contour[1] * a; b = b * (1 - a) + MAPC.contour[2] * a;
+        }
+        // Heavier index contours on close tiles.
+        if (level === 2 && !onIndex) {
+          const el = elev[(y + 1) * (W + 2) + x], eu = elev[y * (W + 2) + x + 1];
+          if (Math.floor(e / ii) !== Math.floor(el / ii) || Math.floor(e / ii) !== Math.floor(eu / ii)) {
+            r = r * 0.15 + MAPC.contour[0] * 0.85; g = g * 0.15 + MAPC.contour[1] * 0.85; b = b * 0.15 + MAPC.contour[2] * 0.85;
+          }
+        }
+      }
+      px[i * 4] = r; px[i * 4 + 1] = g; px[i * 4 + 2] = b; px[i * 4 + 3] = 255;
+    }
   }
-  if (worst <= tol) return [a, b];
-  return simplifyLine(pts.slice(0, wi + 1), tol).slice(0, -1).concat(simplifyLine(pts.slice(wi), tol));
-}
+  ctx.putImageData(img, 0, 0);
 
-// 8-digit grid reference (10 m precision) for a map point.
-function gridRef(x, y) {
-  const e = Math.floor((G.grid.e * 1000 + x) / 10) % 10000;
-  const n = Math.floor((G.grid.n * 1000 + (MAP_H - y)) / 10) % 10000;
-  return String(e).padStart(4, '0') + ' ' + String(n).padStart(4, '0');
+  ctx.save();
+  ctx.setTransform(ppm, 0, 0, ppm, -x0 * ppm, -y0 * ppm);
+  ctx.lineCap = 'round'; ctx.lineJoin = 'round';
+  const pxm = 1 / ppm; // one pixel in meters
+  const inBox = (x, y, m) => x > x0 - m && x < x0 + w + m && y > y0 - m && y < y0 + h + m;
+  const lineIn = (pts, m) => pts.some(p => inBox(p.x, p.y, m + 200));
+  const stroke = (pts) => { ctx.beginPath(); pts.forEach((p, i) => i ? ctx.lineTo(p.x, p.y) : ctx.moveTo(p.x, p.y)); ctx.stroke(); };
+
+  // Vegetation symbols on close tiles: orchard trees in rows, vine rows, grass tufts.
+  if (level > 0) {
+    const c0 = map.cellOf(x0, y0), c1 = map.cellOf(x0 + w, y0 + h);
+    const step = level === 2 ? 2 : 4;
+    ctx.lineWidth = Math.max(0.25, 0.8 * pxm);
+    for (let cy = c0.cy; cy <= c1.cy; cy += step) for (let cx = c0.cx; cx <= c1.cx; cx += step) {
+      const k = map.ter[cy * GW + cx], x = (cx + 0.5) * CELL, y = (cy + 0.5) * CELL;
+      if (k === TER.ORCHARD) {
+        ctx.strokeStyle = '#4f8a3a';
+        ctx.beginPath(); ctx.arc(x, y, Math.max(1.2, 2.2 * pxm), 0, Math.PI * 2); ctx.stroke();
+      } else if (k === TER.VINEYARD) {
+        ctx.strokeStyle = '#4f8a3a';
+        ctx.beginPath(); ctx.moveTo(x - CELL * step * 0.35, y); ctx.lineTo(x + CELL * step * 0.35, y); ctx.stroke();
+      } else if (k === TER.GRASS && level === 2 && (cx * 7 + cy * 13) % 5 === 0) {
+        ctx.strokeStyle = '#6f9a52';
+        const s = 1.4;
+        ctx.beginPath();
+        ctx.moveTo(x - s, y - s); ctx.lineTo(x, y); ctx.lineTo(x + s, y - s);
+        ctx.moveTo(x - s * 1.4, y); ctx.lineTo(x + s * 1.4, y);
+        ctx.stroke();
+      }
+    }
+  }
+
+  // Streams: blue lines, wider downstream.
+  ctx.strokeStyle = BLUE_LINE;
+  for (const s of map.streams) {
+    if (!lineIn(s.pts, 0)) continue;
+    ctx.lineWidth = Math.max(s.width, 1.3 * pxm);
+    stroke(s.pts);
+  }
+
+  // Roads: the paved road red with black casing; dirt tracks a dashed black double line.
+  for (const r of map.roads) {
+    if (!lineIn(r.pts, 0)) continue;
+    if (r.kind === 'paved') {
+      ctx.strokeStyle = MAP_INK; ctx.lineWidth = Math.max(9, 4.2 * pxm); stroke(r.pts);
+      ctx.strokeStyle = '#d0362a'; ctx.lineWidth = Math.max(6.4, 2.4 * pxm); stroke(r.pts);
+    } else {
+      ctx.strokeStyle = MAP_INK; ctx.lineWidth = Math.max(6, 3.4 * pxm);
+      ctx.setLineDash([Math.max(8, 6 * pxm), Math.max(4, 3 * pxm)]); stroke(r.pts); ctx.setLineDash([]);
+      ctx.strokeStyle = 'rgb(' + MAPC.paper.join(',') + ')'; ctx.lineWidth = Math.max(4.4, 1.8 * pxm); stroke(r.pts);
+    }
+  }
+
+  // Stone walls: black line, ticked on close tiles.
+  ctx.strokeStyle = MAP_INK;
+  for (const line of wallLines(map)) {
+    if (!lineIn(line, 0)) continue;
+    ctx.lineWidth = Math.max(0.7, 1 * pxm);
+    stroke(line);
+    if (level !== 2) continue;
+    ctx.lineWidth = Math.max(0.35, 0.7 * pxm);
+    ctx.beginPath();
+    for (let i = 1; i < line.length; i++) {
+      const a = line[i - 1], b = line[i], len = dist(a.x, a.y, b.x, b.y);
+      const nx = -(b.y - a.y) / len, ny = (b.x - a.x) / len;
+      for (let d = 1; d < len; d += 2.4) {
+        const tx = a.x + (b.x - a.x) * d / len, ty = a.y + (b.y - a.y) * d / len;
+        ctx.moveTo(tx, ty); ctx.lineTo(tx + nx * 1.3, ty + ny * 1.3);
+      }
+    }
+    ctx.stroke();
+  }
+
+  // Buildings: solid black.
+  ctx.fillStyle = MAP_INK;
+  for (const bd of map.buildings) {
+    if (!inBox(bd.x0, bd.y0, 20)) continue;
+    const m = Math.min(0.4, (bd.x1 - bd.x0) / 6);
+    ctx.fillRect(bd.x0 + m, bd.y0 + m, Math.max(bd.x1 - bd.x0 - 2 * m, 1.5 * pxm), Math.max(bd.y1 - bd.y0 - 2 * m, 1.5 * pxm));
+  }
+
+  // Grid: 1 km squares.
+  ctx.strokeStyle = 'rgba(10,10,10,0.85)'; ctx.lineWidth = Math.max(1.2, 0.9 * pxm);
+  for (let x = 1000; x < MAP_W; x += 1000) { ctx.beginPath(); ctx.moveTo(x, 0); ctx.lineTo(x, MAP_H); ctx.stroke(); }
+  for (let n = 1000; n < MAP_H; n += 1000) { ctx.beginPath(); ctx.moveTo(0, MAP_H - n); ctx.lineTo(MAP_W, MAP_H - n); ctx.stroke(); }
+
+  // Lettering: sized in screen pixels for each level, as each would be printed.
+  const fs = (level === 0 ? 10 : LEVELS[level].label) * pxm;
+  const halo = (text, x, y, color, size, font) => {
+    ctx.font = font || '600 ' + size + 'px "IBM Plex Mono", ui-monospace, monospace';
+    ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+    ctx.lineWidth = size * 0.3; ctx.strokeStyle = 'rgba(247,245,236,0.95)';
+    ctx.strokeText(text, x, y);
+    ctx.fillStyle = color; ctx.fillText(text, x, y);
+  };
+  for (const l of map.contourLabels) if (inBox(l.x, l.y, 30)) halo(String(Math.round(map.elevBase + l.v)), l.x, l.y, RED_BROWN, fs);
+  for (const p of map.peaks.slice(0, level === 0 ? 6 : 12)) {
+    if (!inBox(p.x, p.y, 40)) continue;
+    ctx.fillStyle = RED_BROWN;
+    ctx.beginPath(); ctx.arc(p.x, p.y, 2.2 * pxm, 0, Math.PI * 2); ctx.fill();
+    halo(String(Math.round(map.elevBase + p.e)), p.x + fs * 1.6, p.y - fs * 0.8, RED_BROWN, fs);
+  }
+  for (const pl of map.places) {
+    if (pl.kind === 'farm' && level === 0) continue;
+    if (!inBox(pl.x, pl.y, 200)) continue;
+    const size = pl.kind === 'village' ? fs * 1.45 : fs * 0.95;
+    const font = (pl.kind === 'village' ? '700 ' : 'italic 600 ') + size + 'px "Saira Condensed", "Arial Narrow", sans-serif';
+    halo(pl.kind === 'village' ? pl.name.toUpperCase() : pl.name, pl.x, pl.y - (pl.kind === 'village' ? 40 : 0), MAP_INK, size, font);
+  }
+  ctx.restore();
 }
 
 // ---------------------------------------------------------------- the printed sheet
-// The map body is set into a paper sheet with a collar of marginal information:
-// sheet name, grid values, legend, graphic scale, declination diagram. Paper grain
-// and fold creases make it read as a physical map on the planning table.
-function buildSheet(map, body) {
-  const W = SHEET_W * PXM, H = SHEET_H * PXM;
+// The whole sheet: map body at low detail inside a collar of marginal information
+// (sheet name, grid values, legend, graphic scale, declination diagram).
+function buildTerrain(map) {
+  R.tiles.clear(); R.queue = [];
+  const P = SHEET_PPM;
+  const body = document.createElement('canvas');
+  body.width = Math.ceil(MAP_W * P); body.height = Math.ceil(MAP_H * P);
+  drawMapRegion(body.getContext('2d'), map, 0, 0, MAP_W, MAP_H, P, 0);
+
   const c = document.createElement('canvas');
-  c.width = W; c.height = H;
+  c.width = Math.ceil(SHEET_W * P); c.height = Math.ceil(SHEET_H * P);
   const ctx = c.getContext('2d');
   ctx.fillStyle = 'rgb(' + MAPC.paper.join(',') + ')';
-  ctx.fillRect(0, 0, W, H);
-  ctx.drawImage(body, SHEET.ml * PXM, SHEET.mt * PXM);
+  ctx.fillRect(0, 0, c.width, c.height);
+  ctx.drawImage(body, Math.round(SHEET.ml * P), Math.round(SHEET.mt * P));
 
   ctx.save();
-  ctx.scale(PXM, PXM);
+  ctx.scale(P, P);
   ctx.translate(SHEET.ml, SHEET.mt);
-  const ink = '#161616', brown = 'rgb(' + MAPC.contour.join(',') + ')';
   const text = (t, x, y, size, opts) => {
     opts = opts || {};
     ctx.font = (opts.weight || 600) + ' ' + size + 'px ' + (opts.serif ? '"Saira Condensed", "Arial Narrow", sans-serif' : '"IBM Plex Mono", ui-monospace, monospace');
-    ctx.fillStyle = opts.color || ink;
+    ctx.fillStyle = opts.color || MAP_INK;
     ctx.textAlign = opts.align || 'left'; ctx.textBaseline = opts.base || 'alphabetic';
     ctx.fillText(t, x, y);
   };
-
-  // Neatline
-  ctx.strokeStyle = ink; ctx.lineWidth = 0.5;
+  ctx.strokeStyle = MAP_INK; ctx.lineWidth = 3;
   ctx.strokeRect(0, 0, MAP_W, MAP_H);
 
-  // Grid values in the margin: small leading digit, large principal digits.
-  const gridLabel = (v, x, y, align) => {
-    const s = String(v).padStart(3, '0');
-    ctx.font = '600 1.7px "IBM Plex Mono", monospace';
-    const small = ctx.measureText(s[0]).width;
-    ctx.font = '700 2.8px "IBM Plex Mono", monospace';
-    const big = ctx.measureText(s.slice(1)).width;
-    const x0 = align === 'center' ? x - (small + big) / 2 : align === 'right' ? x - small - big : x;
-    text(s[0], x0, y - 1, 1.7);
-    text(s.slice(1), x0 + small, y, 2.8, { weight: 700 });
+  // Grid values: small 100 km digit, large principal digits; full values at the corners.
+  const gridLabel = (lead, v, x, y, align) => {
+    const big = String(v).padStart(2, '0');
+    ctx.font = '600 22px "IBM Plex Mono", monospace';
+    const sw = ctx.measureText(String(lead)).width;
+    ctx.font = '700 40px "IBM Plex Mono", monospace';
+    const bw = ctx.measureText(big).width;
+    const x0 = align === 'center' ? x - (sw + bw) / 2 : align === 'right' ? x - sw - bw : x;
+    text(String(lead), x0, y - 16, 22);
+    text(big, x0 + sw, y, 40, { weight: 700 });
   };
-  for (let x = 0; x <= MAP_W; x += 100) {
-    ctx.lineWidth = 0.3;
-    ctx.beginPath(); ctx.moveTo(x, -1.6); ctx.lineTo(x, 0); ctx.moveTo(x, MAP_H); ctx.lineTo(x, MAP_H + 1.6); ctx.stroke();
-    const v = G.grid.e * 10 + x / 100;
-    gridLabel(v, x, -2.4, 'center');
-    gridLabel(v, x, MAP_H + 4.6, 'center');
+  for (let x = 0; x <= MAP_W; x += 1000) {
+    const v = G.grid.e + x / 1000;
+    gridLabel(G.grid.le, v, x, -14, 'center');
+    gridLabel(G.grid.le, v, x, MAP_H + 50, 'center');
   }
-  for (let n = 0; n <= MAP_H; n += 100) {
-    const y = MAP_H - n;
-    ctx.beginPath(); ctx.moveTo(-1.6, y); ctx.lineTo(0, y); ctx.moveTo(MAP_W, y); ctx.lineTo(MAP_W + 1.6, y); ctx.stroke();
-    const v = G.grid.n * 10 + n / 100;
-    gridLabel(v, -2.2, y + 1, 'right');
-    gridLabel(v, MAP_W + 2.2, y + 1, 'left');
+  for (let n = 0; n <= MAP_H; n += 1000) {
+    const y = MAP_H - n, v = G.grid.n + n / 1000;
+    gridLabel(G.grid.ln, v, -14, y + 14, 'right');
+    gridLabel(G.grid.ln, v, MAP_W + 14, y + 14, 'left');
+  }
+  text(G.grid.le + String(G.grid.e).padStart(2, '0') + '000mE.', 0, -64, 20, { weight: 600 });
+  text(G.grid.ln + String(G.grid.n).padStart(2, '0') + '000mN.', -14, MAP_H + 92, 20, { weight: 600, align: 'right' });
+  // 100 m ticks along the neatline.
+  ctx.lineWidth = 2;
+  for (let m = 100; m < MAP_W; m += 100) {
+    ctx.beginPath(); ctx.moveTo(m, 0); ctx.lineTo(m, -12); ctx.moveTo(m, MAP_H); ctx.lineTo(m, MAP_H + 12);
+    ctx.moveTo(0, m); ctx.lineTo(-12, m); ctx.moveTo(MAP_W, m); ctx.lineTo(MAP_W + 12, m); ctx.stroke();
   }
 
-  // Title block
-  text('SQUAD TACTICAL MAP', 0, -12, 2.4, { weight: 700 });
-  text('SERIES T25 · EDITION 1', 0, -9, 1.6, { weight: 500 });
-  text('HILL ' + map.peak, MAP_W / 2, -10, 5, { weight: 700, serif: true, align: 'center' });
-  text('SHEET ' + String(G.settings ? G.settings.seed : 0).padStart(5, '0'), MAP_W, -12, 2.4, { weight: 700, align: 'right' });
-  text('1:2 500 TRAINING SHEET', MAP_W, -9, 1.6, { weight: 500, align: 'right' });
+  // Title block.
+  text('SQUAD TACTICAL MAP', 0, -140, 34, { weight: 700 });
+  text('SERIES T25 · EDITION 1', 0, -104, 22, { weight: 500 });
+  text(('HILL ' + map.peak).toUpperCase(), MAP_W / 2, -118, 76, { weight: 700, serif: true, align: 'center' });
+  text('SHEET ' + String(G.settings ? G.settings.seed : 0).padStart(5, '0'), MAP_W, -140, 34, { weight: 700, align: 'right' });
+  text('1:25 000 · 3 × 3 KM', MAP_W, -104, 22, { weight: 500, align: 'right' });
 
-  // Legend, bottom left
-  const ly = MAP_H + 10;
-  text('LEGEND', 0, ly, 1.9, { weight: 700 });
+  // Legend, bottom left.
+  const ly = MAP_H + 160;
+  text('LEGEND', 0, ly, 26, { weight: 700 });
   const rows = [
-    ['woods', 'Woods, hedgerow'], ['grass', 'Tall grass, scrub'], ['building', 'Building'], ['wall', 'Stone wall'],
-    ['road', 'Unimproved road'], ['index', 'Index contour'], ['contour', 'Contour, 1 m'], ['spot', 'Spot elevation'],
+    ['woods', 'Woods, hedgerow'], ['grass', 'Tall grass, scrub'], ['orchard', 'Orchard'], ['vineyard', 'Vineyard'],
+    ['paved', 'Hard surface road'], ['road', 'Unimproved road'], ['wall', 'Stone wall'], ['building', 'Building'],
+    ['stream', 'Stream'], ['pond', 'Pond'], ['index', 'Index contour (25 m)'], ['contour', 'Contour (5 m)'],
   ];
   rows.forEach(([k, label], i) => {
     const col = Math.floor(i / 4), row = i % 4;
-    const x = col * 46, y = ly + 3.6 + row * 4.4;
+    const x = col * 560, y = ly + 50 + row * 56;
     ctx.save();
-    if (k === 'woods') { ctx.fillStyle = 'rgb(' + MAPC.woods.join(',') + ')'; ctx.fillRect(x, y - 1.2, 7, 2.6); }
-    else if (k === 'grass') {
-      ctx.fillStyle = 'rgb(' + MAPC.grass.join(',') + ')'; ctx.fillRect(x, y - 1.2, 7, 2.6);
-      ctx.strokeStyle = '#6f9a52'; ctx.lineWidth = 0.18;
-      ctx.beginPath(); ctx.moveTo(x + 3, y - 0.5); ctx.lineTo(x + 3.5, y + 0.1); ctx.lineTo(x + 4, y - 0.5); ctx.moveTo(x + 2.8, y + 0.1); ctx.lineTo(x + 4.2, y + 0.1); ctx.stroke();
-    }
-    else if (k === 'building') { ctx.fillStyle = ink; ctx.fillRect(x + 2, y - 1.2, 3, 2.4); }
-    else if (k === 'wall') {
-      ctx.strokeStyle = ink; ctx.lineWidth = 0.45;
-      ctx.beginPath(); ctx.moveTo(x, y); ctx.lineTo(x + 7, y); ctx.stroke();
-      ctx.lineWidth = 0.22; ctx.beginPath();
-      for (let t = 0.6; t < 7; t += 1.2) { ctx.moveTo(x + t, y); ctx.lineTo(x + t, y + 0.7); }
-      ctx.stroke();
-    } else if (k === 'road') {
-      ctx.strokeStyle = ink; ctx.lineWidth = 0.22; ctx.setLineDash([1.2, 0.6]);
-      ctx.beginPath(); ctx.moveTo(x, y - 0.7); ctx.lineTo(x + 7, y - 0.7); ctx.moveTo(x, y + 0.7); ctx.lineTo(x + 7, y + 0.7); ctx.stroke();
-    } else if (k === 'index' || k === 'contour') {
-      ctx.strokeStyle = brown; ctx.lineWidth = k === 'index' ? 0.4 : 0.2;
-      ctx.beginPath(); ctx.moveTo(x, y + 0.6); ctx.bezierCurveTo(x + 2, y - 1, x + 5, y + 1.5, x + 7, y - 0.4); ctx.stroke();
-    } else if (k === 'spot') {
-      ctx.fillStyle = brown; ctx.beginPath(); ctx.arc(x + 2, y, 0.45, 0, Math.PI * 2); ctx.fill();
-      text(String(map.peak), x + 3, y + 0.7, 1.7, { color: brown });
-    }
+    const sw = (c) => { ctx.fillStyle = 'rgb(' + c.join(',') + ')'; ctx.fillRect(x, y - 16, 90, 32); };
+    ctx.lineCap = 'round';
+    if (k === 'woods') sw(MAPC.woods);
+    else if (k === 'grass') sw(MAPC.grass);
+    else if (k === 'orchard') { sw(MAPC.orchard); ctx.strokeStyle = '#4f8a3a'; ctx.lineWidth = 2; for (let t = 12; t < 90; t += 22) { ctx.beginPath(); ctx.arc(x + t, y, 5, 0, Math.PI * 2); ctx.stroke(); } }
+    else if (k === 'vineyard') { sw(MAPC.vineyard); ctx.strokeStyle = '#4f8a3a'; ctx.lineWidth = 2; for (const dy of [-8, 0, 8]) { ctx.beginPath(); ctx.moveTo(x + 6, y + dy); ctx.lineTo(x + 84, y + dy); ctx.stroke(); } }
+    else if (k === 'paved') { ctx.strokeStyle = MAP_INK; ctx.lineWidth = 16; ctx.beginPath(); ctx.moveTo(x, y); ctx.lineTo(x + 90, y); ctx.stroke(); ctx.strokeStyle = '#d0362a'; ctx.lineWidth = 10; ctx.stroke(); }
+    else if (k === 'road') { ctx.strokeStyle = MAP_INK; ctx.lineWidth = 12; ctx.setLineDash([14, 7]); ctx.beginPath(); ctx.moveTo(x, y); ctx.lineTo(x + 90, y); ctx.stroke(); ctx.setLineDash([]); ctx.strokeStyle = 'rgb(' + MAPC.paper.join(',') + ')'; ctx.lineWidth = 7; ctx.stroke(); }
+    else if (k === 'wall') { ctx.strokeStyle = MAP_INK; ctx.lineWidth = 3; ctx.beginPath(); ctx.moveTo(x, y); ctx.lineTo(x + 90, y); ctx.stroke(); ctx.lineWidth = 2; ctx.beginPath(); for (let t = 6; t < 90; t += 12) { ctx.moveTo(x + t, y); ctx.lineTo(x + t, y + 8); } ctx.stroke(); }
+    else if (k === 'building') { ctx.fillStyle = MAP_INK; ctx.fillRect(x + 30, y - 14, 30, 28); }
+    else if (k === 'stream') { ctx.strokeStyle = BLUE_LINE; ctx.lineWidth = 5; ctx.beginPath(); ctx.moveTo(x, y + 8); ctx.bezierCurveTo(x + 30, y - 16, x + 60, y + 16, x + 90, y - 6); ctx.stroke(); }
+    else if (k === 'pond') { ctx.fillStyle = 'rgb(' + MAPC.water.join(',') + ')'; ctx.strokeStyle = BLUE_LINE; ctx.lineWidth = 3; ctx.beginPath(); ctx.ellipse(x + 45, y, 40, 15, 0, 0, Math.PI * 2); ctx.fill(); ctx.stroke(); }
+    else if (k === 'index' || k === 'contour') { ctx.strokeStyle = RED_BROWN; ctx.lineWidth = k === 'index' ? 5 : 2.5; ctx.beginPath(); ctx.moveTo(x, y + 8); ctx.bezierCurveTo(x + 30, y - 16, x + 60, y + 16, x + 90, y - 6); ctx.stroke(); }
     ctx.restore();
-    text(label, x + 9, y + 0.7, 1.9, { weight: 500, serif: true });
+    text(label, x + 110, y + 9, 26, { weight: 500, serif: true });
   });
 
-  // Graphic scale, bottom center
-  const sx = MAP_W / 2 - 50, sy = MAP_H + 13;
-  text('GRAPHIC SCALE', MAP_W / 2, sy - 2.2, 1.7, { weight: 700, align: 'center' });
-  ctx.strokeStyle = ink; ctx.lineWidth = 0.2;
+  // Graphic scale, bottom center.
+  const sx = MAP_W / 2 - 500, sy = MAP_H + 120;
+  text('GRAPHIC SCALE', MAP_W / 2, sy - 22, 24, { weight: 700, align: 'center' });
+  ctx.strokeStyle = MAP_INK; ctx.lineWidth = 2;
   for (let i = 0; i < 10; i++) {
-    ctx.fillStyle = i % 2 ? 'rgb(' + MAPC.paper.join(',') + ')' : ink;
-    ctx.fillRect(sx + i * 10, sy, 10, 1.1); ctx.strokeRect(sx + i * 10, sy, 10, 1.1);
+    ctx.fillStyle = i % 2 ? 'rgb(' + MAPC.paper.join(',') + ')' : MAP_INK;
+    ctx.fillRect(sx + i * 100, sy, 100, 14); ctx.strokeRect(sx + i * 100, sy, 100, 14);
   }
-  for (let m = 0; m <= 100; m += 20) text(String(m), sx + m, sy + 3.6, 1.6, { align: 'center' });
-  text('METERS', sx + 104, sy + 1.2, 1.6, { weight: 700 });
-  text('CONTOUR INTERVAL 1 METER', MAP_W / 2, sy + 8, 1.8, { weight: 700, align: 'center' });
-  text('ELEVATIONS IN METERS ABOVE MEAN SEA LEVEL', MAP_W / 2, sy + 11, 1.5, { weight: 500, align: 'center' });
-  text('GRID: 100 METER SQUARES', MAP_W / 2, sy + 14, 1.5, { weight: 500, align: 'center' });
-  text('TO GIVE A GRID REFERENCE: READ RIGHT, THEN UP', MAP_W / 2, sy + 17, 1.5, { weight: 500, align: 'center' });
-
-  // Declination diagram, bottom right
-  const dx = MAP_W - 22, dy = MAP_H + 34;
-  const gm = map.gmAngle;
+  for (let m = 0; m <= 1000; m += 200) text(String(m), sx + m, sy + 44, 22, { align: 'center' });
+  text('METERS', sx + 1030, sy + 14, 22, { weight: 700 });
+  // The declination diagram and notes sit at the bottom right.
+  const nx = MAP_W - 520;
+  text('CONTOUR INTERVAL 5 METERS', nx, MAP_H + 200, 24, { weight: 700 });
+  text('ELEVATIONS IN METERS ABOVE MEAN SEA LEVEL', nx, MAP_H + 234, 19, { weight: 500 });
+  text('GRID: 1000 METER SQUARES', nx, MAP_H + 262, 19, { weight: 500 });
+  text('TO GIVE A GRID REFERENCE: READ RIGHT, THEN UP', nx, MAP_H + 290, 19, { weight: 500 });
+  const dx = MAP_W - 70, dy = MAP_H + 440, gm = map.gmAngle;
   const ray = (deg, len) => ({ x: dx + Math.sin(deg * Math.PI / 180) * len, y: dy - Math.cos(deg * Math.PI / 180) * len });
-  ctx.strokeStyle = ink; ctx.lineWidth = 0.25;
-  const tn = ray(0, 20), gn = ray(-1.2, 20), mn = ray(gm, 18);
+  ctx.strokeStyle = MAP_INK; ctx.lineWidth = 3;
+  const tn = ray(0, 120), gn = ray(-1.2, 120), mn = ray(gm, 108);
   for (const p of [tn, gn, mn]) { ctx.beginPath(); ctx.moveTo(dx, dy); ctx.lineTo(p.x, p.y); ctx.stroke(); }
-  ctx.fillStyle = ink;
-  // True north: star. Grid north: GN. Magnetic north: half arrowhead.
+  ctx.fillStyle = MAP_INK;
   ctx.beginPath();
-  for (let i = 0; i < 10; i++) { const a = -Math.PI / 2 + i * Math.PI / 5, rr = i % 2 ? 0.5 : 1.2; ctx.lineTo(tn.x + Math.cos(a) * rr, tn.y - 0.6 + Math.sin(a) * rr); }
+  for (let i = 0; i < 10; i++) { const a = -Math.PI / 2 + i * Math.PI / 5, rr = i % 2 ? 4 : 10; ctx.lineTo(tn.x + Math.cos(a) * rr, tn.y - 6 + Math.sin(a) * rr); }
   ctx.fill();
-  text('GN', gn.x - 1.2, gn.y - 0.6, 1.6, { weight: 700, align: 'right' });
-  ctx.beginPath(); ctx.moveTo(mn.x, mn.y); ctx.lineTo(mn.x + 1.2, mn.y + 2.6); ctx.lineTo(mn.x, mn.y + 2.2); ctx.fill();
-  text('MN', mn.x + 1.4, mn.y + 0.5, 1.6, { weight: 700 });
-  text(gm.toFixed(1) + '° G-M ANGLE', dx + 9, dy - 4, 1.4, { weight: 500 });
-  text('GRID BEARINGS USED', dx + 9, dy - 2, 1.4, { weight: 500 });
+  text('GN', gn.x - 10, gn.y - 4, 20, { weight: 700, align: 'right' });
+  ctx.beginPath(); ctx.moveTo(mn.x, mn.y); ctx.lineTo(mn.x + 9, mn.y + 20); ctx.lineTo(mn.x, mn.y + 17); ctx.fill();
+  text('MN', mn.x + 12, mn.y + 6, 20, { weight: 700 });
+  text(Math.abs(gm).toFixed(1) + '° G-M ANGLE ' + (gm >= 0 ? 'EAST' : 'WEST'), nx, MAP_H + 330, 19, { weight: 500 });
+  text('GRID BEARINGS USED IN REPORTS', nx, MAP_H + 358, 19, { weight: 500 });
   ctx.restore();
-
-  // Paper grain
-  const n = document.createElement('canvas');
-  n.width = n.height = 256;
-  const nctx = n.getContext('2d'), nimg = nctx.createImageData(256, 256);
-  for (let i = 0; i < 256 * 256; i++) {
-    const v = 120 + Math.random() * 135;
-    nimg.data[i * 4] = v; nimg.data[i * 4 + 1] = v * 0.97; nimg.data[i * 4 + 2] = v * 0.9; nimg.data[i * 4 + 3] = 255;
-  }
-  nctx.putImageData(nimg, 0, 0);
-  ctx.save();
-  ctx.globalCompositeOperation = 'multiply';
-  ctx.globalAlpha = 0.07;
-  ctx.fillStyle = ctx.createPattern(n, 'repeat');
-  ctx.fillRect(0, 0, W, H);
-  ctx.restore();
-
-  // Fold creases: the sheet was folded in half both ways.
-  const crease = (x0, y0, x1, y1, vertical) => {
-    const g = vertical ? ctx.createLinearGradient(x0 - 14, 0, x0 + 14, 0) : ctx.createLinearGradient(0, y0 - 14, 0, y0 + 14);
-    g.addColorStop(0, 'rgba(60,50,30,0)'); g.addColorStop(0.48, 'rgba(60,50,30,0.07)');
-    g.addColorStop(0.5, 'rgba(255,255,250,0.25)'); g.addColorStop(0.53, 'rgba(60,50,30,0.04)'); g.addColorStop(1, 'rgba(60,50,30,0)');
-    ctx.fillStyle = g;
-    if (vertical) ctx.fillRect(x0 - 14, 0, 28, H); else ctx.fillRect(0, y0 - 14, W, 28);
-    ctx.strokeStyle = 'rgba(70,60,40,0.18)'; ctx.lineWidth = 1;
-    ctx.beginPath(); ctx.moveTo(x0, y0); ctx.lineTo(x1, y1); ctx.stroke();
-  };
-  crease(W / 2, 0, W / 2, H, true);
-  crease(0, H / 2, W, H / 2, false);
-  // Edge wear: slightly darker toward the sheet's edges.
-  const v = ctx.createRadialGradient(W / 2, H / 2, Math.min(W, H) * 0.45, W / 2, H / 2, Math.max(W, H) * 0.75);
-  v.addColorStop(0, 'rgba(120,96,50,0)'); v.addColorStop(1, 'rgba(120,96,50,0.12)');
-  ctx.fillStyle = v; ctx.fillRect(0, 0, W, H);
-
   R.sheet = c;
 }
 
+// ---------------------------------------------------------------- tiles
+function levelFor(zoom) { return zoom < 0.95 ? 0 : zoom < 2.8 ? 1 : 2; }
+
+function tileFor(level, i, j) {
+  const key = level + ':' + i + ':' + j;
+  let t = R.tiles.get(key);
+  if (t) { t.used = performance.now(); return t.canvas ? t : null; }
+  R.tiles.set(key, { level, i, j, canvas: null, used: performance.now() });
+  R.queue.push(key);
+  return null;
+}
+
+// Draw at most a few missing tiles per frame so panning never stalls.
+function drawQueuedTiles(budgetMs) {
+  const start = performance.now();
+  while (R.queue.length && performance.now() - start < budgetMs) {
+    // Nearest to the view center first.
+    R.queue.sort((a, b) => tileDist(b) - tileDist(a));
+    const key = R.queue.pop(), t = R.tiles.get(key);
+    if (!t || t.canvas) continue;
+    const L = LEVELS[t.level], x0 = t.i * L.size, y0 = t.j * L.size;
+    const w = Math.min(L.size, MAP_W - x0), h = Math.min(L.size, MAP_H - y0);
+    const c = document.createElement('canvas');
+    c.width = Math.ceil(w * L.ppm); c.height = Math.ceil(h * L.ppm);
+    drawMapRegion(c.getContext('2d'), G.map, x0, y0, w, h, L.ppm, t.level);
+    t.canvas = c; t.w = w; t.h = h;
+  }
+  // Forget the least recently used tiles.
+  if (R.tiles.size > TILE_CACHE) {
+    const done = [...R.tiles.entries()].filter(([, t]) => t.canvas).sort((a, b) => a[1].used - b[1].used);
+    for (let k = 0; k < done.length && R.tiles.size > TILE_CACHE; k++) R.tiles.delete(done[k][0]);
+  }
+}
+function tileDist(key) {
+  const [l, i, j] = key.split(':').map(Number), L = LEVELS[l];
+  return Math.hypot((i + 0.5) * L.size - R.cam.x, (j + 0.5) * L.size - R.cam.y);
+}
+
 // ---------------------------------------------------------------- frame
+const TEAM_TAG = ['', '1', '2', '3', '4'];
 // Overlay colors follow US doctrine for graphics on a map overlay:
 // blue for friendly, red for enemy, black for fire support targets.
-const TEAM_TAG = ['', '1', '2', '3', '4'];
 const OVL = { blue: '#1f4fbf', red: '#c62828', black: '#161616' };
 
 function tableTexture() {
@@ -2435,6 +2767,15 @@ function tableTexture() {
     ctx.fillRect(Math.random() * 160, Math.random() * 160, 1 + Math.random() * 2, 1);
   }
   R.table = R.ctx.createPattern(c, 'repeat');
+  const n = document.createElement('canvas');
+  n.width = n.height = 256;
+  const nctx = n.getContext('2d'), nimg = nctx.createImageData(256, 256);
+  for (let i = 0; i < 256 * 256; i++) {
+    const v = 120 + Math.random() * 135;
+    nimg.data[i * 4] = v; nimg.data[i * 4 + 1] = v * 0.97; nimg.data[i * 4 + 2] = v * 0.9; nimg.data[i * 4 + 3] = 255;
+  }
+  nctx.putImageData(nimg, 0, 0);
+  R.grain = R.ctx.createPattern(n, 'repeat');
   return R.table;
 }
 
@@ -2450,10 +2791,11 @@ function render() {
     ctx.imageSmoothingEnabled = true;
     ctx.drawImage(R.sheet, o.x, o.y, SHEET_W * z, SHEET_H * z);
     ctx.restore();
+    drawTiles(ctx);
+    drawPaper(ctx);
   }
   drawEdgeLabels(ctx);
   drawOrdersOverlay(ctx);
-  drawContacts(ctx);
   drawProjectiles(ctx);
   drawEffects(ctx);
   drawUnits(ctx);
@@ -2461,15 +2803,59 @@ function render() {
   drawScale(ctx);
 }
 
+function drawTiles(ctx) {
+  const lvl = levelFor(R.cam.zoom);
+  if (!lvl || !G.map) return;
+  const L = LEVELS[lvl], a = toWorld(0, 0), b = toWorld(R.w, R.h);
+  const i0 = Math.max(0, Math.floor(a.x / L.size)), i1 = Math.min(Math.ceil(MAP_W / L.size) - 1, Math.floor(b.x / L.size));
+  const j0 = Math.max(0, Math.floor(a.y / L.size)), j1 = Math.min(Math.ceil(MAP_H / L.size) - 1, Math.floor(b.y / L.size));
+  for (let j = j0; j <= j1; j++) for (let i = i0; i <= i1; i++) {
+    const t = tileFor(lvl, i, j);
+    // While a close tile is being drawn, show the coarser one if it is ready.
+    if (!t && lvl === 2) {
+      const k = R.tiles.get('1:' + Math.floor(i * 200 / 600) + ':' + Math.floor(j * 200 / 600));
+      if (k && k.canvas) { const p = toScreen(k.i * 600, k.j * 600); ctx.drawImage(k.canvas, p.x, p.y, k.w * R.cam.zoom, k.h * R.cam.zoom); }
+      continue;
+    }
+    if (!t) continue;
+    const p = toScreen(i * L.size, j * L.size);
+    ctx.drawImage(t.canvas, p.x, p.y, t.w * R.cam.zoom + 0.5, t.h * R.cam.zoom + 0.5);
+  }
+  drawQueuedTiles(R.queue.length > 4 ? 30 : 14);
+}
+
+// Paper grain and fold creases, fixed to the sheet.
+function drawPaper(ctx) {
+  const z = R.cam.zoom, o = toScreen(-SHEET.ml, -SHEET.mt), w = SHEET_W * z, h = SHEET_H * z;
+  ctx.save();
+  ctx.globalCompositeOperation = 'multiply';
+  ctx.globalAlpha = 0.07;
+  if (R.grain.setTransform) R.grain.setTransform(new DOMMatrix([1, 0, 0, 1, o.x, o.y]));
+  ctx.fillStyle = R.grain;
+  ctx.fillRect(Math.max(0, o.x), Math.max(0, o.y), Math.min(R.w, o.x + w) - Math.max(0, o.x), Math.min(R.h, o.y + h) - Math.max(0, o.y));
+  ctx.restore();
+  const crease = (pos, vertical) => {
+    const g = vertical ? ctx.createLinearGradient(pos - 12, 0, pos + 12, 0) : ctx.createLinearGradient(0, pos - 12, 0, pos + 12);
+    g.addColorStop(0, 'rgba(60,50,30,0)'); g.addColorStop(0.47, 'rgba(60,50,30,0.08)');
+    g.addColorStop(0.5, 'rgba(255,255,250,0.3)'); g.addColorStop(0.54, 'rgba(60,50,30,0.04)'); g.addColorStop(1, 'rgba(60,50,30,0)');
+    ctx.fillStyle = g;
+    if (vertical) ctx.fillRect(pos - 12, Math.max(0, o.y), 24, Math.min(R.h, o.y + h) - Math.max(0, o.y));
+    else ctx.fillRect(Math.max(0, o.x), pos - 12, Math.min(R.w, o.x + w) - Math.max(0, o.x), 24);
+  };
+  crease(o.x + w / 2, true);
+  crease(o.y + h / 3, false);
+  crease(o.y + h * 2 / 3, false);
+}
+
 // When the margin is scrolled off screen, repeat the grid values along the screen edge.
 function drawEdgeLabels(ctx) {
   ctx.font = '600 12px "IBM Plex Mono", ui-monospace, monospace';
-  ctx.lineWidth = 3; ctx.strokeStyle = 'rgba(248,245,234,0.95)'; ctx.fillStyle = OVL.black;
+  ctx.lineWidth = 3; ctx.strokeStyle = 'rgba(247,245,236,0.95)'; ctx.fillStyle = OVL.black;
   const top = 56;
   if (toScreen(0, 0).y < top) {
     ctx.textAlign = 'left'; ctx.textBaseline = 'top';
-    for (let x = 100; x < MAP_W; x += 100) {
-      const p = toScreen(x, 0), t = String(G.grid.e * 10 + x / 100).padStart(3, '0');
+    for (let x = 1000; x < MAP_W; x += 1000) {
+      const p = toScreen(x, 0), t = String(G.grid.e + x / 1000).padStart(2, '0');
       if (p.x < 4 || p.x > R.w - 30) continue;
       ctx.strokeText(t, p.x + 3, top); ctx.fillText(t, p.x + 3, top);
     }
@@ -2477,8 +2863,8 @@ function drawEdgeLabels(ctx) {
   const left = R.w > 760 ? 306 : 4;
   if (toScreen(0, 0).x < left) {
     ctx.textAlign = 'left'; ctx.textBaseline = 'bottom';
-    for (let n = 100; n < MAP_H; n += 100) {
-      const p = toScreen(0, MAP_H - n), t = String(G.grid.n * 10 + n / 100).padStart(3, '0');
+    for (let n = 1000; n < MAP_H; n += 1000) {
+      const p = toScreen(0, MAP_H - n), t = String(G.grid.n + n / 1000).padStart(2, '0');
       if (p.y < top + 16 || p.y > R.h - 10) continue;
       ctx.strokeText(t, left, p.y - 2); ctx.fillText(t, left, p.y - 2);
     }
@@ -2487,10 +2873,12 @@ function drawEdgeLabels(ctx) {
 
 // Coordinate card: graphic scale at the current zoom and the grid reference under the cursor.
 function drawScale(ctx) {
-  const z = R.cam.zoom, len = 50 * z;
+  const z = R.cam.zoom;
+  const steps = [10, 25, 50, 100, 250, 500, 1000];
+  const m = steps.find(s => s * z >= 70) || 1000, len = m * z;
   const hv = G.ui.hover && G.ui.hoverIsPointer ? G.ui.hover : null;
-  const onMap = hv && hv.x >= 0 && hv.y >= 0 && hv.x <= MAP_W && hv.y <= MAP_H;
-  const w = Math.max(len + 70, 210), h = onMap ? 46 : 30;
+  const onMap = hv && G.map && hv.x >= 0 && hv.y >= 0 && hv.x <= MAP_W && hv.y <= MAP_H;
+  const w = Math.max(len + 70, 230), h = onMap ? 46 : 30;
   const x = Math.max(14, R.w - w - 10), y = R.h - (G.ui.panelH || 0) - h - 10;
   ctx.save();
   ctx.shadowColor = 'rgba(0,0,0,0.4)'; ctx.shadowBlur = 6; ctx.shadowOffsetX = 2; ctx.shadowOffsetY = 3;
@@ -2505,13 +2893,23 @@ function drawScale(ctx) {
   ctx.font = '600 11px "IBM Plex Mono", ui-monospace, monospace';
   ctx.textAlign = 'left'; ctx.textBaseline = 'bottom';
   ctx.fillText('0', x + 7, y + 14);
-  ctx.fillText('50 M', x + 10 + len - 14, y + 14);
+  ctx.textAlign = 'right';
+  ctx.fillText(m + ' M', x + 10 + len + 4, y + 14);
+  ctx.textAlign = 'left';
   if (onMap) {
     ctx.textBaseline = 'top';
     ctx.fillText('GR ' + gridRef(hv.x, hv.y) + '  ELEV ' + Math.round(G.map.elevBase + G.map.elevAt(hv.x, hv.y)) + ' M', x + 10, y + 26);
   }
 }
 
+// 8-digit grid reference (10 m precision) for a map point.
+function gridRef(x, y) {
+  const e = Math.floor((G.grid.e * 1000 + x) / 10) % 10000;
+  const n = Math.floor((G.grid.n * 1000 + (MAP_H - y)) / 10) % 10000;
+  return String(e).padStart(4, '0') + ' ' + String(n).padStart(4, '0');
+}
+
+// ---------------------------------------------------------------- pieces
 function unitRadius() { return clamp(R.cam.zoom * 1.6, 10, 17); }
 
 function enemyVisible(e) {
@@ -2519,23 +2917,144 @@ function enemyVisible(e) {
   return G.revealAll || (k && k.visible);
 }
 
+// What sits on the map at this zoom: each man as a round counter close in; farther out,
+// a square counter for each fire team; farther still, one for each squad.
+function pieceLevel() { return R.cam.zoom >= 2 ? 'man' : R.cam.zoom >= 0.7 ? 'team' : 'squad'; }
+
+function displayPieces() {
+  const level = pieceLevel(), out = [];
+  if (!G.squads.blue) return out;
+  const visible = (s) => s.side === 'blue' || enemyVisible(s);
+  if (level === 'man') {
+    for (const s of G.soldiers) if (!s.routed && visible(s)) out.push({ kind: 'man', x: s.x, y: s.y, side: s.side, soldier: s });
+  } else {
+    for (const sq of [G.squads.blue, G.squads.red]) {
+      const groups = level === 'team' ? [sq.hq, ...sq.teams].map(t => ({ team: t, men: t.members })) : [{ squad: sq, men: sq.all }];
+      for (const gr of groups) {
+        const seen = gr.men.filter(s => !s.routed && visible(s));
+        if (!seen.length) continue;
+        const live = seen.filter(s => s.active);
+        const c = centroid(live.length ? live : seen);
+        out.push({ kind: level, x: c.x, y: c.y, side: sq.side, team: gr.team, squad: gr.squad || sq, men: seen, live });
+      }
+    }
+  }
+  // Last known enemy positions, grouped the same way.
+  if (!G.revealAll) {
+    const lost = [];
+    for (const k of G.known.blue.values()) {
+      const e = G.byId.get(k.id);
+      if (!k.visible && e && e.active) lost.push({ k, e });
+    }
+    if (level === 'man') for (const { k } of lost) out.push({ kind: 'lost', x: k.x, y: k.y, side: 'red', billet: k.billet, age: G.time - k.t });
+    else {
+      const by = new Map();
+      for (const l of lost) {
+        const key = level === 'team' ? l.e.team : l.e.squad;
+        if (!by.has(key)) by.set(key, []);
+        by.get(key).push(l);
+      }
+      for (const [, list] of by) {
+        const c = centroid(list.map(l => l.k));
+        out.push({ kind: 'lost', x: c.x, y: c.y, side: 'red', unit: level, age: G.time - Math.max(...list.map(l => l.k.t)) });
+      }
+    }
+  }
+  return out;
+}
+
+function pieceAt(sx, sy) {
+  const r = (pieceLevel() === 'man' ? unitRadius() : 18) + 5;
+  let best = null, bd = Infinity;
+  for (const p of displayPieces()) {
+    if (p.kind === 'lost') continue;
+    const q = toScreen(p.x, p.y), d = Math.hypot(q.x - sx, q.y - sy);
+    const pen = d + (p.kind === 'man' && !p.soldier.alive ? 6 : 0) + (p.side === 'blue' ? 0 : 2);
+    if (d < r && pen < bd) { bd = pen; best = p; }
+  }
+  return best;
+}
+
 const PIECE_EDGE = { blue: '#3a7d96', red: '#a14646' };
 
-// A game piece: a thick disc with the billet symbol printed on its face.
+// A round counter for one man: a thick disc with the billet symbol on its face.
 // Picked-up (selected) pieces are lifted off the map and throw a longer shadow.
-function drawPiece(ctx, s, p, r, lifted) {
-  const th = Math.max(2, r * 0.22), lift = lifted ? 4 : 0, y = p.y - lift;
+function drawDisc(ctx, side, billet, x, py, r, lifted) {
+  const th = Math.max(2, r * 0.22), lift = lifted ? 4 : 0, y = py - lift;
   ctx.save();
   ctx.shadowColor = 'rgba(0,0,0,0.5)'; ctx.shadowBlur = 3 + lift * 2;
   ctx.shadowOffsetX = 1.5 + lift * 0.8; ctx.shadowOffsetY = 2 + lift * 1.2;
-  ctx.fillStyle = PIECE_EDGE[s.side];
-  ctx.beginPath(); ctx.arc(p.x, y + th, r, 0, Math.PI * 2); ctx.fill();
+  ctx.fillStyle = PIECE_EDGE[side];
+  ctx.beginPath(); ctx.arc(x, y + th, r, 0, Math.PI * 2); ctx.fill();
   ctx.restore();
-  ctx.fillStyle = PIECE_EDGE[s.side];
-  ctx.fillRect(p.x - r, y, r * 2, th);
-  drawSymbol(ctx, p.x, y, r, s.billet, { side: s.side });
+  ctx.fillStyle = PIECE_EDGE[side];
+  ctx.fillRect(x - r, y, r * 2, th);
+  drawSymbol(ctx, x, y, r, billet, { side });
   ctx.strokeStyle = 'rgba(255,255,255,0.45)'; ctx.lineWidth = 1.2;
-  ctx.beginPath(); ctx.arc(p.x, y, r - 2.2, Math.PI * 1.08, Math.PI * 1.55); ctx.stroke();
+  ctx.beginPath(); ctx.arc(x, y, r - 2.2, Math.PI * 1.08, Math.PI * 1.55); ctx.stroke();
+  return y;
+}
+
+// Unit symbol (MIL-STD-2525): friendly a rectangle, hostile a diamond, infantry an X,
+// with the echelon above: a circle with a slash for a team, a dot for a squad.
+function drawUnitSymbol(ctx, x, y, s, side, echelon, opts) {
+  opts = opts || {};
+  const fill = opts.fill != null ? opts.fill : SIDE_FILL[side], ink = opts.ink || MAP_INK;
+  ctx.save();
+  ctx.lineWidth = Math.max(1.4, s * 0.09);
+  ctx.strokeStyle = ink; ctx.fillStyle = fill;
+  if (opts.dashed) ctx.setLineDash([s * 0.22, s * 0.16]);
+  let top;
+  if (side === 'blue') {
+    const w = s * 1.5, h = s;
+    ctx.beginPath(); ctx.rect(x - w / 2, y - h / 2, w, h); ctx.fill(); ctx.stroke();
+    ctx.setLineDash([]);
+    ctx.beginPath(); ctx.moveTo(x - w / 2, y - h / 2); ctx.lineTo(x + w / 2, y + h / 2); ctx.moveTo(x + w / 2, y - h / 2); ctx.lineTo(x - w / 2, y + h / 2); ctx.stroke();
+    top = y - h / 2;
+  } else {
+    const d = s * 0.8;
+    ctx.beginPath(); ctx.moveTo(x, y - d); ctx.lineTo(x + d, y); ctx.lineTo(x, y + d); ctx.lineTo(x - d, y); ctx.closePath(); ctx.fill(); ctx.stroke();
+    ctx.setLineDash([]);
+    ctx.beginPath(); ctx.moveTo(x - d / 2, y - d / 2); ctx.lineTo(x + d / 2, y + d / 2); ctx.moveTo(x + d / 2, y - d / 2); ctx.lineTo(x - d / 2, y + d / 2); ctx.stroke();
+    top = y - d;
+  }
+  ctx.fillStyle = ink; ctx.strokeStyle = ink;
+  const ey = top - s * 0.28;
+  if (echelon === 'team') {
+    const rr = s * 0.16;
+    ctx.lineWidth = Math.max(1.2, s * 0.07);
+    ctx.beginPath(); ctx.arc(x, ey, rr, 0, Math.PI * 2); ctx.stroke();
+    ctx.beginPath(); ctx.moveTo(x - rr * 1.5, ey + rr * 1.5); ctx.lineTo(x + rr * 1.5, ey - rr * 1.5); ctx.stroke();
+  } else if (echelon === 'squad') {
+    ctx.beginPath(); ctx.arc(x, ey, s * 0.09, 0, Math.PI * 2); ctx.fill();
+  }
+  ctx.restore();
+}
+
+// A square cardboard counter for a fire team or squad, with its symbol and strength.
+function drawCounter(ctx, p, sx, sy, s, lifted) {
+  const lift = lifted ? 4 : 0, y = sy - lift, half = s * 1.25, th = Math.max(2, s * 0.14);
+  ctx.save();
+  ctx.shadowColor = 'rgba(0,0,0,0.5)'; ctx.shadowBlur = 3 + lift * 2;
+  ctx.shadowOffsetX = 1.5 + lift * 0.8; ctx.shadowOffsetY = 2 + lift * 1.2;
+  ctx.fillStyle = PIECE_EDGE[p.side];
+  ctx.fillRect(sx - half, y - half + th, half * 2, half * 2);
+  ctx.restore();
+  ctx.fillStyle = p.side === 'blue' ? '#e9f6fb' : '#fbeaea';
+  ctx.fillRect(sx - half, y - half, half * 2, half * 2);
+  ctx.strokeStyle = PIECE_EDGE[p.side]; ctx.lineWidth = 1.5;
+  ctx.strokeRect(sx - half + 0.75, y - half + 0.75, half * 2 - 1.5, half * 2 - 1.5);
+  drawUnitSymbol(ctx, sx, y - s * 0.05, s * 0.85, p.side, p.kind);
+  // Designation at the top left, effective strength at the bottom.
+  ctx.fillStyle = MAP_INK;
+  ctx.font = '700 ' + Math.round(s * 0.42) + 'px "IBM Plex Mono", ui-monospace, monospace';
+  ctx.textBaseline = 'alphabetic';
+  ctx.textAlign = 'center';
+  ctx.fillText(p.live.length + '/' + p.men.length, sx, y + half - s * 0.14);
+  if (p.kind === 'team') {
+    ctx.textAlign = 'left';
+    ctx.fillText(p.team.num ? String(p.team.num) : 'SL', sx - half + 3, y - half + s * 0.48);
+  }
   return y;
 }
 
@@ -2557,74 +3076,76 @@ function drawChit(ctx, x, y, size, label, bg, fg) {
 function drawUnits(ctx) {
   const r = unitRadius();
   const sel = new Set(selMembers(G.ui.sel));
-  const list = G.soldiers.filter(s => !s.routed && (s.side === 'blue' || enemyVisible(s)));
-  list.sort((a, b) => (a.alive ? 1 : 0) - (b.alive ? 1 : 0) || (sel.has(a) ? 1 : 0) - (sel.has(b) ? 1 : 0) || a.y - b.y);
+  const pieces = displayPieces();
+  const isSel = (p) => p.kind === 'man' ? sel.has(p.soldier) : p.men ? p.men.some(s => sel.has(s)) : false;
+  pieces.sort((a, b) => (a.kind === 'lost' ? -1 : 0) - (b.kind === 'lost' ? -1 : 0)
+    || (a.kind === 'man' && !a.soldier.alive ? -1 : 0) - (b.kind === 'man' && !b.soldier.alive ? -1 : 0)
+    || (isSel(a) ? 1 : 0) - (isSel(b) ? 1 : 0) || a.y - b.y);
   const chit = Math.max(9, r * 0.7);
-  for (const s of list) {
-    const p = toScreen(s.x, s.y);
-    if (p.x < -40 || p.y < -40 || p.x > R.w + 40 || p.y > R.h + 40) continue;
-    const down = !s.active, lifted = sel.has(s) && !down;
-    // Grease-pencil ring on the map around picked-up pieces.
-    if (sel.has(s)) {
-      ctx.strokeStyle = OVL.blue; ctx.lineWidth = 2.2;
-      ctx.beginPath(); ctx.arc(p.x + 0.5, p.y + 1, r + 6, 0, Math.PI * 2); ctx.stroke();
+  for (const p of pieces) {
+    const q = toScreen(p.x, p.y);
+    if (q.x < -50 || q.y < -50 || q.x > R.w + 50 || q.y > R.h + 50) continue;
+    if (p.kind === 'lost') {
+      ctx.save();
+      ctx.globalAlpha = clamp(1 - p.age / 50, 0.3, 0.9);
+      if (p.billet) drawSymbol(ctx, q.x, q.y, r, p.billet, { fill: 'rgba(255,255,255,0)', ink: OVL.red, dashed: true });
+      else drawUnitSymbol(ctx, q.x, q.y, r * 1.1, 'red', p.unit, { fill: 'rgba(255,255,255,0)', ink: OVL.red, dashed: true });
+      ctx.restore();
+      continue;
     }
-    // Facing: a notch on the map at the piece's front.
+    const lifted = isSel(p) && (p.kind !== 'man' || p.soldier.active);
+    if (isSel(p)) {
+      ctx.strokeStyle = OVL.blue; ctx.lineWidth = 2.2;
+      ctx.beginPath(); ctx.arc(q.x + 0.5, q.y + 1, (p.kind === 'man' ? r : 24) + 6, 0, Math.PI * 2); ctx.stroke();
+    }
+    if (p.kind !== 'man') {
+      const y = drawCounter(ctx, p, q.x, q.y, 14, lifted);
+      const pinned = p.live.filter(s => s.pinned).length, supp = p.live.filter(s => s.suppressed).length;
+      const chits = [];
+      if (p.live.length && pinned * 2 >= p.live.length) chits.push(['PIN', '#b3261e', '#fff']);
+      else if (p.live.length && supp * 2 >= p.live.length) chits.push(['SUP', '#e8871e', '#1b1405']);
+      if (p.live.some(s => s.moving)) chits.push(['MOV', '#f3eedc', MAP_INK]);
+      chits.forEach(([label, bg, fg], i) => drawChit(ctx, q.x + r * 0.7 + i * 3, y + r * 0.8 + i * (chit * 0.62), chit, label, bg, fg));
+      continue;
+    }
+    const s = p.soldier, down = !s.active;
     if (!down) {
       const a = s.facing, tip = r + 8;
       ctx.fillStyle = s.side === 'blue' ? OVL.blue : OVL.red;
       ctx.beginPath();
-      ctx.moveTo(p.x + Math.cos(a) * tip, p.y + Math.sin(a) * tip);
-      ctx.lineTo(p.x + Math.cos(a + 0.32) * (r + 2), p.y + Math.sin(a + 0.32) * (r + 2));
-      ctx.lineTo(p.x + Math.cos(a - 0.32) * (r + 2), p.y + Math.sin(a - 0.32) * (r + 2));
+      ctx.moveTo(q.x + Math.cos(a) * tip, q.y + Math.sin(a) * tip);
+      ctx.lineTo(q.x + Math.cos(a + 0.32) * (r + 2), q.y + Math.sin(a + 0.32) * (r + 2));
+      ctx.lineTo(q.x + Math.cos(a - 0.32) * (r + 2), q.y + Math.sin(a - 0.32) * (r + 2));
       ctx.closePath(); ctx.fill();
     }
-    const y = drawPiece(ctx, s, p, r, lifted);
+    const y = drawDisc(ctx, s.side, s.billet, q.x, q.y, r, lifted);
     // Operational condition (MIL-STD-2525): slash for a casualty, X for killed.
     if (down) {
       ctx.strokeStyle = OVL.black; ctx.lineWidth = 2.6; ctx.lineCap = 'round';
       const k = r + 4;
-      ctx.beginPath(); ctx.moveTo(p.x - k, y + k); ctx.lineTo(p.x + k, y - k);
-      if (s.health === 'kia') { ctx.moveTo(p.x - k, y - k); ctx.lineTo(p.x + k, y + k); }
+      ctx.beginPath(); ctx.moveTo(q.x - k, y + k); ctx.lineTo(q.x + k, y - k);
+      if (s.health === 'kia') { ctx.moveTo(q.x - k, y - k); ctx.lineTo(q.x + k, y + k); }
       ctx.stroke();
       continue;
     }
-    // Unique designation (fire team) to the right of the frame.
     if (s.team.num) {
       ctx.font = '700 ' + Math.round(r * 0.9) + 'px "Saira Condensed", "Arial Narrow", sans-serif';
       ctx.textAlign = 'left'; ctx.textBaseline = 'middle';
-      ctx.lineWidth = 3; ctx.strokeStyle = 'rgba(248,245,234,0.95)';
-      ctx.strokeText(TEAM_TAG[s.team.num], p.x + r + 3, y - r * 0.55);
+      ctx.lineWidth = 3; ctx.strokeStyle = 'rgba(247,245,236,0.95)';
+      ctx.strokeText(TEAM_TAG[s.team.num], q.x + r + 3, y - r * 0.55);
       ctx.fillStyle = s.side === 'blue' ? OVL.blue : OVL.red;
-      ctx.fillText(TEAM_TAG[s.team.num], p.x + r + 3, y - r * 0.55);
+      ctx.fillText(TEAM_TAG[s.team.num], q.x + r + 3, y - r * 0.55);
     }
-    // Status chits stacked at the lower right: posture, then suppression, wounds, ammunition.
     const chits = [[POSTURE[s.posture].short, '#f3eedc', OVL.black]];
     if (s.pinned) chits.push(['PIN', '#b3261e', '#fff']);
     else if (s.suppressed) chits.push(['SUP', '#e8871e', '#1b1405']);
     if (s.health === 'light') chits.push(['WIA', '#fff', '#b3261e']);
     if (s.side === 'blue' && s.inMag + s.mags === 0) chits.push(['AMO', '#ffd60a', OVL.black]);
-    chits.forEach(([label, bg, fg], i) => drawChit(ctx, p.x + r * 0.35 + i * 3, y + r * 0.45 + i * (chit * 0.62), chit, label, bg, fg));
+    chits.forEach(([label, bg, fg], i) => drawChit(ctx, q.x + r * 0.35 + i * 3, y + r * 0.45 + i * (chit * 0.62), chit, label, bg, fg));
   }
 }
 
-// Last known enemy positions: the symbol in a dashed frame (suspected), in red ink.
-function drawContacts(ctx) {
-  if (G.revealAll) return;
-  const r = unitRadius();
-  for (const k of G.known.blue.values()) {
-    if (k.visible) continue;
-    const e = G.byId.get(k.id);
-    if (!e || !e.active) continue;
-    const age = G.time - k.t;
-    const p = toScreen(k.x, k.y);
-    ctx.save();
-    ctx.globalAlpha = clamp(1 - age / 50, 0.3, 0.9);
-    drawSymbol(ctx, p.x, p.y, r, k.billet, { fill: 'rgba(255,255,255,0)', ink: OVL.red, dashed: true });
-    ctx.restore();
-  }
-}
-
+// ---------------------------------------------------------------- overlay graphics
 function arrowHead(ctx, from, to, size, filled) {
   const a = Math.atan2(to.y - from.y, to.x - from.x);
   ctx.beginPath();
@@ -2642,7 +3163,7 @@ function drawTarget(ctx, x, y, radius, label) {
   ctx.beginPath(); ctx.moveTo(p.x - rr - 4, p.y); ctx.lineTo(p.x + rr + 4, p.y); ctx.moveTo(p.x, p.y - rr - 4); ctx.lineTo(p.x, p.y + rr + 4); ctx.stroke();
   ctx.font = '700 11px "IBM Plex Mono", ui-monospace, monospace';
   ctx.textAlign = 'left'; ctx.textBaseline = 'bottom';
-  ctx.lineWidth = 3; ctx.strokeStyle = 'rgba(248,245,234,0.95)';
+  ctx.lineWidth = 3; ctx.strokeStyle = 'rgba(247,245,236,0.95)';
   ctx.strokeText(label, p.x + rr + 4, p.y - 3); ctx.fillStyle = OVL.black; ctx.fillText(label, p.x + rr + 4, p.y - 3);
 }
 
@@ -2669,7 +3190,7 @@ function drawOrdersOverlay(ctx) {
   // Objectives of bounding drills.
   for (const c of G.controllers) {
     if (c.members[0].side !== 'blue') continue;
-    const p = toScreen(c.dest.x, c.dest.y), rr = 16 * R.cam.zoom;
+    const p = toScreen(c.dest.x, c.dest.y), rr = Math.max(18, 16 * R.cam.zoom);
     ctx.strokeStyle = OVL.blue; ctx.lineWidth = 2.4;
     ctx.beginPath();
     for (let i = 0; i <= 24; i++) {
@@ -2702,7 +3223,7 @@ function drawOrdersOverlay(ctx) {
   // Sectors of fire for selected men told to watch a direction.
   for (const s of selSet) {
     if (!s.active || s.faceAngle == null) continue;
-    const p = toScreen(s.x, s.y), L = 35 * R.cam.zoom;
+    const p = toScreen(s.x, s.y), L = Math.max(60, 35 * R.cam.zoom);
     ctx.strokeStyle = OVL.blue; ctx.lineWidth = 1.4; ctx.globalAlpha = 0.8;
     ctx.beginPath();
     for (const d of [-0.6, 0.6]) { ctx.moveTo(p.x, p.y); ctx.lineTo(p.x + Math.cos(s.faceAngle + d) * L, p.y + Math.sin(s.faceAngle + d) * L); }
@@ -2775,7 +3296,7 @@ function drawEffects(ctx) {
       ctx.fillStyle = 'rgba(232,135,30,' + (1 - f) + ')';
       ctx.beginPath(); ctx.arc(p.x, p.y, 4 + 5 * f, 0, Math.PI * 2); ctx.fill();
     } else if (e.type === 'blast') {
-      const p = toScreen(e.x, e.y), rr = (2 + e.r * 0.6 * Math.sqrt(f)) * z;
+      const p = toScreen(e.x, e.y), rr = Math.max(4, (2 + e.r * 0.6 * Math.sqrt(f)) * z);
       ctx.fillStyle = 'rgba(232,135,30,' + (0.75 * (1 - f)) + ')';
       ctx.beginPath(); ctx.arc(p.x, p.y, rr * 0.55, 0, Math.PI * 2); ctx.fill();
       ctx.strokeStyle = 'rgba(22,22,22,' + (0.7 * (1 - f)) + ')'; ctx.lineWidth = 1.5;
@@ -2790,7 +3311,7 @@ function drawFloaters(ctx) {
   for (const f of G.floaters) {
     if (f.side === 'red' && !enemyVisible(G.byId.get(f.id))) continue;
     const p = toScreen(f.x, f.y), a = 1 - f.t / f.life, y = p.y - 26 - f.t * 14;
-    ctx.lineWidth = 3; ctx.strokeStyle = 'rgba(248,245,234,' + a + ')';
+    ctx.lineWidth = 3; ctx.strokeStyle = 'rgba(247,245,236,' + a + ')';
     ctx.strokeText(f.text, p.x, y);
     ctx.fillStyle = f.side === 'blue' ? 'rgba(31,79,191,' + a + ')' : 'rgba(198,40,40,' + a + ')';
     ctx.fillText(f.text, p.x, y);
@@ -2821,7 +3342,7 @@ const UI = {
   init() {
     this.buildOrders();
     $('btnPause').addEventListener('click', () => togglePause());
-    $('btnSpeed').addEventListener('click', () => { G.speed = G.speed === 1 ? 2 : G.speed === 2 ? 4 : 1; this.refreshBar(); });
+    $('btnSpeed').addEventListener('click', () => { G.speed = G.speed >= 16 ? 1 : G.speed * 2; this.refreshBar(); });
     $('btnRoster').addEventListener('click', () => document.body.classList.toggle('roster-open'));
     $('btnHelp').addEventListener('click', () => this.showModal('help'));
     $('btnMenu').addEventListener('click', () => this.showBriefing());
@@ -2938,38 +3459,32 @@ const UI = {
   handleTap(sx, sy, secondary) {
     if (!G.running || G.over) return;
     const w = toWorld(sx, sy);
-    const hit = this.unitAt(sx, sy);
+    const piece = pieceAt(sx, sy);
     const sel = G.ui.sel;
+    // An enemy piece stands for its nearest visible, effective man.
+    const enemy = piece && piece.side === 'red' ? (piece.kind === 'man' ? (piece.soldier.active ? piece.soldier : null)
+      : piece.live.filter(s => enemyVisible(s)).sort((a, b) => dist(a.x, a.y, w.x, w.y) - dist(b.x, b.y, w.x, w.y))[0] || null) : null;
     if (secondary) {
       G.ui.pending = null;
-      if (sel) issueOrder(sel, hit && hit.side === 'red' && hit.active ? 'engage' : 'move', hit && hit.side === 'red' && hit.active ? hit : w);
+      if (sel) issueOrder(sel, enemy ? 'engage' : 'move', enemy || w);
       this.refreshOrders();
       return;
     }
     if (G.ui.pending && sel) {
       const p = G.ui.pending;
       G.ui.pending = null;
-      const target = hit && hit.side === 'red' && p !== 'face' ? { x: hit.x, y: hit.y } : w;
-      issueOrder(sel, p, target);
+      issueOrder(sel, p, enemy && p !== 'face' ? { x: enemy.x, y: enemy.y } : w);
       this.refreshOrders();
       return;
     }
-    if (hit && hit.side === 'blue' && hit.alive) { this.cycleSelect(hit); return; }
-    if (hit && hit.side === 'red' && hit.active && sel) { issueOrder(sel, 'engage', hit); return; }
-    if (sel) issueOrder(sel, 'move', w);
-  },
-
-  unitAt(sx, sy) {
-    const r = unitRadius() + 5;
-    let best = null, bd = Infinity;
-    for (const s of G.soldiers) {
-      if (s.routed || (s.side === 'red' && !enemyVisible(s))) continue;
-      const p = toScreen(s.x, s.y), d = Math.hypot(p.x - sx, p.y - sy);
-      // Prefer the living and our own when symbols overlap.
-      const pen = d + (s.alive ? 0 : 6) + (s.side === 'blue' ? 0 : 2);
-      if (d < r && pen < bd) { bd = pen; best = s; }
+    if (piece && piece.side === 'blue') {
+      if (piece.kind === 'man') { if (piece.soldier.alive) this.cycleSelect(piece.soldier); }
+      else if (piece.kind === 'team' && piece.team.num) this.select({ level: 'team', team: piece.team, squad: piece.team.squad });
+      else this.select({ level: 'squad', squad: G.squads.blue });
+      return;
     }
-    return best;
+    if (enemy && sel) { issueOrder(sel, 'engage', enemy); return; }
+    if (sel) issueOrder(sel, 'move', w);
   },
 
   // ------------------------------------------------------------ roster
@@ -3000,7 +3515,7 @@ const UI = {
         row.appendChild(st); row.appendChild(ammo);
         row.addEventListener('click', () => {
           if (s.alive) this.select({ level: 'soldier', soldier: s, team: s.team, squad: s.squad });
-          R.cam.x = s.x; R.cam.y = s.y;
+          R.cam.zoom = Math.max(R.cam.zoom, 3); R.cam.x = s.x; R.cam.y = s.y; clampCam();
         });
         sec.appendChild(row);
         this.rosterRows.push({ s, row, st, ammo });
@@ -3322,27 +3837,34 @@ function newMission() {
   saveSettings();
   NEXT_ID = 1;
   G.map = new GameMap(set.seed);
-  G.grid = { e: randInt(10, 80), n: randInt(20, 90) };
+  // Grid: a small 100 km digit and two principal digits for each kilometer line.
+  G.grid = { e: randInt(10, 85), n: randInt(10, 85), le: randInt(1, 8), ln: randInt(1, 8) };
   const blue = buildUSMCSquad(set.loadout);
   const red = buildOpforSquad();
   G.squads = { blue, red };
   const mode = set.mode === 'random' ? (chance(0.5) ? 'attack' : 'meeting') : set.mode;
   G.mode = mode;
 
-  const bx = randRange(70, MAP_W - 70), by = MAP_H - 16;
-  placeSquad(blue, G.map, bx, by, -Math.PI / 2);
-  const blueStart = { x: bx, y: by - 10 };
+  // The squads start about a kilometer apart, on a random axis.
+  const axis = randRange(0, Math.PI * 2), sep = randRange(900, 1150);
+  const mid = { x: MAP_W / 2 + randRange(-400, 400), y: MAP_H / 2 + randRange(-400, 400) };
+  const bx = clamp(mid.x - Math.cos(axis) * sep / 2, 250, MAP_W - 250), by = clamp(mid.y - Math.sin(axis) * sep / 2, 250, MAP_H - 250);
+  const toEnemy = axis;
+  placeSquad(blue, G.map, bx, by, toEnemy);
+  const blueStart = { x: bx, y: by };
+  let rx = clamp(bx + Math.cos(axis) * sep, 250, MAP_W - 250), ry = clamp(by + Math.sin(axis) * sep, 250, MAP_H - 250);
 
   if (mode === 'attack') {
-    const north = G.map.buildings.filter(b => (b.y0 + b.y1) / 2 < 105);
-    let anchor;
-    if (north.length && chance(0.7)) { const b = pick(north); anchor = { x: (b.x0 + b.x1) / 2, y: b.y1 + 4 }; }
-    else anchor = { x: randRange(50, MAP_W - 50), y: randRange(30, 60) };
-    placeSquad(red, G.map, anchor.x, anchor.y, Math.PI / 2);
+    // Defenders hold the nearest village or farm to their area, or the ground where they are.
+    const near = G.map.buildings.filter(b => dist((b.x0 + b.x1) / 2, (b.y0 + b.y1) / 2, rx, ry) < 300);
+    if (near.length && chance(0.75)) { const b = pick(near); rx = (b.x0 + b.x1) / 2; ry = (b.y0 + b.y1) / 2; }
+    placeSquad(red, G.map, rx, ry, toEnemy + Math.PI);
     setupDefense(red, blueStart);
   } else {
-    placeSquad(red, G.map, randRange(60, MAP_W - 60), 14, Math.PI / 2);
+    placeSquad(red, G.map, rx, ry, toEnemy + Math.PI);
   }
+  G.enemyArea = { x: rx, y: ry };
+  G.axisBearing = bearing(bx, by, rx, ry);
 
   G.soldiers = [...blue.all, ...red.all];
   G.byId = new Map(G.soldiers.map(s => [s.id, s]));
@@ -3358,25 +3880,34 @@ function newMission() {
   initAI(mode === 'attack' ? 'defend' : 'advance', blueStart);
 
   buildTerrain(G.map);
-  fitCamera(centroid(blue.all));
+  fitCamera(centroid(blue.all), Math.max(R.minZoom, 1.3));
   $('log').innerHTML = '';
   UI.logLines = [];
   UI.buildRoster();
   UI.select({ level: 'squad', squad: blue });
-  G.log(mode === 'attack' ? 'Mission: attack. Enemy reported holding to the north.' : 'Mission: meeting engagement. Enemy reported moving south toward you.', 'info');
+  const gr = gridRef(G.enemyArea.x, G.enemyArea.y);
+  G.log(mode === 'attack' ? 'Mission: attack. Enemy squad reported holding near grid ' + gr + ', bearing ' + pad3(G.axisBearing) + '.'
+    : 'Mission: meeting engagement. Enemy squad reported near grid ' + gr + ', bearing ' + pad3(G.axisBearing) + ', moving toward you.', 'info');
   G.log('Paused. Give your orders, then press Resume.', 'info');
   UI.refreshBar();
 }
 
 // ---------------------------------------------------------------- morale and routing
+// A broken team falls back about 400 m away from the enemy and is out of the fight.
+function routePoint(s) {
+  const t = threatCentroid(s.side, [s]);
+  const a = angleTo(t.x, t.y, s.x, s.y);
+  return { x: clamp(s.x + Math.cos(a) * 400, 20, MAP_W - 20), y: clamp(s.y + Math.sin(a) * 400, 20, MAP_H - 20) };
+}
+
 function startRouting(team, reason) {
   if (team.routing) return;
   team.routing = true; team.routeReason = reason;
-  const edgeY = team.side === 'blue' ? MAP_H - 1 : 1;
   for (const s of team.members) {
     if (!s.active) continue;
     s.routing = true; s.assault = false; s.suppressPt = null; s.launchQueue = null;
-    s.path = G.map.findPath(s.x, s.y, s.x, edgeY) || [];
+    s.routeTo = routePoint(s);
+    s.path = G.map.findPath(s.x, s.y, s.routeTo.x, s.routeTo.y) || [];
     s.moveMode = 'rush';
   }
   releaseControllers(team.members);
@@ -3385,7 +3916,7 @@ function startRouting(team, reason) {
 
 function rally(team) {
   team.routing = false;
-  for (const s of team.members) if (s.routing && !s.routed) { s.routing = false; s.path = []; s.homePosture = 'prone'; }
+  for (const s of team.members) if (s.routing && !s.routed) { s.routing = false; s.routeTo = null; s.path = []; s.homePosture = 'prone'; }
   if (team.side === 'blue') G.log(team.name + ' has rallied.', 'info');
 }
 
@@ -3398,9 +3929,9 @@ function updateTeams(dt) {
       if (t.routing && t.routeReason === 'break' && t.morale > 35 && quiet > 15) rally(t);
       for (const s of t.members) {
         if (!s.routing || s.routed || !s.active) continue;
-        const edgeY = s.side === 'blue' ? MAP_H - 1 : 1;
-        if (Math.abs(s.y - edgeY) < 4) { s.routed = true; s.path = []; }
-        else if (!s.moving) { s.path = G.map.findPath(s.x, s.y, s.x, edgeY) || []; s.moveMode = 'rush'; }
+        if (!s.routeTo) s.routeTo = routePoint(s);
+        if (dist(s.x, s.y, s.routeTo.x, s.routeTo.y) < 8) { s.routed = true; s.path = []; }
+        else if (!s.moving) { s.path = G.map.findPath(s.x, s.y, s.routeTo.x, s.routeTo.y) || []; s.moveMode = 'rush'; }
       }
     }
   }
@@ -3408,8 +3939,9 @@ function updateTeams(dt) {
 
 function inCover(s) {
   const k = G.map.terAt(s.x, s.y);
-  if (k === TER.WOODS) return true;
-  for (const [dx, dy] of [[1.8, 0], [-1.8, 0], [0, 1.8], [0, -1.8]]) {
+  if (k === TER.WOODS || k === TER.STREAM) return true;
+  const o = CELL * 0.8;
+  for (const [dx, dy] of [[o, 0], [-o, 0], [0, o], [0, -o]]) {
     const n = G.map.terAt(s.x + dx, s.y + dy);
     if (n === TER.WALL || n === TER.BUILDING) return true;
   }
@@ -3477,6 +4009,13 @@ function frame(now) {
   requestAnimationFrame(frame);
 }
 
+// Building a 3 km sheet takes a few seconds; show a notice and let it paint first.
+function withLoading(text, fn) {
+  $('loading').textContent = text;
+  $('loading').hidden = false;
+  requestAnimationFrame(() => setTimeout(() => { try { fn(); } finally { $('loading').hidden = true; } }, 30));
+}
+
 function boot() {
   G.settings = loadSettings();
   initRender($('view'));
@@ -3485,20 +4024,22 @@ function boot() {
   $('btnBegin').addEventListener('click', () => {
     G.settings.seed = parseInt($('missionSeed').value, 10) || G.settings.seed;
     UI.hideModal('briefing');
-    newMission();
+    withLoading('Drawing the map sheet…', newMission);
   });
-  $('btnAgain').addEventListener('click', () => { $('debrief').hidden = true; newMission(); });
+  $('btnAgain').addEventListener('click', () => { $('debrief').hidden = true; withLoading('Drawing the map sheet…', newMission); });
   $('btnNext').addEventListener('click', () => {
     $('debrief').hidden = true;
     G.settings.seed = Math.floor(Math.random() * 99999) + 1;
     UI.showBriefing();
   });
-  // Draw a map behind the briefing so the first view is the ground, not a blank screen.
-  G.map = new GameMap(G.settings.seed);
-  buildTerrain(G.map);
-  fitCamera();
-  UI.showBriefing();
   requestAnimationFrame(frame);
+  // Draw a map behind the briefing so the first view is the ground, not a blank table.
+  withLoading('Drawing the map sheet…', () => {
+    G.map = new GameMap(G.settings.seed);
+    buildTerrain(G.map);
+    fitCamera(null, R.minZoom);
+    UI.showBriefing();
+  });
 }
 
 if (document.readyState === 'loading') window.addEventListener('DOMContentLoaded', boot);

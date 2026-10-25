@@ -36,27 +36,34 @@ function newMission() {
   saveSettings();
   NEXT_ID = 1;
   G.map = new GameMap(set.seed);
-  G.grid = { e: randInt(10, 80), n: randInt(20, 90) };
+  // Grid: a small 100 km digit and two principal digits for each kilometer line.
+  G.grid = { e: randInt(10, 85), n: randInt(10, 85), le: randInt(1, 8), ln: randInt(1, 8) };
   const blue = buildUSMCSquad(set.loadout);
   const red = buildOpforSquad();
   G.squads = { blue, red };
   const mode = set.mode === 'random' ? (chance(0.5) ? 'attack' : 'meeting') : set.mode;
   G.mode = mode;
 
-  const bx = randRange(70, MAP_W - 70), by = MAP_H - 16;
-  placeSquad(blue, G.map, bx, by, -Math.PI / 2);
-  const blueStart = { x: bx, y: by - 10 };
+  // The squads start about a kilometer apart, on a random axis.
+  const axis = randRange(0, Math.PI * 2), sep = randRange(900, 1150);
+  const mid = { x: MAP_W / 2 + randRange(-400, 400), y: MAP_H / 2 + randRange(-400, 400) };
+  const bx = clamp(mid.x - Math.cos(axis) * sep / 2, 250, MAP_W - 250), by = clamp(mid.y - Math.sin(axis) * sep / 2, 250, MAP_H - 250);
+  const toEnemy = axis;
+  placeSquad(blue, G.map, bx, by, toEnemy);
+  const blueStart = { x: bx, y: by };
+  let rx = clamp(bx + Math.cos(axis) * sep, 250, MAP_W - 250), ry = clamp(by + Math.sin(axis) * sep, 250, MAP_H - 250);
 
   if (mode === 'attack') {
-    const north = G.map.buildings.filter(b => (b.y0 + b.y1) / 2 < 105);
-    let anchor;
-    if (north.length && chance(0.7)) { const b = pick(north); anchor = { x: (b.x0 + b.x1) / 2, y: b.y1 + 4 }; }
-    else anchor = { x: randRange(50, MAP_W - 50), y: randRange(30, 60) };
-    placeSquad(red, G.map, anchor.x, anchor.y, Math.PI / 2);
+    // Defenders hold the nearest village or farm to their area, or the ground where they are.
+    const near = G.map.buildings.filter(b => dist((b.x0 + b.x1) / 2, (b.y0 + b.y1) / 2, rx, ry) < 300);
+    if (near.length && chance(0.75)) { const b = pick(near); rx = (b.x0 + b.x1) / 2; ry = (b.y0 + b.y1) / 2; }
+    placeSquad(red, G.map, rx, ry, toEnemy + Math.PI);
     setupDefense(red, blueStart);
   } else {
-    placeSquad(red, G.map, randRange(60, MAP_W - 60), 14, Math.PI / 2);
+    placeSquad(red, G.map, rx, ry, toEnemy + Math.PI);
   }
+  G.enemyArea = { x: rx, y: ry };
+  G.axisBearing = bearing(bx, by, rx, ry);
 
   G.soldiers = [...blue.all, ...red.all];
   G.byId = new Map(G.soldiers.map(s => [s.id, s]));
@@ -72,25 +79,34 @@ function newMission() {
   initAI(mode === 'attack' ? 'defend' : 'advance', blueStart);
 
   buildTerrain(G.map);
-  fitCamera(centroid(blue.all));
+  fitCamera(centroid(blue.all), Math.max(R.minZoom, 1.3));
   $('log').innerHTML = '';
   UI.logLines = [];
   UI.buildRoster();
   UI.select({ level: 'squad', squad: blue });
-  G.log(mode === 'attack' ? 'Mission: attack. Enemy reported holding to the north.' : 'Mission: meeting engagement. Enemy reported moving south toward you.', 'info');
+  const gr = gridRef(G.enemyArea.x, G.enemyArea.y);
+  G.log(mode === 'attack' ? 'Mission: attack. Enemy squad reported holding near grid ' + gr + ', bearing ' + pad3(G.axisBearing) + '.'
+    : 'Mission: meeting engagement. Enemy squad reported near grid ' + gr + ', bearing ' + pad3(G.axisBearing) + ', moving toward you.', 'info');
   G.log('Paused. Give your orders, then press Resume.', 'info');
   UI.refreshBar();
 }
 
 // ---------------------------------------------------------------- morale and routing
+// A broken team falls back about 400 m away from the enemy and is out of the fight.
+function routePoint(s) {
+  const t = threatCentroid(s.side, [s]);
+  const a = angleTo(t.x, t.y, s.x, s.y);
+  return { x: clamp(s.x + Math.cos(a) * 400, 20, MAP_W - 20), y: clamp(s.y + Math.sin(a) * 400, 20, MAP_H - 20) };
+}
+
 function startRouting(team, reason) {
   if (team.routing) return;
   team.routing = true; team.routeReason = reason;
-  const edgeY = team.side === 'blue' ? MAP_H - 1 : 1;
   for (const s of team.members) {
     if (!s.active) continue;
     s.routing = true; s.assault = false; s.suppressPt = null; s.launchQueue = null;
-    s.path = G.map.findPath(s.x, s.y, s.x, edgeY) || [];
+    s.routeTo = routePoint(s);
+    s.path = G.map.findPath(s.x, s.y, s.routeTo.x, s.routeTo.y) || [];
     s.moveMode = 'rush';
   }
   releaseControllers(team.members);
@@ -99,7 +115,7 @@ function startRouting(team, reason) {
 
 function rally(team) {
   team.routing = false;
-  for (const s of team.members) if (s.routing && !s.routed) { s.routing = false; s.path = []; s.homePosture = 'prone'; }
+  for (const s of team.members) if (s.routing && !s.routed) { s.routing = false; s.routeTo = null; s.path = []; s.homePosture = 'prone'; }
   if (team.side === 'blue') G.log(team.name + ' has rallied.', 'info');
 }
 
@@ -112,9 +128,9 @@ function updateTeams(dt) {
       if (t.routing && t.routeReason === 'break' && t.morale > 35 && quiet > 15) rally(t);
       for (const s of t.members) {
         if (!s.routing || s.routed || !s.active) continue;
-        const edgeY = s.side === 'blue' ? MAP_H - 1 : 1;
-        if (Math.abs(s.y - edgeY) < 4) { s.routed = true; s.path = []; }
-        else if (!s.moving) { s.path = G.map.findPath(s.x, s.y, s.x, edgeY) || []; s.moveMode = 'rush'; }
+        if (!s.routeTo) s.routeTo = routePoint(s);
+        if (dist(s.x, s.y, s.routeTo.x, s.routeTo.y) < 8) { s.routed = true; s.path = []; }
+        else if (!s.moving) { s.path = G.map.findPath(s.x, s.y, s.routeTo.x, s.routeTo.y) || []; s.moveMode = 'rush'; }
       }
     }
   }
@@ -122,8 +138,9 @@ function updateTeams(dt) {
 
 function inCover(s) {
   const k = G.map.terAt(s.x, s.y);
-  if (k === TER.WOODS) return true;
-  for (const [dx, dy] of [[1.8, 0], [-1.8, 0], [0, 1.8], [0, -1.8]]) {
+  if (k === TER.WOODS || k === TER.STREAM) return true;
+  const o = CELL * 0.8;
+  for (const [dx, dy] of [[o, 0], [-o, 0], [0, o], [0, -o]]) {
     const n = G.map.terAt(s.x + dx, s.y + dy);
     if (n === TER.WALL || n === TER.BUILDING) return true;
   }
@@ -191,6 +208,13 @@ function frame(now) {
   requestAnimationFrame(frame);
 }
 
+// Building a 3 km sheet takes a few seconds; show a notice and let it paint first.
+function withLoading(text, fn) {
+  $('loading').textContent = text;
+  $('loading').hidden = false;
+  requestAnimationFrame(() => setTimeout(() => { try { fn(); } finally { $('loading').hidden = true; } }, 30));
+}
+
 function boot() {
   G.settings = loadSettings();
   initRender($('view'));
@@ -199,20 +223,22 @@ function boot() {
   $('btnBegin').addEventListener('click', () => {
     G.settings.seed = parseInt($('missionSeed').value, 10) || G.settings.seed;
     UI.hideModal('briefing');
-    newMission();
+    withLoading('Drawing the map sheet…', newMission);
   });
-  $('btnAgain').addEventListener('click', () => { $('debrief').hidden = true; newMission(); });
+  $('btnAgain').addEventListener('click', () => { $('debrief').hidden = true; withLoading('Drawing the map sheet…', newMission); });
   $('btnNext').addEventListener('click', () => {
     $('debrief').hidden = true;
     G.settings.seed = Math.floor(Math.random() * 99999) + 1;
     UI.showBriefing();
   });
-  // Draw a map behind the briefing so the first view is the ground, not a blank screen.
-  G.map = new GameMap(G.settings.seed);
-  buildTerrain(G.map);
-  fitCamera();
-  UI.showBriefing();
   requestAnimationFrame(frame);
+  // Draw a map behind the briefing so the first view is the ground, not a blank table.
+  withLoading('Drawing the map sheet…', () => {
+    G.map = new GameMap(G.settings.seed);
+    buildTerrain(G.map);
+    fitCamera(null, R.minZoom);
+    UI.showBriefing();
+  });
 }
 
 if (document.readyState === 'loading') window.addEventListener('DOMContentLoaded', boot);

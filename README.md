@@ -2,16 +2,20 @@
 
 Real-time squad tactics in the browser. You command a 13-man Marine rifle squad
 (squad leader and three four-man fire teams) against an enemy squad, using fire
-and maneuver on a 240 × 180 m map seen straight down, drawn as a military
-topographic map.
+and maneuver on a 3 × 3 km map (nine 1 km grid squares) seen straight down.
 
-The battlefield is a printed map sheet on a planning table, in the standard
-colors of US military topographic maps (FM 3-25.26): black for man-made
-features and the grid, red-brown for contours and elevations, green for
-vegetation. It has a full collar: title, grid values, legend, graphic scale and
-declination diagram.
+The battlefield is a printed 1:25,000-style map sheet on a planning table, in
+the standard colors of US military topographic maps (FM 3-25.26): black for
+man-made features and the grid, red-brown for contours (5 m, index every 25 m)
+and elevations, blue for water, green for vegetation, red for the paved road.
+It has a full collar: title, grid values, legend, graphic scale and
+declination diagram. Each map is generated: rolling hills with 60–110 m of
+relief, streams in gullies and ponds, fields with hedgerows and stone walls,
+orchards, vineyards, woods, a paved road, dirt tracks, named villages and
+farms. The sheet is drawn at three levels of detail as you zoom.
 
-Men are game pieces printed with the billet symbols from the Marine rifle squad
+Zoomed out, each fire team (then the squad) is one square counter with the
+standard unit symbol. Zoomed in, men are round game pieces printed with the billet symbols from the Marine rifle squad
 organization figure: squad leader, fire team leader, automatic rifleman,
 grenadier, rifleman. Status chits sit on the pieces (posture, suppressed or
 pinned, wounded, no ammunition). Orders are drawn as overlay graphics in the
@@ -30,7 +34,8 @@ works with mouse or touch.
   take cover, fall back, halt, face. Five formations for teams and the squad.
 - Loadout by billet: weapon, magazines, 40mm rounds, grenades, with load weight
   affecting speed.
-- Line of sight over terrain height, walls, buildings, woods and tall grass.
+- Line of sight over terrain height, walls, buildings, woods, orchards,
+  vineyards and tall grass. Squads start about 1 km apart; time runs up to 16×.
 - Spotting with fog of war and last-known enemy positions.
 - Suppression: suppressed men shoot worse; pinned men go prone and will not
   move except by crawling.
