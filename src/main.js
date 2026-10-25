@@ -209,16 +209,20 @@ function update(dt) {
   G.time += dt;
   G.spotT -= dt;
   if (G.spotT <= 0) { G.spotT = 0.25; updateSpotting(); }
-  for (const c of G.controllers) c.update(dt);
-  G.controllers = G.controllers.filter(c => !c.done);
-  updateAI(dt);
+  // While the order is being planned the field is frozen: no one moves or fires. Men still
+  // look about and spot, and the clock runs (the enemy's time is accounted at step-off).
+  const frozen = Plan.planning;
+  if (!frozen) {
+    for (const c of G.controllers) c.update(dt);
+    G.controllers = G.controllers.filter(c => !c.done);
+    updateAI(dt);
+  }
   Plan.update(dt);
   Radio.update();
   for (const s of G.soldiers) {
     if (!s.alive || s.routed) continue;
     updateSuppression(s, dt);
-    updateMovement(s, dt);
-    updateCombat(s, dt);
+    if (!frozen) { updateMovement(s, dt); updateCombat(s, dt); }
     updateLook(s, dt);
   }
   updateProjectiles(dt);

@@ -318,6 +318,7 @@ const Plan = {
   stepOffNow() {
     if (!this.planning) return;
     this.planUsed = G.time - this.planStart;
+    advanceDuringPlanning(this.planUsed);
     this.phase = 'execution';
     this.stepOff = G.time;
     this.tool = null; this.plStart = null;

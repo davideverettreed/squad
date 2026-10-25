@@ -398,7 +398,7 @@ const UI = {
     sit.appendChild(el('h3', null, 'Mission type'));
     const mp = el('p');
     const modes = { attack: 'Attack. The enemy holds a position and digs in while you plan.',
-      meeting: 'Meeting engagement. The enemy is moving toward you while you plan.',
+      meeting: 'Meeting engagement. The enemy is marching toward you. The field is frozen while you plan, but the longer you take, the closer it is when you step off.',
       random: 'Either one, chosen at random.' };
     const modeSel = el('select'); modeSel.id = 'missionMode';
     for (const [k, t] of [['random', 'Random'], ['attack', 'Attack a position'], ['meeting', 'Meeting engagement']]) {
@@ -430,7 +430,7 @@ const UI = {
     const how = el('div', 'bsit');
     how.appendChild(el('h3', null, 'Troop leading'));
     how.appendChild(el('p', null, 'You receive a five-paragraph order beside the map: Orientation, Situation, Mission, Execution, Admin & Logistics, Command & Signal. Plan on the map, then step off.'));
-    how.appendChild(el('p', null, 'The clock runs while you plan, at ' + PLAN_RATE + '× speed. Use no more than a third of the time available; the enemy uses the rest.'));
+    how.appendChild(el('p', null, 'The clock runs while you plan, at ' + PLAN_RATE + '× speed. Nothing moves while you plan, but the enemy uses the time: it digs in, or marches closer. Use no more than a third of the time available.'));
     box.appendChild(how);
     this.showModal('briefing');
   },

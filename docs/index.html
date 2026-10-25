@@ -508,7 +508,7 @@ body:not(.roster-min) #btn3d, body:not(.roster-min) #ctl3d { margin-left: 0; }
       <div class="cardhead"><h2>Controls</h2><span class="eyebrow">Mouse, touch and keyboard</span></div>
       <div class="helpbody">
         <h3>The order and the plan</h3>
-        <p>Each mission opens with a five-paragraph order beside the map: <b>O</b>rientation, <b>S</b>ituation (SALUTE and DRAW-D), <b>M</b>ission, <b>E</b>xecution, <b>A</b>dmin &amp; Logistics, <b>C</b>ommand &amp; Signal. In Execution, place control measures on the map (CP, OBJ, SBF, ASLT POS, PL, CCP) and write the scheme of maneuver as lines: a trigger (at step-off, after or with the line above, on a signal, at a time, on contact), a unit, a task and a place. Draft a plan gives you a hasty attack to start from. The clock runs while you plan, at 4× speed: use a third of the time available and leave the rest to the fire teams. Press Step off to execute. The Tracker shows each line; fire signals there. A line halted short by contact waits for you to press Resume. The plan is graded at step-off, and the grade sets the squad's confidence: steadiness under fire, staying power, and how fast it answers the radio. After step-off your orders go by radio and take a few seconds to be acknowledged. The debrief grades the mission on plan, result, casualties and time.</p>
+        <p>Each mission opens with a five-paragraph order beside the map: <b>O</b>rientation, <b>S</b>ituation (SALUTE and DRAW-D), <b>M</b>ission, <b>E</b>xecution, <b>A</b>dmin &amp; Logistics, <b>C</b>ommand &amp; Signal. In Execution, place control measures on the map (CP, OBJ, SBF, ASLT POS, PL, CCP) and write the scheme of maneuver as lines: a trigger (at step-off, after or with the line above, on a signal, at a time, on contact), a unit, a task and a place. Draft a plan gives you a hasty attack to start from. The clock runs while you plan, at 4× speed, and the field is frozen: no one moves or fires until you step off. The enemy uses the time all the same: a defender digs in, and an enemy on the march is placed as far along its route at step-off as it would have walked. Use a third of the time available and leave the rest to the fire teams. Press Step off to execute. The Tracker shows each line; fire signals there. A line halted short by contact waits for you to press Resume. The plan is graded at step-off, and the grade sets the squad's confidence: steadiness under fire, staying power, and how fast it answers the radio. After step-off your orders go by radio and take a few seconds to be acknowledged. The debrief grades the mission on plan, result, casualties and time.</p>
         <h3>Selecting</h3>
         <p>Tap a Marine to select that Marine. Tap again to select the fire team, and again for the whole squad. The Squad and fire team buttons above the orders do the same. Keys: <kbd>1</kbd> <kbd>2</kbd> <kbd>3</kbd> fire teams, <kbd>0</kbd> squad, <kbd>Esc</kbd> cancel.</p>
         <h3>Moving</h3>
@@ -2122,9 +2122,6 @@ function updateCombat(s, dt) {
   const tgt = pickTarget(s);
   if (tgt) {
     const e = tgt.e, d = dist(s.x, s.y, e.x, e.y);
-    // While the order is being planned both sides keep out of the fight: they watch, and
-    // fire only at an enemy who comes within 150 m.
-    if (Plan.planning && d > 150) { s.fireCD = 1; return; }
     s.targetId = e.id;
     if (s.launcher && s.lRounds > 0 && s.launchCD <= 0 && !s.moving && d >= s.launcher.min && d <= s.launcher.range) {
       const clustered = G.soldiers.some(o => o !== e && o.side === e.side && o.active && dist(o.x, o.y, e.x, e.y) < 8);
@@ -3075,6 +3072,28 @@ function assignTasks(sq) {
     if (go) maneuvers++;
   });
   sq.hq.task = { type: 'hold' };
+}
+
+// The planning time in a meeting engagement: nothing moves while the order is planned, but
+// the enemy has been marching all the while. At step-off it is placed as far along its
+// route as it would have walked in that time, at a walk over the ground, stopping short
+// of the squad's start so the fight still opens at range.
+function advanceDuringPlanning(seconds) {
+  if (AI.mode !== 'advance' || !AI.objective) return;
+  const sq = G.squads.red, act = sq.all.filter(commandable);
+  if (!act.length) return;
+  const c = centroid(act), route = G.map.findPath(c.x, c.y, AI.objective.x, AI.objective.y);
+  if (!route || !route.length) return;
+  let left = Math.min(seconds * MOVE.walk.speed * 0.8, Math.max(0, dist(c.x, c.y, AI.objective.x, AI.objective.y) - 600));
+  let px = c.x, py = c.y;
+  for (const p of route) {
+    const d = dist(px, py, p.x, p.y);
+    if (d >= left) { px += (p.x - px) * left / d; py += (p.y - py) * left / d; left = 0; break; }
+    left -= d; px = p.x; py = p.y;
+  }
+  const h = angleTo(px, py, AI.objective.x, AI.objective.y);
+  placeSquad(sq, G.map, px, py, h);
+  for (const s of sq.all) s.path = [];
 }
 
 function updateAI(dt) {
@@ -5217,7 +5236,7 @@ const UI = {
     sit.appendChild(el('h3', null, 'Mission type'));
     const mp = el('p');
     const modes = { attack: 'Attack. The enemy holds a position and digs in while you plan.',
-      meeting: 'Meeting engagement. The enemy is moving toward you while you plan.',
+      meeting: 'Meeting engagement. The enemy is marching toward you. The field is frozen while you plan, but the longer you take, the closer it is when you step off.',
       random: 'Either one, chosen at random.' };
     const modeSel = el('select'); modeSel.id = 'missionMode';
     for (const [k, t] of [['random', 'Random'], ['attack', 'Attack a position'], ['meeting', 'Meeting engagement']]) {
@@ -5249,7 +5268,7 @@ const UI = {
     const how = el('div', 'bsit');
     how.appendChild(el('h3', null, 'Troop leading'));
     how.appendChild(el('p', null, 'You receive a five-paragraph order beside the map: Orientation, Situation, Mission, Execution, Admin & Logistics, Command & Signal. Plan on the map, then step off.'));
-    how.appendChild(el('p', null, 'The clock runs while you plan, at ' + PLAN_RATE + '× speed. Use no more than a third of the time available; the enemy uses the rest.'));
+    how.appendChild(el('p', null, 'The clock runs while you plan, at ' + PLAN_RATE + '× speed. Nothing moves while you plan, but the enemy uses the time: it digs in, or marches closer. Use no more than a third of the time available.'));
     box.appendChild(how);
     this.showModal('briefing');
   },
@@ -5749,6 +5768,7 @@ const Plan = {
   stepOffNow() {
     if (!this.planning) return;
     this.planUsed = G.time - this.planStart;
+    advanceDuringPlanning(this.planUsed);
     this.phase = 'execution';
     this.stepOff = G.time;
     this.tool = null; this.plStart = null;
@@ -7695,16 +7715,20 @@ function update(dt) {
   G.time += dt;
   G.spotT -= dt;
   if (G.spotT <= 0) { G.spotT = 0.25; updateSpotting(); }
-  for (const c of G.controllers) c.update(dt);
-  G.controllers = G.controllers.filter(c => !c.done);
-  updateAI(dt);
+  // While the order is being planned the field is frozen: no one moves or fires. Men still
+  // look about and spot, and the clock runs (the enemy's time is accounted at step-off).
+  const frozen = Plan.planning;
+  if (!frozen) {
+    for (const c of G.controllers) c.update(dt);
+    G.controllers = G.controllers.filter(c => !c.done);
+    updateAI(dt);
+  }
   Plan.update(dt);
   Radio.update();
   for (const s of G.soldiers) {
     if (!s.alive || s.routed) continue;
     updateSuppression(s, dt);
-    updateMovement(s, dt);
-    updateCombat(s, dt);
+    if (!frozen) { updateMovement(s, dt); updateCombat(s, dt); }
     updateLook(s, dt);
   }
   updateProjectiles(dt);

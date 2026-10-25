@@ -51,6 +51,28 @@ function assignTasks(sq) {
   sq.hq.task = { type: 'hold' };
 }
 
+// The planning time in a meeting engagement: nothing moves while the order is planned, but
+// the enemy has been marching all the while. At step-off it is placed as far along its
+// route as it would have walked in that time, at a walk over the ground, stopping short
+// of the squad's start so the fight still opens at range.
+function advanceDuringPlanning(seconds) {
+  if (AI.mode !== 'advance' || !AI.objective) return;
+  const sq = G.squads.red, act = sq.all.filter(commandable);
+  if (!act.length) return;
+  const c = centroid(act), route = G.map.findPath(c.x, c.y, AI.objective.x, AI.objective.y);
+  if (!route || !route.length) return;
+  let left = Math.min(seconds * MOVE.walk.speed * 0.8, Math.max(0, dist(c.x, c.y, AI.objective.x, AI.objective.y) - 600));
+  let px = c.x, py = c.y;
+  for (const p of route) {
+    const d = dist(px, py, p.x, p.y);
+    if (d >= left) { px += (p.x - px) * left / d; py += (p.y - py) * left / d; left = 0; break; }
+    left -= d; px = p.x; py = p.y;
+  }
+  const h = angleTo(px, py, AI.objective.x, AI.objective.y);
+  placeSquad(sq, G.map, px, py, h);
+  for (const s of sq.all) s.path = [];
+}
+
 function updateAI(dt) {
   AI.timer -= dt;
   if (AI.timer > 0) return;
