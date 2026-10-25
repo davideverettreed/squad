@@ -98,6 +98,8 @@ function newMission() {
   UI.buildRoster();
   UI.select({ level: 'squad', squad: blue });
   Plan.reset();
+  Fog.reset();
+  for (let k = 0; k < 4; k++) Fog.update();
   Radio.reset();
   OPORD.show('O');
   UI.refreshBar();
@@ -252,6 +254,7 @@ function frame(now) {
     let sim = dt * (Plan.planning ? PLAN_RATE : G.speed);
     while (sim > 1e-6) { const step = Math.min(0.05, sim); update(step); sim -= step; }
   }
+  Fog.update();
   render();
   UI.tick(dt);
   requestAnimationFrame(frame);

@@ -454,7 +454,7 @@ details.cheat dd { margin: 0; opacity: .9; }
         <h3>Overlay</h3>
         <p>Orders are drawn as on an acetate overlay: blue for friendly, red for enemy, black for targets. Blue lines with arrowheads are routes (long dashes for a rush, dots for a crawl); a heavy arrow with a solid head is an assault. OBJ marks the objective of a bounding drill. Dashed blue lines run from the shooters to a suppression target, a black cross in a circle. 40MM marks a grenade launcher target.</p>
         <h3>Map key</h3>
-        <p>A squad fights on a sheet of one 1-kilometer grid square, with fainter lines every 100 meters; larger units will get larger sheets. The sheet is in standard US military map colors. White is open ground. Light green with tufts is tall grass, which hides a man lying prone. Green is woods and hedgerows; rows of small green circles are orchards, green row lines are vineyards. Blue lines are streams, which run in shallow gullies that give cover; blue areas are ponds and cannot be crossed. A broad blue band is a river: it can be crossed only at a bridge (two black lines across the road) or at a ford, marked FORD in a dashed blue circle, where men wade slowly in the open. Pale blue-green ground with small blue tufts is swamp: very slow going and no cover, but it hides a man. Red-brown lines are contours (5 or 10 meters apart, as the margin states), with a heavier, numbered index contour every fifth line; numbers with a dot are hilltop heights. Black blocks are buildings. A black line with ticks is a stone wall, which gives hard cover to a kneeling or prone man. The red road is a paved road; the dashed double lines are dirt tracks. Each mission is set in one of six regions, chosen in the New mission dialog or at random: rolling farmland; the Southern California coast (Pacific Ocean on the west edge, sand beach, chaparral); South Texas brush country (mesquite thickets, pasture, stock tanks); North Carolina pine woods and blackwater swamp; the Arizona desert and mountains (open creosote flats, rock outcrops, dry washes shown as dashed blue lines); and the Montana mountains in winter (deep snow, lodgepole pine, frozen ponds). The ground changes the fight: snow, sand, chaparral and rock are slow; brush and grass hide a man lying down; rock gives cover; open desert gives long fields of fire. Point at the map to read the 8-digit grid reference. Measure (key M) lays a tape between two taps and marks the distance, grid bearing and mils on the map; tap a label to remove it. Point at a formation button to see the selected team or squad ghosted in that formation. Zoomed out, your men gather into one counter per fire team, then one for the squad, in the standard unit symbol: a rectangle with an infantry X for friendly, a diamond for enemy.</p>
+        <p>A squad fights on a sheet of one 1-kilometer grid square, with fainter lines every 100 meters; larger units will get larger sheets. The sheet is in standard US military map colors. White is open ground. Light green with tufts is tall grass, which hides a man lying prone. Green is woods and hedgerows; rows of small green circles are orchards, green row lines are vineyards. Blue lines are streams, which run in shallow gullies that give cover; blue areas are ponds and cannot be crossed. A broad blue band is a river: it can be crossed only at a bridge (two black lines across the road) or at a ford, marked FORD in a dashed blue circle, where men wade slowly in the open. Pale blue-green ground with small blue tufts is swamp: very slow going and no cover, but it hides a man. Red-brown lines are contours (5 or 10 meters apart, as the margin states), with a heavier, numbered index contour every fifth line; numbers with a dot are hilltop heights. Black blocks are buildings. A black line with ticks is a stone wall, which gives hard cover to a kneeling or prone man. The red road is a paved road; the dashed double lines are dirt tracks. Each mission is set in one of six regions, chosen in the New mission dialog or at random: rolling farmland; the Southern California coast (Pacific Ocean on the west edge, sand beach, chaparral); South Texas brush country (mesquite thickets, pasture, stock tanks); North Carolina pine woods and blackwater swamp; the Arizona desert and mountains (open creosote flats, rock outcrops, dry washes shown as dashed blue lines); and the Montana mountains in winter (deep snow, lodgepole pine, frozen ponds). The ground changes the fight: snow, sand, chaparral and rock are slow; brush and grass hide a man lying down; rock gives cover; open desert gives long fields of fire. Fog of war: ground your squad can see now is clear; ground it has seen before is faded; ground it has never seen is faded more (key F toggles the wash). Point at the map to read the 8-digit grid reference. Measure (key M) lays a tape between two taps and marks the distance, grid bearing and mils on the map; tap a label to remove it. Point at a formation button to see the selected team or squad ghosted in that formation. Zoomed out, your men gather into one counter per fire team, then one for the squad, in the standard unit symbol: a rectangle with an infantry X for friendly, a diamond for enemy.</p>
         <h3>Camera</h3>
         <p>Drag to pan. Use the wheel or pinch to zoom. <kbd>Space</kbd> pauses; you can give orders while paused.</p>
       </div>
@@ -730,7 +730,7 @@ const REGIONS = {
     brief: 'Rolling farmland, woods and villages.',
     relief: [60, 110], base: [6, 40], ci: 5, index: 5,
     fields: [[TER.OPEN, 3], [TER.PLOWED, 2.2], [TER.GRASS, 2.4], [TER.ORCHARD, 0.6], [TER.VINEYARD, 0.5]],
-    hedges: 0.45, walls: 0.2, woods: 0.74, riverChance: 0.75,
+    hedges: 0.45, walls: 0.2, woods: 0.74, riverChance: 0.75, riverWidth: [12, 18],
     swamp: { reach: 10, low: 0.3, noise: 0.5 },
     villages: [2, 4], farms: [6, 10], farmWord: 'Farm', yardWalls: [0.3, 0.4],
     nameA: ['Bran', 'Hol', 'Mer', 'Ash', 'Kel', 'Dun', 'Fair', 'Stan', 'Wex', 'Oak', 'Mill', 'Thorn', 'Rock', 'Hal', 'Elm', 'Bram', 'Cold', 'Red'],
@@ -744,7 +744,7 @@ const REGIONS = {
     relief: [120, 200], base: [0, 0], ci: 10, index: 5,
     coast: true,
     fields: [[TER.CHAPARRAL, 4], [TER.GRASS, 2], [TER.OPEN, 1.5], [TER.ORCHARD, 1.2], [TER.PLOWED, 0.8]],
-    hedges: 0.12, walls: 0.05, woods: 0.82, riverChance: 0.15, dryStreams: true, ponds: 'dry',
+    hedges: 0.12, walls: 0.05, woods: 0.82, riverChance: 0.15, riverWidth: [10, 16], dryStreams: true, ponds: 'dry',
     swamp: null,
     villages: [2, 3], farms: [4, 7], farmWord: 'Ranch', yardWalls: [0.25, 0.3],
     whole: ['San Onofre', 'San Clemente', 'Santa Margarita', 'Las Pulgas', 'San Luis Rey', 'San Mateo', 'Las Flores', 'Los Robles',
@@ -758,7 +758,7 @@ const REGIONS = {
     brief: 'Flat brush country: mesquite thickets, pasture and cotton fields, stock tanks and ranch roads.',
     relief: [18, 40], base: [10, 30], ci: 5, index: 5,
     fields: [[TER.OPEN, 3], [TER.BRUSH, 3.5], [TER.PLOWED, 2], [TER.GRASS, 1.6], [TER.ORCHARD, 0.3]],
-    hedges: 0.3, walls: 0, woods: 0.8, riverChance: 0.5, riparian: 5,
+    hedges: 0.3, walls: 0, woods: 0.8, riverChance: 0.45, riverWidth: [8, 14], riparian: 5,
     swamp: { reach: 4, low: 0.15, noise: 0.62 },
     villages: [1, 3], farms: [6, 10], farmWord: 'Ranch', yardWalls: [0, 0],
     nameA: ['Mesquite', 'Live Oak', 'Encino', 'Dry', 'Caddo', 'Comanche', 'Sandy', 'Turkey', 'Javelina', 'Cibolo', 'Black Jack', 'Prickly Pear'],
@@ -773,7 +773,7 @@ const REGIONS = {
     brief: 'Low pine woods and blackwater swamp, tobacco fields and crossroads settlements.',
     relief: [20, 45], base: [3, 12], ci: 5, index: 5,
     fields: [[TER.WOODS, 3.2], [TER.PLOWED, 2], [TER.OPEN, 1.4], [TER.GRASS, 1.2]],
-    hedges: 0.6, walls: 0, woods: 0.6, riverChance: 0.85, riparian: 8,
+    hedges: 0.6, walls: 0, woods: 0.6, riverChance: 0.92, riverWidth: [15, 25], riparian: 8,
     swamp: { reach: 32, low: 0.5, noise: 0.36, slope: 0.07 },
     villages: [2, 3], farms: [5, 8], farmWord: 'Farm', yardWalls: [0, 0],
     nameA: ['Pine', 'Holly', 'Cedar', 'Gum', 'Spring', 'Rock', 'Lumber', 'Bladen', 'Long', 'Hope', 'Black', 'White Oak'],
@@ -787,7 +787,7 @@ const REGIONS = {
     brief: 'Sonoran desert flats under rocky mountains: creosote and saguaro, dry washes, long fields of fire.',
     relief: [380, 560], base: [70, 120], ci: 10, index: 5,
     ridged: true, floor: 0.08, base0: TER.DESERT, rock: 0.65, desertPatches: [[TER.CHAPARRAL, 0.12]],
-    fields: null, hedges: 0, walls: 0, woods: 2, riverChance: 0.12, dryStreams: true, ponds: 'dry', riparian: 3,
+    fields: null, hedges: 0, walls: 0, woods: 2, riverChance: 0.12, riverWidth: [8, 12], dryStreams: true, ponds: 'dry', riparian: 3,
     swamp: null,
     villages: [1, 2], farms: [2, 4], farmWord: 'Ranch', yardWalls: [0.4, 0.4],
     whole: ['Ajo', 'Sells', 'Quijotoa', 'Sasabe', 'Arivaca', 'Amado', 'Sonoita', 'Gila Bend', 'Why', 'Gu Vo', 'Santa Rita',
@@ -802,7 +802,7 @@ const REGIONS = {
     relief: [300, 460], base: [130, 180], ci: 10, index: 5,
     ridged: true, floor: 0.25, base0: TER.SNOW, rock: 0.95, treeline: 0.75,
     fields: [[TER.SNOW, 5], [TER.WOODS, 0.5]],
-    hedges: 0.1, walls: 0, woods: 0.78, riverChance: 0.6, ponds: 'ice', snow: true,
+    hedges: 0.1, walls: 0, woods: 0.78, riverChance: 0.75, riverWidth: [12, 20], ponds: 'ice', snow: true,
     swamp: null,
     villages: [1, 2], farms: [3, 5], farmWord: 'Ranch', yardWalls: [0, 0],
     nameA: ['Elk', 'Bear', 'Wolf', 'Bighorn', 'Granite', 'Cold', 'Eagle', 'Crazy', 'Lodgepole', 'Grizzly', 'Antelope', 'Silver'],
@@ -1048,13 +1048,15 @@ class GameMap {
     }
     for (let i = 0; i < N; i++) this.elev[i] -= cut[i];
     // On most sheets the biggest watercourse, if long enough, is a river.
-    const main = this.streams.filter(s => s.len > MAP_W * 0.4).sort((a, b) => b.flow - a.flow)[0];
-    if (main && chance(this.R.riverChance)) this.makeRiver(main);
+    const main = this.streams.filter(s => s.len > MAP_W * 0.3).sort((a, b) => b.flow - a.flow)[0];
+    // riverChance is the share of 3 km sheets in the region with a river; a smaller sheet
+    // takes in less country, so it is less likely to hold one.
+    if (main && chance(1 - Math.pow(1 - this.R.riverChance, MAP_K))) this.makeRiver(main);
   }
 
-  // A river 12-18 m wide down the main valley: impassable on foot except at bridges and fords.
+  // A river (12-18 m wide, or as the region has them) down the main valley: impassable on foot except at bridges and fords.
   makeRiver(st) {
-    const width = randRange(12, 18), half = width / 2;
+    const rw = this.R.riverWidth || [12, 18], width = randRange(rw[0], rw[1]), half = width / 2;
     this.streams = this.streams.filter(s => s !== st);
     for (let k = 1; k < st.pts.length; k++) {
       const a = st.pts[k - 1], b = st.pts[k];
@@ -2258,6 +2260,111 @@ function casualtyEvent(t, res) {
     G.log('Enemy ' + t.title.toLowerCase() + ' hit.', 'kill');
   }
 }
+
+// ---- src/fog.js
+'use strict';
+// Fog of war on the map: the ground the squad can see now is drawn clear, ground it has
+// seen before is faded, and ground it has never seen is faded more. One observer (a
+// man from each fire team, and the squad leader) is swept per frame by rays cast out
+// to spotting range; a ray stops at a crest, a building or enough vegetation.
+
+const FOG_CELL = 10;   // meters per fog cell
+const FOG_TARGET = 1;  // height above the ground that counts as seen (a kneeling man)
+
+const Fog = {
+  on: true, fw: 0, fh: 0, seen: null, vis: null, views: new Map(), turn: 0, canvas: null, dirty: true,
+
+  reset() {
+    this.fw = Math.ceil(MAP_W / FOG_CELL); this.fh = Math.ceil(MAP_H / FOG_CELL);
+    this.seen = new Uint8Array(this.fw * this.fh);
+    this.vis = new Uint8Array(this.fw * this.fh);
+    this.views = new Map(); this.turn = 0; this.dirty = true;
+    this.canvas = document.createElement('canvas');
+    this.canvas.width = this.fw; this.canvas.height = this.fh;
+  },
+
+  // The men who look for the squad: one from each team that still has a man up, and the SL.
+  observers() {
+    const sq = G.squads.blue, out = [];
+    for (const t of [sq.hq, ...sq.teams]) { const s = t.leader; if (s) out.push(s); }
+    return out;
+  },
+
+  // Everything one man can see, as a list of fog cells.
+  sweep(s) {
+    const m = G.map, fw = this.fw, fh = this.fh, out = new Uint8Array(fw * fh);
+    const eye = m.elevAt(s.x, s.y) + POSTURE[s.posture].eye, R0 = SPOT_RANGE;
+    const rays = Math.ceil(2 * Math.PI * R0 / (FOG_CELL * 0.8)), step = CELL;
+    for (let k = 0; k < rays; k++) {
+      const a = k / rays * Math.PI * 2, dx = Math.cos(a), dy = Math.sin(a);
+      // horizon: the lowest slope a sight line must have to clear the ground and buildings so
+      // far. veg: earlier vegetation, as the slope of its top and how much it thins a line.
+      let horizon = -Infinity;
+      const vegTop = [], vegAmt = [];
+      for (let r = step; r <= R0; r += step) {
+        const x = s.x + dx * r, y = s.y + dy * r;
+        if (x < 0 || y < 0 || x >= MAP_W || y >= MAP_H) break;
+        const g = m.elevAt(x, y), slope = (g + FOG_TARGET - eye) / r;
+        if (slope >= horizon) {
+          // Vegetation counts only where its top rises above this line.
+          let dens = 0;
+          for (let i = 0; i < vegTop.length; i++) if (vegTop[i] > slope) dens += vegAmt[i];
+          if (dens < 1) out[Math.floor(y / FOG_CELL) * fw + Math.floor(x / FOG_CELL)] = 1;
+        }
+        const T = TERRAIN[m.ter[Math.floor(y / CELL) * GW + Math.floor(x / CELL)]];
+        const top = (g + (T.losH || 0) - eye) / r;
+        // A man sees out of the cover he stands in; vegetation below every line still open does nothing.
+        if (T.density && r > 6 && top > horizon) { vegTop.push(top); vegAmt.push(T.density * step); }
+        horizon = Math.max(horizon, T.solid ? top : (g - eye) / r);
+        // Stop when vegetation above the highest line to the ground still ahead blocks it all.
+        if (vegTop.length > 8) {
+          let tot = 0;
+          for (let i = 0; i < vegTop.length; i++) if (vegTop[i] > 0.15) tot += vegAmt[i];
+          if (tot >= 1) break;
+        }
+      }
+    }
+    // The man's own patch is always in view.
+    const c = Math.floor(s.y / FOG_CELL) * fw + Math.floor(s.x / FOG_CELL);
+    if (c >= 0 && c < out.length) out[c] = 1;
+    return out;
+  },
+
+  update() {
+    if (!G.running || !this.seen) return;
+    const obs = this.observers();
+    if (!obs.length) return;
+    const s = obs[this.turn++ % obs.length];
+    this.views.set(s.id, this.sweep(s));
+    // Drop the view of a man who is no longer an observer.
+    const ids = new Set(obs.map(o => o.id));
+    for (const id of [...this.views.keys()]) if (!ids.has(id)) this.views.delete(id);
+    this.vis.fill(0);
+    for (const v of this.views.values()) for (let i = 0; i < v.length; i++) if (v[i]) this.vis[i] = 1;
+    for (let i = 0; i < this.vis.length; i++) if (this.vis[i]) this.seen[i] = 1;
+    this.dirty = true;
+  },
+
+  // A wash over the sheet: none where the squad can see, lighter where it has seen,
+  // heavier where it has not.
+  draw(ctx) {
+    if (!this.on || !this.seen || !G.running || G.revealAll) return;
+    if (this.dirty) {
+      const c = this.canvas.getContext('2d'), img = c.createImageData(this.fw, this.fh), d = img.data;
+      for (let i = 0; i < this.vis.length; i++) {
+        const a = this.vis[i] ? 0 : this.seen[i] ? 0.4 : 0.66;
+        d[i * 4] = 214; d[i * 4 + 1] = 210; d[i * 4 + 2] = 198; d[i * 4 + 3] = a * 255;
+      }
+      c.putImageData(img, 0, 0);
+      this.dirty = false;
+    }
+    const o = toScreen(0, 0), z = R.cam.zoom;
+    ctx.save();
+    ctx.imageSmoothingEnabled = true; ctx.imageSmoothingQuality = 'high';
+    ctx.drawImage(this.canvas, o.x, o.y, MAP_W * z, MAP_H * z);
+    ctx.restore();
+  },
+};
 
 // ---- src/orders.js
 'use strict';
@@ -3558,6 +3665,7 @@ function render() {
     drawTiles(ctx);
     drawPaper(ctx);
   }
+  Fog.draw(ctx);
   drawEdgeLabels(ctx);
   drawPlan(ctx);
   drawOrdersOverlay(ctx);
@@ -6268,6 +6376,7 @@ const Input = {
       if (k === ' ') { e.preventDefault(); togglePause(); }
       else if (k === 'v' || k === 'V') $('btnCones').click();
       else if (k === 'm' || k === 'M') $('btnMeasure').click();
+      else if (k === 'f' || k === 'F') { Fog.on = !Fog.on; UI.toast(Fog.on ? 'Fog of war shown.' : 'Fog of war hidden.'); }
       else if (k === '1' || k === '2' || k === '3') UI.selectTeam(+k);
       else if (k === '0' || k === '`') UI.select({ level: 'squad', squad: G.squads.blue });
       else if (k === 'Escape') {
@@ -6382,6 +6491,8 @@ function newMission() {
   UI.buildRoster();
   UI.select({ level: 'squad', squad: blue });
   Plan.reset();
+  Fog.reset();
+  for (let k = 0; k < 4; k++) Fog.update();
   Radio.reset();
   OPORD.show('O');
   UI.refreshBar();
@@ -6536,6 +6647,7 @@ function frame(now) {
     let sim = dt * (Plan.planning ? PLAN_RATE : G.speed);
     while (sim > 1e-6) { const step = Math.min(0.05, sim); update(step); sim -= step; }
   }
+  Fog.update();
   render();
   UI.tick(dt);
   requestAnimationFrame(frame);

@@ -662,6 +662,7 @@ function render() {
     drawTiles(ctx);
     drawPaper(ctx);
   }
+  Fog.draw(ctx);
   drawEdgeLabels(ctx);
   drawPlan(ctx);
   drawOrdersOverlay(ctx);

@@ -232,13 +232,15 @@ class GameMap {
     }
     for (let i = 0; i < N; i++) this.elev[i] -= cut[i];
     // On most sheets the biggest watercourse, if long enough, is a river.
-    const main = this.streams.filter(s => s.len > MAP_W * 0.4).sort((a, b) => b.flow - a.flow)[0];
-    if (main && chance(this.R.riverChance)) this.makeRiver(main);
+    const main = this.streams.filter(s => s.len > MAP_W * 0.3).sort((a, b) => b.flow - a.flow)[0];
+    // riverChance is the share of 3 km sheets in the region with a river; a smaller sheet
+    // takes in less country, so it is less likely to hold one.
+    if (main && chance(1 - Math.pow(1 - this.R.riverChance, MAP_K))) this.makeRiver(main);
   }
 
-  // A river 12-18 m wide down the main valley: impassable on foot except at bridges and fords.
+  // A river (12-18 m wide, or as the region has them) down the main valley: impassable on foot except at bridges and fords.
   makeRiver(st) {
-    const width = randRange(12, 18), half = width / 2;
+    const rw = this.R.riverWidth || [12, 18], width = randRange(rw[0], rw[1]), half = width / 2;
     this.streams = this.streams.filter(s => s !== st);
     for (let k = 1; k < st.pts.length; k++) {
       const a = st.pts[k - 1], b = st.pts[k];
