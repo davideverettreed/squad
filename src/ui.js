@@ -22,6 +22,7 @@ const UI = {
     this.buildOrders();
     $('btnPause').addEventListener('click', () => togglePause());
     $('btnSpeed').addEventListener('click', () => { G.speed = G.speed >= 16 ? 1 : G.speed * 2; this.refreshBar(); });
+    $('btnCones').addEventListener('click', () => { G.ui.cones = !G.ui.cones; $('btnCones').classList.toggle('on', G.ui.cones); });
     $('btnRoster').addEventListener('click', () => document.body.classList.toggle('roster-open'));
     $('btnHelp').addEventListener('click', () => this.showModal('help'));
     $('btnMenu').addEventListener('click', () => this.showBriefing());

@@ -33,6 +33,8 @@ class Soldier {
     this.targetId = null; this.priorityId = null; this.suppressPt = null; this.launchQueue = null;
     this.fireCD = randRange(0.3, 1.5); this.reloadT = 0; this.launchCD = randRange(2, 5); this.fragCD = 0;
     this.lastFired = -99; this.lastHitAt = -99;
+    this.look = this.facing; this.scanPhase = randRange(0, Math.PI * 2); this.scanJerk = 0;
+    this.coneHalf = 0.5; this.alert = 0; this.agit = 0;
     this.assault = false; this.routing = false; this.routed = false;
     this.shots = 0; this.hits = 0; this.dryLogged = false;
     this.loadKg = this.computeLoad();
@@ -161,7 +163,7 @@ function placeSquad(sq, map, x, y, heading) {
   const put = (s, px, py) => {
     const c = map.nearestPassable(Math.floor(clamp(px, 2, MAP_W - 2) / CELL), Math.floor(clamp(py, 2, MAP_H - 2) / CELL));
     s.x = (c.cx + 0.5) * CELL; s.y = (c.cy + 0.5) * CELL;
-    s.facing = heading;
+    s.facing = heading; s.look = heading;
   };
   sq.teams.forEach((t, k) => {
     const a = rotateOffset(squadSlot(sq.formation, k, n).x, squadSlot(sq.formation, k, n).y, heading);

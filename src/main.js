@@ -9,7 +9,7 @@ const G = {
   spotT: 0, teamT: 0, endT: 0,
   stats: null, grid: { e: 34, n: 72 }, revealAll: false,
   settings: null,
-  ui: { sel: null, pending: null, moveMode: 'walk', hover: null, hoverIsPointer: false, panelH: 0 },
+  ui: { cones: true, sel: null, pending: null, moveMode: 'walk', hover: null, hoverIsPointer: false, panelH: 0 },
   log(msg, kind) { UI.log(msg, kind); },
   toast(msg) { UI.toast(msg); },
 };
@@ -119,7 +119,27 @@ function rally(team) {
   if (team.side === 'blue') G.log(team.name + ' has rallied.', 'info');
 }
 
+// Immediate action on contact: a Marine fire team walking when it takes fire, or when it
+// sees a new enemy within 250 m, halts, gets down and returns fire. Rushing, assaulting
+// and bounding teams carry on; those orders mean to move under fire.
+function reactToContact(t) {
+  if (t.routing) return;
+  const walking = t.members.filter(s => commandable(s) && s.moving && s.moveMode === 'walk' && !s.assault);
+  if (!walking.length) return;
+  t.reacted = t.reacted || new Set();
+  const underFire = G.time - t.lastFiredUpon < 1.5 && G.time - (t.reactedAt || -99) > 20;
+  const fresh = [...G.known.blue.values()].filter(k => k.visible && !t.reacted.has(k.id) && G.byId.get(k.id)?.active
+    && walking.some(s => dist(s.x, s.y, k.x, k.y) < 250));
+  if (!underFire && !fresh.length) return;
+  for (const k of fresh) t.reacted.add(k.id);
+  t.reactedAt = G.time;
+  releaseControllers(walking);
+  for (const s of walking) { s.path = []; s.homePosture = 'prone'; }
+  G.log(t.short + ': ' + (underFire ? 'Taking fire!' : 'Enemy close!') + ' Get down, return fire.', 'contact');
+}
+
 function updateTeams(dt) {
+  for (const t of [G.squads.blue.hq, ...G.squads.blue.teams]) reactToContact(t);
   for (const sq of [G.squads.blue, G.squads.red]) {
     for (const t of [sq.hq, ...sq.teams]) {
       const quiet = G.time - t.lastFiredUpon;
@@ -170,6 +190,7 @@ function update(dt) {
     updateSuppression(s, dt);
     updateMovement(s, dt);
     updateCombat(s, dt);
+    updateLook(s, dt);
   }
   updateProjectiles(dt);
   for (const list of [G.effects, G.floaters]) {

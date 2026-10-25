@@ -39,7 +39,9 @@ function updateSpotting() {
         if (G.time - e.lastFired < 4) p *= 5;
         if (!e.alive || e.health === 'serious') p *= 0.5;
         p *= v;
-        if (Math.abs(angleDiff(o.facing, angleTo(o.x, o.y, e.x, e.y))) > 1.9) p *= 0.35;
+        // Inside the cone a man sees well; at the edge of his vision poorly; behind him hardly at all.
+        const off = Math.abs(angleDiff(o.look, angleTo(o.x, o.y, e.x, e.y)));
+        p *= off <= o.coneHalf ? 1.25 : off < 1.75 ? 0.45 : 0.12;
         p *= 1 - o.supp / 120;
         if (d < 25) p = Math.max(p, 0.5 * v);
         if (chance(Math.min(0.95, p))) { seenBy = o; break; }
@@ -67,6 +69,40 @@ function contactReport(fresh) {
   const d = Math.round(dist(o.x, o.y, e.x, e.y) / 10) * 10;
   const what = fresh.length > 1 ? fresh.length + ' enemy' : 'enemy ' + e.title.toLowerCase();
   G.log(o.team.short + ': Contact! ' + what + ', ' + d + ' m, bearing ' + pad3(bearing(o.x, o.y, e.x, e.y)) + '.', 'contact');
+}
+
+// ---------------------------------------------------------------- where each man looks
+// A man sweeps his sector left and right. Calm, the sweep is wide and slow. Alert, with
+// the enemy known to be near or recent fire, it narrows toward the threat and quickens.
+// Agitated, suppressed or under fire, it is fast and erratic, with sudden glances aside.
+// A man firing holds his eyes on his target.
+function updateLook(s, dt) {
+  if (!s.active) return;
+  const sinceFire = G.time - s.team.lastFiredUpon;
+  const threat = threatPoint(s);
+  s.alert = threat ? 1 : sinceFire < 30 ? 0.6 : 0;
+  s.agit = clamp(Math.max(s.supp / 80, sinceFire < 4 ? 0.6 : 0), 0, 1);
+  s.coneHalf = 0.5 - 0.14 * s.alert;
+
+  const aiming = G.time - s.lastFired < 2.5;
+  const tgt = aiming && s.targetId ? G.byId.get(s.targetId) : null;
+  const aimAt = tgt ? tgt : aiming && s.suppressPt ? s.suppressPt : null;
+  if (aimAt) {
+    s.look = turnToward(s.look, angleTo(s.x, s.y, aimAt.x, aimAt.y) + gauss() * 0.02, dt * 8);
+    s.coneHalf = 0.22;
+    return;
+  }
+  let center;
+  if (s.faceAngle != null) center = s.faceAngle;
+  else if (s.moving) center = angleTo(s.x, s.y, s.path[0].x, s.path[0].y);
+  else if (threat) center = angleTo(s.x, s.y, threat.x, threat.y);
+  else center = s.facing;
+  const amp = (1 - 0.45 * s.alert) * (s.moving ? 0.6 : 1.05) + 0.35 * s.agit;
+  const rate = 0.7 + 1.6 * s.alert + 3.5 * s.agit;
+  s.scanPhase += rate * dt * (1 + (s.agit > 0.3 ? gauss() * 0.6 * s.agit : 0));
+  if (s.agit > 0.4 && chance(dt * s.agit * 1.5)) s.scanJerk = gauss() * 0.7 * s.agit;
+  s.scanJerk *= Math.max(0, 1 - dt * 2);
+  s.look = turnToward(s.look, center + Math.sin(s.scanPhase) * amp + s.scanJerk, dt * (2.5 + 5 * s.agit));
 }
 
 // ---------------------------------------------------------------- direct fire

@@ -504,6 +504,7 @@ function render() {
   drawOrdersOverlay(ctx);
   drawProjectiles(ctx);
   drawEffects(ctx);
+  drawCones(ctx);
   drawUnits(ctx);
   drawFloaters(ctx);
   drawScale(ctx);
@@ -815,15 +816,6 @@ function drawUnits(ctx) {
       continue;
     }
     const s = p.soldier, down = !s.active;
-    if (!down) {
-      const a = s.facing, tip = r + 8;
-      ctx.fillStyle = s.side === 'blue' ? OVL.blue : OVL.red;
-      ctx.beginPath();
-      ctx.moveTo(q.x + Math.cos(a) * tip, q.y + Math.sin(a) * tip);
-      ctx.lineTo(q.x + Math.cos(a + 0.32) * (r + 2), q.y + Math.sin(a + 0.32) * (r + 2));
-      ctx.lineTo(q.x + Math.cos(a - 0.32) * (r + 2), q.y + Math.sin(a - 0.32) * (r + 2));
-      ctx.closePath(); ctx.fill();
-    }
     const y = drawDisc(ctx, s.side, s.billet, q.x, q.y, r, lifted);
     // Operational condition (MIL-STD-2525): slash for a casualty, X for killed.
     if (down) {
@@ -848,6 +840,35 @@ function drawUnits(ctx) {
     if (s.health === 'light') chits.push(['WIA', '#fff', '#b3261e']);
     if (s.side === 'blue' && s.inMag + s.mags === 0) chits.push(['AMO', '#ffd60a', OVL.black]);
     chits.forEach(([label, bg, fg], i) => drawChit(ctx, q.x + r * 0.35 + i * 3, y + r * 0.45 + i * (chit * 0.62), chit, label, bg, fg));
+  }
+}
+
+// Vision cones: where each man is looking, shaded in his side's overlay color.
+// The cone narrows as he grows alert and becomes a thin line while he aims.
+function drawCones(ctx) {
+  if (!G.ui.cones || pieceLevel() !== 'man' || !G.squads.blue) return;
+  const z = R.cam.zoom, len = clamp(40 + z * 14, 60, 150);
+  for (const s of G.soldiers) {
+    if (!s.active || s.routed || (s.side === 'red' && !enemyVisible(s))) continue;
+    const q = toScreen(s.x, s.y);
+    if (q.x < -len || q.y < -len || q.x > R.w + len || q.y > R.h + len) continue;
+    const rgb = s.side === 'blue' ? '31,79,191' : '198,40,40';
+    const g = ctx.createRadialGradient(q.x, q.y, 6, q.x, q.y, len);
+    g.addColorStop(0, 'rgba(' + rgb + ',' + (0.26 + 0.12 * s.agit) + ')');
+    g.addColorStop(1, 'rgba(' + rgb + ',0)');
+    ctx.fillStyle = g;
+    ctx.beginPath();
+    ctx.moveTo(q.x, q.y);
+    ctx.arc(q.x, q.y, len, s.look - s.coneHalf, s.look + s.coneHalf);
+    ctx.closePath();
+    ctx.fill();
+    ctx.strokeStyle = 'rgba(' + rgb + ',0.45)'; ctx.lineWidth = 1;
+    ctx.beginPath();
+    ctx.moveTo(q.x + Math.cos(s.look - s.coneHalf) * 8, q.y + Math.sin(s.look - s.coneHalf) * 8);
+    ctx.lineTo(q.x + Math.cos(s.look - s.coneHalf) * len * 0.75, q.y + Math.sin(s.look - s.coneHalf) * len * 0.75);
+    ctx.moveTo(q.x + Math.cos(s.look + s.coneHalf) * 8, q.y + Math.sin(s.look + s.coneHalf) * 8);
+    ctx.lineTo(q.x + Math.cos(s.look + s.coneHalf) * len * 0.75, q.y + Math.sin(s.look + s.coneHalf) * len * 0.75);
+    ctx.stroke();
   }
 }
 

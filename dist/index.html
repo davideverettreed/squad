@@ -196,7 +196,8 @@ kbd { font: 600 12px/1 var(--mono); border: 1px solid var(--line); border-bottom
 
 /* ---------------- narrow screens: phones */
 @media (max-width: 760px) {
-  .brand span { display: none; }
+  .brand { display: none; }
+  .barbtns { gap: 4px; }
   #btnRoster { display: inline-block; }
   #btnHelp { display: none; }
   .obtn { padding: 7px 9px; font-size: 13px; min-height: 36px; }
@@ -227,6 +228,7 @@ kbd { font: 600 12px/1 var(--mono); border: 1px solid var(--line); border-bottom
     <div class="barbtns">
       <button id="btnPause" class="obtn">Resume</button>
       <button id="btnSpeed" class="obtn" title="Game speed">1×</button>
+      <button id="btnCones" class="obtn on" title="Show where each man is looking (V)">Cones</button>
       <button id="btnRoster" class="obtn">Roster</button>
       <button id="btnHelp" class="obtn" title="Controls">Help</button>
       <button id="btnMenu" class="obtn">Mission</button>
@@ -278,11 +280,11 @@ kbd { font: 600 12px/1 var(--mono); border: 1px solid var(--line); border-bottom
         <h3>Selecting</h3>
         <p>Tap a Marine to select that Marine. Tap again to select the fire team, and again for the whole squad. The Squad and fire team buttons above the orders do the same. Keys: <kbd>1</kbd> <kbd>2</kbd> <kbd>3</kbd> fire teams, <kbd>0</kbd> squad, <kbd>Esc</kbd> cancel.</p>
         <h3>Moving</h3>
-        <p>Pick Walk, Rush or Crawl, then tap the ground. Right-click also moves. Teams and the squad move in their formation. Rushing is fast but tiring and easy to spot. Crawling is slow but men can crawl while pinned.</p>
+        <p>Pick Walk, Rush or Crawl, then tap the ground. Right-click also moves. Teams and the squad move in their formation. A walking team that takes fire, or sees a new enemy within 250 m, halts on its own, gets down and returns fire; rush, assault or bound to keep moving under fire. Rushing is fast but tiring and easy to spot. Crawling is slow but men can crawl while pinned.</p>
         <h3>Fire and maneuver</h3>
         <p><b>Suppress</b> puts fire on an area, seen enemy or not. <b>Bound</b> sends the squad forward one fire team at a time while the others cover it (a fire team bounds in buddy pairs). <b>Assault</b> walks forward firing and throwing grenades. Tap a visible enemy to make the selection engage that target.</p>
         <h3>Reading the pieces</h3>
-        <p>Blue pieces are your Marines; red pieces are enemy you can see. A selected piece is lifted off the map and circled in blue. The small notch shows which way a man faces, and the numeral beside him is his fire team. Chits stacked on a piece show posture (STD, KNL, PRN), suppression (SUP, or PIN when pinned; a pinned man moves only by crawling), a wound (WIA) and no ammunition (AMO). A slash through a piece is a casualty; an X is killed. A red symbol in a dashed frame is where an enemy was last seen.</p>
+        <p>Blue pieces are your Marines; red pieces are enemy you can see. A selected piece is lifted off the map and circled in blue. The shaded cone shows where a man is looking: he sweeps it left and right, wide and slow when calm, tighter and quicker when the enemy is near, fast and jerky under fire, and holds it on his target while firing. He is far more likely to spot an enemy inside his cone. The numeral beside him is his fire team. Cones toggles them (key V). Chits stacked on a piece show posture (STD, KNL, PRN), suppression (SUP, or PIN when pinned; a pinned man moves only by crawling), a wound (WIA) and no ammunition (AMO). A slash through a piece is a casualty; an X is killed. A red symbol in a dashed frame is where an enemy was last seen.</p>
         <h3>Overlay</h3>
         <p>Orders are drawn as on an acetate overlay: blue for friendly, red for enemy, black for targets. Blue lines with arrowheads are routes (long dashes for a rush, dots for a crawl); a heavy arrow with a solid head is an assault. OBJ marks the objective of a bounding drill. Dashed blue lines run from the shooters to a suppression target, a black cross in a circle. 40MM marks a grenade launcher target.</p>
         <h3>Map key</h3>
@@ -1200,6 +1202,8 @@ class Soldier {
     this.targetId = null; this.priorityId = null; this.suppressPt = null; this.launchQueue = null;
     this.fireCD = randRange(0.3, 1.5); this.reloadT = 0; this.launchCD = randRange(2, 5); this.fragCD = 0;
     this.lastFired = -99; this.lastHitAt = -99;
+    this.look = this.facing; this.scanPhase = randRange(0, Math.PI * 2); this.scanJerk = 0;
+    this.coneHalf = 0.5; this.alert = 0; this.agit = 0;
     this.assault = false; this.routing = false; this.routed = false;
     this.shots = 0; this.hits = 0; this.dryLogged = false;
     this.loadKg = this.computeLoad();
@@ -1328,7 +1332,7 @@ function placeSquad(sq, map, x, y, heading) {
   const put = (s, px, py) => {
     const c = map.nearestPassable(Math.floor(clamp(px, 2, MAP_W - 2) / CELL), Math.floor(clamp(py, 2, MAP_H - 2) / CELL));
     s.x = (c.cx + 0.5) * CELL; s.y = (c.cy + 0.5) * CELL;
-    s.facing = heading;
+    s.facing = heading; s.look = heading;
   };
   sq.teams.forEach((t, k) => {
     const a = rotateOffset(squadSlot(sq.formation, k, n).x, squadSlot(sq.formation, k, n).y, heading);
@@ -1383,7 +1387,9 @@ function updateSpotting() {
         if (G.time - e.lastFired < 4) p *= 5;
         if (!e.alive || e.health === 'serious') p *= 0.5;
         p *= v;
-        if (Math.abs(angleDiff(o.facing, angleTo(o.x, o.y, e.x, e.y))) > 1.9) p *= 0.35;
+        // Inside the cone a man sees well; at the edge of his vision poorly; behind him hardly at all.
+        const off = Math.abs(angleDiff(o.look, angleTo(o.x, o.y, e.x, e.y)));
+        p *= off <= o.coneHalf ? 1.25 : off < 1.75 ? 0.45 : 0.12;
         p *= 1 - o.supp / 120;
         if (d < 25) p = Math.max(p, 0.5 * v);
         if (chance(Math.min(0.95, p))) { seenBy = o; break; }
@@ -1411,6 +1417,40 @@ function contactReport(fresh) {
   const d = Math.round(dist(o.x, o.y, e.x, e.y) / 10) * 10;
   const what = fresh.length > 1 ? fresh.length + ' enemy' : 'enemy ' + e.title.toLowerCase();
   G.log(o.team.short + ': Contact! ' + what + ', ' + d + ' m, bearing ' + pad3(bearing(o.x, o.y, e.x, e.y)) + '.', 'contact');
+}
+
+// ---------------------------------------------------------------- where each man looks
+// A man sweeps his sector left and right. Calm, the sweep is wide and slow. Alert, with
+// the enemy known to be near or recent fire, it narrows toward the threat and quickens.
+// Agitated, suppressed or under fire, it is fast and erratic, with sudden glances aside.
+// A man firing holds his eyes on his target.
+function updateLook(s, dt) {
+  if (!s.active) return;
+  const sinceFire = G.time - s.team.lastFiredUpon;
+  const threat = threatPoint(s);
+  s.alert = threat ? 1 : sinceFire < 30 ? 0.6 : 0;
+  s.agit = clamp(Math.max(s.supp / 80, sinceFire < 4 ? 0.6 : 0), 0, 1);
+  s.coneHalf = 0.5 - 0.14 * s.alert;
+
+  const aiming = G.time - s.lastFired < 2.5;
+  const tgt = aiming && s.targetId ? G.byId.get(s.targetId) : null;
+  const aimAt = tgt ? tgt : aiming && s.suppressPt ? s.suppressPt : null;
+  if (aimAt) {
+    s.look = turnToward(s.look, angleTo(s.x, s.y, aimAt.x, aimAt.y) + gauss() * 0.02, dt * 8);
+    s.coneHalf = 0.22;
+    return;
+  }
+  let center;
+  if (s.faceAngle != null) center = s.faceAngle;
+  else if (s.moving) center = angleTo(s.x, s.y, s.path[0].x, s.path[0].y);
+  else if (threat) center = angleTo(s.x, s.y, threat.x, threat.y);
+  else center = s.facing;
+  const amp = (1 - 0.45 * s.alert) * (s.moving ? 0.6 : 1.05) + 0.35 * s.agit;
+  const rate = 0.7 + 1.6 * s.alert + 3.5 * s.agit;
+  s.scanPhase += rate * dt * (1 + (s.agit > 0.3 ? gauss() * 0.6 * s.agit : 0));
+  if (s.agit > 0.4 && chance(dt * s.agit * 1.5)) s.scanJerk = gauss() * 0.7 * s.agit;
+  s.scanJerk *= Math.max(0, 1 - dt * 2);
+  s.look = turnToward(s.look, center + Math.sin(s.scanPhase) * amp + s.scanJerk, dt * (2.5 + 5 * s.agit));
 }
 
 // ---------------------------------------------------------------- direct fire
@@ -2084,7 +2124,7 @@ function setupDefense(sq, threat) {
     s.x = c.x; s.y = c.y;
     s.homePosture = c.posture; s.posture = c.posture;
     s.facing = angleTo(s.x, s.y, threat.x, threat.y);
-    s.faceAngle = s.facing;
+    s.faceAngle = s.facing; s.look = s.facing;
   }
 }
 
@@ -2805,6 +2845,7 @@ function render() {
   drawOrdersOverlay(ctx);
   drawProjectiles(ctx);
   drawEffects(ctx);
+  drawCones(ctx);
   drawUnits(ctx);
   drawFloaters(ctx);
   drawScale(ctx);
@@ -3116,15 +3157,6 @@ function drawUnits(ctx) {
       continue;
     }
     const s = p.soldier, down = !s.active;
-    if (!down) {
-      const a = s.facing, tip = r + 8;
-      ctx.fillStyle = s.side === 'blue' ? OVL.blue : OVL.red;
-      ctx.beginPath();
-      ctx.moveTo(q.x + Math.cos(a) * tip, q.y + Math.sin(a) * tip);
-      ctx.lineTo(q.x + Math.cos(a + 0.32) * (r + 2), q.y + Math.sin(a + 0.32) * (r + 2));
-      ctx.lineTo(q.x + Math.cos(a - 0.32) * (r + 2), q.y + Math.sin(a - 0.32) * (r + 2));
-      ctx.closePath(); ctx.fill();
-    }
     const y = drawDisc(ctx, s.side, s.billet, q.x, q.y, r, lifted);
     // Operational condition (MIL-STD-2525): slash for a casualty, X for killed.
     if (down) {
@@ -3149,6 +3181,35 @@ function drawUnits(ctx) {
     if (s.health === 'light') chits.push(['WIA', '#fff', '#b3261e']);
     if (s.side === 'blue' && s.inMag + s.mags === 0) chits.push(['AMO', '#ffd60a', OVL.black]);
     chits.forEach(([label, bg, fg], i) => drawChit(ctx, q.x + r * 0.35 + i * 3, y + r * 0.45 + i * (chit * 0.62), chit, label, bg, fg));
+  }
+}
+
+// Vision cones: where each man is looking, shaded in his side's overlay color.
+// The cone narrows as he grows alert and becomes a thin line while he aims.
+function drawCones(ctx) {
+  if (!G.ui.cones || pieceLevel() !== 'man' || !G.squads.blue) return;
+  const z = R.cam.zoom, len = clamp(40 + z * 14, 60, 150);
+  for (const s of G.soldiers) {
+    if (!s.active || s.routed || (s.side === 'red' && !enemyVisible(s))) continue;
+    const q = toScreen(s.x, s.y);
+    if (q.x < -len || q.y < -len || q.x > R.w + len || q.y > R.h + len) continue;
+    const rgb = s.side === 'blue' ? '31,79,191' : '198,40,40';
+    const g = ctx.createRadialGradient(q.x, q.y, 6, q.x, q.y, len);
+    g.addColorStop(0, 'rgba(' + rgb + ',' + (0.26 + 0.12 * s.agit) + ')');
+    g.addColorStop(1, 'rgba(' + rgb + ',0)');
+    ctx.fillStyle = g;
+    ctx.beginPath();
+    ctx.moveTo(q.x, q.y);
+    ctx.arc(q.x, q.y, len, s.look - s.coneHalf, s.look + s.coneHalf);
+    ctx.closePath();
+    ctx.fill();
+    ctx.strokeStyle = 'rgba(' + rgb + ',0.45)'; ctx.lineWidth = 1;
+    ctx.beginPath();
+    ctx.moveTo(q.x + Math.cos(s.look - s.coneHalf) * 8, q.y + Math.sin(s.look - s.coneHalf) * 8);
+    ctx.lineTo(q.x + Math.cos(s.look - s.coneHalf) * len * 0.75, q.y + Math.sin(s.look - s.coneHalf) * len * 0.75);
+    ctx.moveTo(q.x + Math.cos(s.look + s.coneHalf) * 8, q.y + Math.sin(s.look + s.coneHalf) * 8);
+    ctx.lineTo(q.x + Math.cos(s.look + s.coneHalf) * len * 0.75, q.y + Math.sin(s.look + s.coneHalf) * len * 0.75);
+    ctx.stroke();
   }
 }
 
@@ -3350,6 +3411,7 @@ const UI = {
     this.buildOrders();
     $('btnPause').addEventListener('click', () => togglePause());
     $('btnSpeed').addEventListener('click', () => { G.speed = G.speed >= 16 ? 1 : G.speed * 2; this.refreshBar(); });
+    $('btnCones').addEventListener('click', () => { G.ui.cones = !G.ui.cones; $('btnCones').classList.toggle('on', G.ui.cones); });
     $('btnRoster').addEventListener('click', () => document.body.classList.toggle('roster-open'));
     $('btnHelp').addEventListener('click', () => this.showModal('help'));
     $('btnMenu').addEventListener('click', () => this.showBriefing());
@@ -3795,6 +3857,7 @@ const Input = {
       if (!G.running) return;
       const k = e.key;
       if (k === ' ') { e.preventDefault(); togglePause(); }
+      else if (k === 'v' || k === 'V') $('btnCones').click();
       else if (k === '1' || k === '2' || k === '3') UI.selectTeam(+k);
       else if (k === '0' || k === '`') UI.select({ level: 'squad', squad: G.squads.blue });
       else if (k === 'Escape') {
@@ -3817,7 +3880,7 @@ const G = {
   spotT: 0, teamT: 0, endT: 0,
   stats: null, grid: { e: 34, n: 72 }, revealAll: false,
   settings: null,
-  ui: { sel: null, pending: null, moveMode: 'walk', hover: null, hoverIsPointer: false, panelH: 0 },
+  ui: { cones: true, sel: null, pending: null, moveMode: 'walk', hover: null, hoverIsPointer: false, panelH: 0 },
   log(msg, kind) { UI.log(msg, kind); },
   toast(msg) { UI.toast(msg); },
 };
@@ -3927,7 +3990,27 @@ function rally(team) {
   if (team.side === 'blue') G.log(team.name + ' has rallied.', 'info');
 }
 
+// Immediate action on contact: a Marine fire team walking when it takes fire, or when it
+// sees a new enemy within 250 m, halts, gets down and returns fire. Rushing, assaulting
+// and bounding teams carry on; those orders mean to move under fire.
+function reactToContact(t) {
+  if (t.routing) return;
+  const walking = t.members.filter(s => commandable(s) && s.moving && s.moveMode === 'walk' && !s.assault);
+  if (!walking.length) return;
+  t.reacted = t.reacted || new Set();
+  const underFire = G.time - t.lastFiredUpon < 1.5 && G.time - (t.reactedAt || -99) > 20;
+  const fresh = [...G.known.blue.values()].filter(k => k.visible && !t.reacted.has(k.id) && G.byId.get(k.id)?.active
+    && walking.some(s => dist(s.x, s.y, k.x, k.y) < 250));
+  if (!underFire && !fresh.length) return;
+  for (const k of fresh) t.reacted.add(k.id);
+  t.reactedAt = G.time;
+  releaseControllers(walking);
+  for (const s of walking) { s.path = []; s.homePosture = 'prone'; }
+  G.log(t.short + ': ' + (underFire ? 'Taking fire!' : 'Enemy close!') + ' Get down, return fire.', 'contact');
+}
+
 function updateTeams(dt) {
+  for (const t of [G.squads.blue.hq, ...G.squads.blue.teams]) reactToContact(t);
   for (const sq of [G.squads.blue, G.squads.red]) {
     for (const t of [sq.hq, ...sq.teams]) {
       const quiet = G.time - t.lastFiredUpon;
@@ -3978,6 +4061,7 @@ function update(dt) {
     updateSuppression(s, dt);
     updateMovement(s, dt);
     updateCombat(s, dt);
+    updateLook(s, dt);
   }
   updateProjectiles(dt);
   for (const list of [G.effects, G.floaters]) {

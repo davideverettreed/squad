@@ -19,7 +19,7 @@ function setupDefense(sq, threat) {
     s.x = c.x; s.y = c.y;
     s.homePosture = c.posture; s.posture = c.posture;
     s.facing = angleTo(s.x, s.y, threat.x, threat.y);
-    s.faceAngle = s.facing;
+    s.faceAngle = s.facing; s.look = s.facing;
   }
 }
 

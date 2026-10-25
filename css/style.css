@@ -184,7 +184,8 @@ kbd { font: 600 12px/1 var(--mono); border: 1px solid var(--line); border-bottom
 
 /* ---------------- narrow screens: phones */
 @media (max-width: 760px) {
-  .brand span { display: none; }
+  .brand { display: none; }
+  .barbtns { gap: 4px; }
   #btnRoster { display: inline-block; }
   #btnHelp { display: none; }
   .obtn { padding: 7px 9px; font-size: 13px; min-height: 36px; }
