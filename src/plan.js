@@ -164,6 +164,20 @@ const Plan = {
     this.graphics.push(g);
     return g;
   },
+  // Make a control measure another kind of the same shape: a point or area into another
+  // point or area, a phase line into a limit of advance. Plan lines that use it keep it.
+  changeKind(g, kind) {
+    if (g.kind === kind) return;
+    g.kind = kind; g.name = this.nextName(kind); g.r = GRAPHIC_KINDS[kind].r || 0;
+    if (kind === 'fp' && g.dir == null) { g.dir = angleTo(g.pts[0].x, g.pts[0].y, this.reported.x, this.reported.y); g.width = Math.PI / 2; }
+  },
+  // The kinds a control measure can be changed into.
+  kindsLike(g) {
+    const K = GRAPHIC_KINDS[g.kind];
+    if (K.multi) return [];
+    if (K.line) return ['pl', 'loa'].filter(k => k !== g.kind && !(k === 'loa' && this.graphics.some(o => o.kind === 'loa')));
+    return Object.keys(GRAPHIC_KINDS).filter(k => k !== g.kind && !GRAPHIC_KINDS[k].line);
+  },
   removeGraphic(id) {
     this.graphics = this.graphics.filter(g => g.id !== id);
     for (const l of this.lines) { if (l.where === id) l.where = null; if (l.target === id) l.target = null; }

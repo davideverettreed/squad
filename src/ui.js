@@ -275,6 +275,48 @@ const UI = {
   },
   closePlanMenu() { const m = $('planMenu'); if (m) m.remove(); },
 
+  // The menu for a control measure tapped on the map: change it to another kind, rename
+  // it, open it in the order, or delete it.
+  graphicMenu(sx, sy, g) {
+    this.closePlanMenu();
+    const K = GRAPHIC_KINDS[g.kind], m = el('div', 'planmenu');
+    m.id = 'planMenu';
+    m.appendChild(el('div', 'pmhead', g.name + ' · ' + K.label));
+    const item = (label, note, fn, cls) => {
+      const b = el('button', 'pmitem' + (cls ? ' ' + cls : ''));
+      b.appendChild(el('b', null, label)); if (note) b.appendChild(el('span', null, note));
+      b.addEventListener('click', fn); m.appendChild(b); return b;
+    };
+    const used = Plan.lines.filter(l => l.where === g.id || l.target === g.id).length;
+    // Rename in place.
+    const rn = el('div', 'pmrename');
+    const inp = el('input'); inp.type = 'text'; inp.value = g.name; inp.maxLength = 18;
+    const ok = el('button', 'obtn mini', 'Rename');
+    const rename = () => { g.name = inp.value.trim().toUpperCase() || g.name; this.closePlanMenu(); OPORD.refresh(); };
+    ok.addEventListener('click', rename);
+    inp.addEventListener('keydown', (e) => { if (e.key === 'Enter') rename(); e.stopPropagation(); });
+    rn.appendChild(inp); rn.appendChild(ok); m.appendChild(rn);
+    const kinds = Plan.kindsLike(g);
+    if (kinds.length) {
+      m.appendChild(el('div', 'pmsub', 'Change to'));
+      const grid = el('div', 'pmkinds');
+      for (const k of kinds) {
+        const b = el('button', 'obtn mini', GRAPHIC_KINDS[k].short);
+        b.title = GRAPHIC_KINDS[k].label;
+        b.addEventListener('click', () => { const old = g.name; Plan.changeKind(g, k); this.closePlanMenu(); OPORD.refresh(); this.toast(old + ' is now ' + g.name + '.'); });
+        grid.appendChild(b);
+      }
+      m.appendChild(grid);
+    }
+    item('Edit in the order', used ? used + ' plan line' + (used > 1 ? 's' : '') + ' use it' : 'details, sector of fire', () => { this.closePlanMenu(); Plan.selected = g.id; OPORD.show('E'); });
+    item('Delete', used ? 'its plan lines lose their place' : '', () => { this.closePlanMenu(); Plan.removeGraphic(g.id); OPORD.refresh(); this.toast(g.name + ' deleted.'); }, 'pmdanger');
+    item('Cancel', '', () => this.closePlanMenu(), 'pmcancel');
+    document.body.appendChild(m);
+    const r = m.getBoundingClientRect(), vw = window.innerWidth, vh = window.innerHeight;
+    m.style.left = clamp(sx + 10, 8, vw - r.width - 8) + 'px';
+    m.style.top = clamp(sy - r.height / 2, 8, vh - r.height - 8) + 'px';
+  },
+
   // ------------------------------------------------------------ roster
   buildRoster() {
     const box = $('roster');

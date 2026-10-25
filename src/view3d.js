@@ -371,7 +371,9 @@ const View3D = {
       }
       const r = (gh.unit === 'squad' ? 9 : 6) * k, h = 7 * k;
       m.g.visible = true;
-      m.g.position.set(gh.x - MAP_W / 2, this.height(gh.x, gh.y), gh.y - MAP_H / 2);
+      // Beside the control measure it ends on, so each can be tapped on its own.
+      const gx = gh.x + 12 * k, gy = gh.y - 12 * k;
+      m.g.position.set(gx - MAP_W / 2, this.height(gx, gy), gy - MAP_H / 2);
       m.body.scale.set(r, h, r); m.body.position.y = h / 2;
       m.label.scale.set(5 * k * m.aspect, 5 * k, 1); m.label.position.y = h + 4 * k;
     });
@@ -380,7 +382,7 @@ const View3D = {
   ghostAt(sx, sy) {
     let best = null, bd = 30;
     for (const gh of this.ghostList || []) {
-      const q = this.screenOf(gh.x, gh.y, 3 * this.pegScale());
+      const k = this.pegScale(), q = this.screenOf(gh.x + 12 * k, gh.y - 12 * k, 3 * k);
       const d = Math.hypot(q.x - sx, q.y - sy);
       if (q.z <= 1 && d < bd) { bd = d; best = gh; }
     }
@@ -538,9 +540,10 @@ const View3D = {
         return;
       }
       if (e.type === 'pointerup' && this.dragG && this.pointers.size === 0) {
-        // A tap or drag on a control measure selects it in the order's Execution paragraph.
-        Plan.selected = this.dragG.g.id; this.dragG = null;
-        OPORD.show('E');
+        // A drag moves the control measure; a tap opens its menu (change, rename, delete).
+        const g = this.dragG.g;
+        Plan.selected = g.id; this.dragG = null;
+        if (this.moved) OPORD.refresh(); else UI.graphicMenu(p.x, p.y, g);
         return;
       }
       if (e.type === 'pointerup' && !this.moved && this.pointers.size === 0) this.tap(p.x, p.y, p.button === 2);

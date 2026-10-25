@@ -57,9 +57,10 @@ const Input = {
         return;
       }
       if (e.type === 'pointerup' && this.dragG && this.pointers.size === 0) {
-        Plan.selected = this.dragG.g.id;
-        this.dragG = null;
-        OPORD.show('E');
+        // A drag moves the control measure; a tap opens its menu (change, rename, delete).
+        const g = this.dragG.g;
+        Plan.selected = g.id; this.dragG = null;
+        if (this.moved) OPORD.refresh(); else UI.graphicMenu(p.x, p.y, g);
         return;
       }
       if (e.type === 'pointerup' && !this.moved && this.pointers.size === 0) UI.handleTap(p.x, p.y, p.button === 2);

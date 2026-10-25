@@ -404,3 +404,12 @@ body:not(.roster-min) #btn3d, body:not(.roster-min) #ctl3d { margin-left: 0; }
 .dside .daar:first-of-type { margin-top: 6px; }
 #debrief .card.small { width: min(900px, 100%); }
 @media (max-width: 760px) { .dgrid { grid-template-columns: minmax(0, 1fr); } }
+
+/* Control measure menu: rename field, the kinds it can become, delete. */
+.planmenu .pmrename { display: flex; gap: 6px; padding: 6px 8px; }
+.planmenu .pmrename input { flex: 1; min-width: 0; font: 600 13px var(--mono, monospace); text-transform: uppercase; padding: 4px 6px; border: 1px solid #b08d57; border-radius: 3px; background: #fff; color: #1c2b3a; }
+.planmenu .pmsub { padding: 6px 8px 2px; color: #6b7380; font: 600 11px/1 "Saira Condensed", sans-serif; letter-spacing: .08em; text-transform: uppercase; }
+.planmenu .pmkinds { display: flex; flex-wrap: wrap; gap: 4px; padding: 4px 8px 6px; max-width: 260px; }
+.planmenu .pmkinds .obtn { background: #eceae3; color: #1c2b3a; border-color: #c9c3b3; }
+.planmenu .pmkinds .obtn:hover { background: #ffe066; }
+.planmenu .pmdanger b { color: #8a2d2d; }
