@@ -18,7 +18,7 @@ const View3D = {
   active: false, built: false, mapRef: null, canvas: null,
   renderer: null, scene: null, camera: null, tiles: [], skirt: null, table: null, exag: 2,
   cam: { x: 500, y: 500, yaw: 0, pitch: 0.9, dist: 700 },
-  pointers: new Map(), drag: null, pegs: new Map(), lost: [], symTex: new Map(), dragG: null,
+  pointers: new Map(), drag: null, pegs: new Map(), lost: [], symTex: new Map(), dragG: null, marks: [], marksRef: null, drawingDrape: false,
 
   // ------------------------------------------------------------ opening and closing
   toggle() { if (this.active) this.close(); else this.open(); },
@@ -89,7 +89,7 @@ const View3D = {
     let hi = 0;
     for (const v of m.elev) if (v > hi) hi = v;
     // Sand-table exaggeration: low ground raised more, mountains less.
-    this.exag = clamp(180 / Math.max(10, hi), 1.5, 3);
+    this.exag = clamp(180 / Math.max(10, hi), 1.2, 3);
     const seg = Math.round(TILE_M / 8), nt = Math.ceil(MAP_W / TILE_M);
     for (let j = 0; j < nt; j++) for (let i = 0; i < nt; i++) {
       const x0 = i * TILE_M, y0 = j * TILE_M, w = Math.min(TILE_M, MAP_W - x0), h = Math.min(TILE_M, MAP_H - y0);
@@ -139,6 +139,7 @@ const View3D = {
     S.add(this.table);
     this.mapRef = m;
     this.clearPegs();
+    this.buildMarks();
     // Start behind the squad, looking toward the reported enemy.
     const c = centroid(G.squads.blue.all), e = Plan.reported || { x: MAP_W / 2, y: MAP_H / 2 };
     Object.assign(this.cam, { x: lerp(c.x, e.x, 0.3), y: lerp(c.y, e.y, 0.3), yaw: Math.atan2(e.y - c.y, e.x - c.x), pitch: 0.95, dist: MAP_W * 0.85 });
@@ -212,11 +213,12 @@ const View3D = {
     ctx.drawImage(t.base, 0, 0, res, res);
     const save = { cam: R.cam, w: R.w, h: R.h };
     R.cam = { x: t.x0 + t.w / 2, y: t.y0 + t.h / 2, zoom: res / t.w }; R.w = R.h = res;
+    this.drawingDrape = true; // the terrain flags stand up in 3D instead
     try {
       Fog.draw(ctx);
       drawPlan(ctx); drawOrdersOverlay(ctx); drawProjectiles(ctx); drawEffects(ctx);
       drawCones(ctx); drawGhostFormation(ctx); drawTapes(ctx);
-    } finally { R.cam = save.cam; R.w = save.w; R.h = save.h; }
+    } finally { R.cam = save.cam; R.w = save.w; R.h = save.h; this.drawingDrape = false; }
     t.tex.needsUpdate = true;
     t.drawnAt = performance.now(); t.dirty = false;
   },
@@ -255,6 +257,7 @@ const View3D = {
     this.buildSome();
     this.refreshTiles();
     this.updatePegs();
+    this.updateMarks();
     this.renderer.render(this.scene, this.camera);
   },
 
@@ -324,6 +327,60 @@ const View3D = {
     }
     for (; n < this.lost.length; n++) this.lost[n].visible = false;
   },
+  // ------------------------------------------------------------ terrain flags
+  // A pennant with a name, as on the flat map, for the top of a flagpole.
+  flagTexture(text, color) {
+    const c = document.createElement('canvas'), ctx = c.getContext('2d');
+    ctx.font = '700 44px "Saira Condensed", "Arial Narrow", sans-serif';
+    const w = Math.ceil(ctx.measureText(text).width) + 48, h = 64;
+    c.width = w; c.height = h;
+    ctx.font = '700 44px "Saira Condensed", "Arial Narrow", sans-serif';
+    ctx.fillStyle = 'rgba(250,248,240,0.97)'; ctx.strokeStyle = color; ctx.lineWidth = 5;
+    ctx.beginPath(); ctx.moveTo(3, 3); ctx.lineTo(w - 3, 3); ctx.lineTo(w - 20, h / 2); ctx.lineTo(w - 3, h - 3); ctx.lineTo(3, h - 3); ctx.closePath();
+    ctx.fill(); ctx.stroke();
+    ctx.fillStyle = color; ctx.textBaseline = 'middle'; ctx.fillText(text, 14, h / 2 + 2);
+    return { tex: new THREE.CanvasTexture(c), aspect: w / h };
+  },
+  // Key terrain, settlements and the reported enemy stand on the sand table as flagpoles;
+  // the enemy's carries a red diamond, the hostile symbol.
+  buildMarks() {
+    for (const m of this.marks) this.scene.remove(m.g);
+    this.marks = [];
+    this.marksRef = Plan.terrain;
+    for (const k of Plan.terrain || []) {
+      if (k.kind === 'aa') continue; // an area: it stays drawn on the ground
+      const red = k.kind === 'eny', ink = red ? '#c62828' : '#161616';
+      const g = new THREE.Group();
+      const pole = new THREE.Mesh(new THREE.CylinderGeometry(1, 1, 1, 8), new THREE.MeshLambertMaterial({ color: red ? 0x8e1c1c : 0x222222 }));
+      const f = this.flagTexture(k.name, ink);
+      const flag = new THREE.Sprite(new THREE.SpriteMaterial({ map: f.tex }));
+      flag.center.set(0, 0.5);
+      const base = new THREE.Mesh(new THREE.CylinderGeometry(1, 1, 1, 24), new THREE.MeshLambertMaterial({ color: red ? 0xf4c4c4 : 0xf7f5ec }));
+      g.add(pole, flag, base);
+      let dia = null;
+      if (red) {
+        dia = new THREE.Mesh(new THREE.OctahedronGeometry(1), new THREE.MeshLambertMaterial({ color: 0xd84343, transparent: true, opacity: 0.8 }));
+        g.add(dia);
+      }
+      g.position.set(k.x - MAP_W / 2, this.height(k.x, k.y), k.y - MAP_H / 2);
+      this.scene.add(g);
+      this.marks.push({ g, pole, flag, base, dia, aspect: f.aspect });
+    }
+  },
+  updateMarks() {
+    if (this.marksRef !== Plan.terrain) this.buildMarks();
+    const k = this.pegScale(), on = !!Plan.showTerrain;
+    for (const m of this.marks) {
+      m.g.visible = on;
+      if (!on) continue;
+      const H = 26 * k, fh = 7.5 * k;
+      m.pole.scale.set(0.5 * k, H, 0.5 * k); m.pole.position.y = H / 2;
+      m.flag.scale.set(fh * m.aspect, fh, 1); m.flag.position.set(0.5 * k, H - fh / 2, 0);
+      m.base.scale.set(2.2 * k, 0.5, 2.2 * k); m.base.position.y = 0.25;
+      if (m.dia) { m.dia.scale.set(4.5 * k, 4.5 * k, 4.5 * k); m.dia.position.y = H * 0.45; m.dia.rotation.y += 0.01; }
+    }
+  },
+
   clearPegs() {
     for (const p of this.pegs.values()) this.scene.remove(p.g);
     this.pegs.clear();

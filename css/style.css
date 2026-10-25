@@ -372,3 +372,8 @@ body:not(.roster-min) #btn3d, body:not(.roster-min) #ctl3d { margin-left: 0; }
     display: grid; grid-template-columns: repeat(2, 38px); gap: 4px; }
   #ctl3d .obtn { min-width: 0; padding: 6px 0; }
 }
+
+/* Tool palette: control measures in rows of points, lines and areas. */
+.tgroup { display: flex; align-items: flex-start; gap: 6px; margin-bottom: 4px; }
+.tglab { flex: none; width: 42px; padding-top: 7px; color: var(--muted); font: 600 10px/1 var(--display); letter-spacing: 0.1em; text-transform: uppercase; }
+.tgroup .otools { flex: 1; min-width: 0; }

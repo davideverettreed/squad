@@ -1071,6 +1071,8 @@ function drawTerrainMarks(ctx) {
     ctx.fillText(text, x + 5, top + h / 2 + 0.5);
   };
   for (const k of Plan.terrain) {
+    // On the 3D sand table the flags stand up as poles; only the assembly area is drawn flat.
+    if (View3D.drawingDrape && k.kind !== 'aa') continue;
     const p = toScreen(k.x, k.y);
     if (p.x < -80 || p.y < -80 || p.x > R.w + 200 || p.y > R.h + 80) continue;
     if (k.kind === 'aa') {

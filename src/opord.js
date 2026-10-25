@@ -44,8 +44,13 @@ const OPORD = {
 
   // Buttons for placing control measures, shared by Execution and the tool palette.
   toolButtons(box) {
+    for (const [label, kinds] of GRAPHIC_GROUPS) {
+    const row = el('div', 'tgroup');
+    row.appendChild(el('span', 'tglab', label));
     const tools = el('div', 'otools');
-    for (const [k, K] of Object.entries(GRAPHIC_KINDS)) {
+    row.appendChild(tools);
+    for (const k of kinds) {
+      const K = GRAPHIC_KINDS[k];
       const b = el('button', 'obtn' + (Plan.tool === k ? ' on' : ''), K.short);
       b.title = 'Place a ' + K.label.toLowerCase();
       b.addEventListener('click', () => {
@@ -55,7 +60,8 @@ const OPORD = {
       });
       tools.appendChild(b);
     }
-    box.appendChild(tools);
+    box.appendChild(row);
+    }
     if (Plan.tool === 'rte') {
       const r = el('div', 'otools');
       const fin = el('button', 'obtn primary', 'Finish route (' + (Plan.routeDraft ? Plan.routeDraft.length : 0) + ' points)');
@@ -289,19 +295,24 @@ const OPORD = {
       for (const [k, v] of rows) { t.appendChild(el('dt', null, k)); t.appendChild(el('dd', null, v)); }
       d.appendChild(t);
     };
-    sec('Control measures (map)', [
+    sec('Points (one tap)', [
       ['CP · Checkpoint', 'A point on the ground to control and report movement. A unit sent here moves to it and waits for its next line.'],
-      ['RTE · Route', 'A path of waypoints. The unit follows it instead of the shortest way: use it to stay in a draw or behind a tree line.'],
-      ['SBF · Support by fire', 'Where the base of fire sets in to fire onto the objective and cover the assault.'],
-      ['ASLT POS · Assault position', 'The last covered ground short of the objective, where the assault element shakes out and waits for the signal.'],
-      ['OBJ · Objective', 'The ground or enemy position to be seized or cleared.'],
-      ['TRP · Target reference point', 'A marked point that fire can be put onto quickly. Units sent to it suppress it.'],
-      ['FP · Fighting position', 'A defensive position with a sector of fire (set its center and width when selected).'],
-      ['PL · Phase line', 'A line across the ground; crossing it is reported. Used to control and time the movement.'],
-      ['LOA · Limit of advance', 'No one goes past it. Stops the assault from running on into the open or into friendly fire.'],
       ['RP · Release point', 'Where the squad splits and the fire teams go to their own tasks.'],
       ['RLY PT · Rally point', 'Where the squad regroups if it is scattered.'],
       ['CCP · Casualty collection point', 'Where wounded are brought for treatment and evacuation.'],
+      ['TRP · Target reference point', 'A marked point that fire can be put onto quickly. Units sent to it suppress it.'],
+      ['FP · Fighting position', 'A defensive position with a sector of fire (set its center and width when selected).'],
+      ['SBF · Support by fire', 'Where the base of fire sets in to fire onto the objective and cover the assault.'],
+    ]);
+    sec('Lines (two taps; a route, a tap per waypoint)', [
+      ['PL · Phase line', 'A line across the ground; crossing it is reported. Used to control and time the movement.'],
+      ['LOA · Limit of advance', 'No one goes past it. Stops the assault from running on into the open or into friendly fire.'],
+      ['RTE · Route', 'A path of waypoints. The unit follows it instead of the shortest way: use it to stay in a draw or behind a tree line.'],
+    ]);
+    sec('Areas (one tap at the center)', [
+      ['OBJ · Objective', 'The ground or enemy position to be seized or cleared.'],
+      ['ASLT POS · Assault position', 'The last covered ground short of the objective, where the assault element shakes out and waits for the signal.'],
+      ['AA · Assembly area', 'Where the squad starts and prepares. Drawn for you at the start.'],
     ]);
     sec('Tasks (plan lines)', [
       ['Move to', 'Go to the point in the chosen mode: walk, rush or crawl.'],

@@ -384,6 +384,11 @@ body:not(.roster-min) #btn3d, body:not(.roster-min) #ctl3d { margin-left: 0; }
     display: grid; grid-template-columns: repeat(2, 38px); gap: 4px; }
   #ctl3d .obtn { min-width: 0; padding: 6px 0; }
 }
+
+/* Tool palette: control measures in rows of points, lines and areas. */
+.tgroup { display: flex; align-items: flex-start; gap: 6px; margin-bottom: 4px; }
+.tglab { flex: none; width: 42px; padding-top: 7px; color: var(--muted); font: 600 10px/1 var(--display); letter-spacing: 0.1em; text-transform: uppercase; }
+.tgroup .otools { flex: 1; min-width: 0; }
 </style>
 <link rel="manifest" href="manifest.webmanifest">
 <link rel="icon" type="image/png" sizes="192x192" href="icons/icon-192.png">
@@ -488,7 +493,7 @@ body:not(.roster-min) #btn3d, body:not(.roster-min) #ctl3d { margin-left: 0; }
         <h3>Overlay</h3>
         <p>Orders are drawn as on an acetate overlay: blue for friendly, red for enemy, black for targets. Blue lines with arrowheads are routes (long dashes for a rush, dots for a crawl); a heavy arrow with a solid head is an assault. OBJ marks the objective of a bounding drill. Dashed blue lines run from the shooters to a suppression target, a black cross in a circle. 40MM marks a grenade launcher target.</p>
         <h3>Map key</h3>
-        <p>A squad fights on a 2 by 2 kilometer sheet of four 1-kilometer grid squares, starting 1 to 1.4 km from the enemy, beyond spotting range; larger units will get larger sheets. The sheet is in standard US military map colors. White is open ground. Light green with tufts is tall grass, which hides a man lying prone. Green is woods and hedgerows; rows of small green circles are orchards, green row lines are vineyards. Blue lines are streams, which run in shallow gullies that give cover; blue areas are ponds and cannot be crossed. A broad blue band is a river: it can be crossed only at a bridge (two black lines across the road) or at a ford, marked FORD in a dashed blue circle, where men wade slowly in the open. Pale blue-green ground with small blue tufts is swamp: very slow going and no cover, but it hides a man. Red-brown lines are contours (5 or 10 meters apart, as the margin states), with a heavier, numbered index contour every fifth line; numbers with a dot are hilltop heights. Black blocks are buildings. A black line with ticks is a stone wall, which gives hard cover to a kneeling or prone man. The red road is a paved road; the dashed double lines are dirt tracks. Each mission is set in one of six regions, chosen in the New mission dialog or at random: rolling farmland; the Southern California coast (Pacific Ocean on the west edge, sand beach, chaparral); South Texas brush country (mesquite thickets, pasture, stock tanks); North Carolina pine woods and blackwater swamp; the Arizona desert and mountains (open creosote flats, rock outcrops, dry washes shown as dashed blue lines); and the Montana mountains in winter (deep snow, lodgepole pine, frozen ponds). The ground changes the fight: snow, sand, chaparral and rock are slow; brush and grass hide a man lying down; rock gives cover; open desert gives long fields of fire. The 3D button (key T) turns the map into a sand table: the same sheet laid over the ground in 3D, heights exaggerated, with every man standing on it as a peg under his billet symbol (gray when hit; a red wire sphere marks where an enemy was last seen). Planning works there too: tap with a tool to place a control measure, drag one to move it, tap the ground with a unit selected for the plan menu. Drag to move, right-drag or two fingers to turn and tilt, wheel or pinch to zoom; the buttons beside it turn, tilt and zoom on a phone. Taps give the same orders as on the flat map. Fog of war: ground your squad can see now is clear; ground it has seen before is faded; ground it has never seen is faded more (key F toggles the wash). Point at the map to read the 8-digit grid reference. Measure (key M) lays a tape between two taps and marks the distance, grid bearing and mils on the map; tap a label to remove it. Point at a formation button to see the selected team or squad ghosted in that formation. Zoomed out, your men gather into one counter per fire team, then one for the squad, in the standard unit symbol: a rectangle with an infantry X for friendly, a diamond for enemy.</p>
+        <p>A squad fights on a 2 by 2 kilometer sheet of four 1-kilometer grid squares, starting 1 to 1.4 km from the enemy, beyond spotting range; larger units will get larger sheets. The sheet is in standard US military map colors. White is open ground. Light green with tufts is tall grass, which hides a man lying prone. Green is woods and hedgerows; rows of small green circles are orchards, green row lines are vineyards. Blue lines are streams, which run in shallow gullies that give cover; blue areas are ponds and cannot be crossed. A broad blue band is a river: it can be crossed only at a bridge (two black lines across the road) or at a ford, marked FORD in a dashed blue circle, where men wade slowly in the open. Pale blue-green ground with small blue tufts is swamp: very slow going and no cover, but it hides a man. Red-brown lines are contours (5 or 10 meters apart, as the margin states), with a heavier, numbered index contour every fifth line; numbers with a dot are hilltop heights. Black blocks are buildings. A black line with ticks is a stone wall, which gives hard cover to a kneeling or prone man. The red road is a paved road; the dashed double lines are dirt tracks. Each mission is set in one of six regions, chosen in the New mission dialog or at random: rolling farmland; the Southern California coast (Pacific Ocean on the west edge, sand beach, chaparral); South Texas brush country (mesquite thickets, pasture, stock tanks); North Carolina pine woods and blackwater swamp; the Arizona desert and mountains (open creosote flats, rock outcrops, dry washes shown as dashed blue lines); and the Montana mountains in winter (deep snow, lodgepole pine, frozen ponds). The ground changes the fight: snow, sand, chaparral and rock are slow; brush and grass hide a man lying down; rock gives cover; open desert gives long fields of fire. The 3D button (key T) turns the map into a sand table: the same sheet laid over the ground in 3D, heights exaggerated, with every man standing on it as a peg under his billet symbol (gray when hit; a red wire sphere marks where an enemy was last seen), and key terrain and the reported enemy position on flagpoles. Planning works there too: tap with a tool to place a control measure, drag one to move it, tap the ground with a unit selected for the plan menu. Drag to move, right-drag or two fingers to turn and tilt, wheel or pinch to zoom; the buttons beside it turn, tilt and zoom on a phone. Taps give the same orders as on the flat map. Fog of war: ground your squad can see now is clear; ground it has seen before is faded; ground it has never seen is faded more (key F toggles the wash). Point at the map to read the 8-digit grid reference. Measure (key M) lays a tape between two taps and marks the distance, grid bearing and mils on the map; tap a label to remove it. Point at a formation button to see the selected team or squad ghosted in that formation. Zoomed out, your men gather into one counter per fire team, then one for the squad, in the standard unit symbol: a rectangle with an infantry X for friendly, a diamond for enemy.</p>
         <h3>Camera</h3>
         <p>Drag to pan. Use the wheel or pinch to zoom. <kbd>Space</kbd> pauses; you can give orders while paused.</p>
       </div>
@@ -4130,6 +4135,8 @@ function drawTerrainMarks(ctx) {
     ctx.fillText(text, x + 5, top + h / 2 + 0.5);
   };
   for (const k of Plan.terrain) {
+    // On the 3D sand table the flags stand up as poles; only the assembly area is drawn flat.
+    if (View3D.drawingDrape && k.kind !== 'aa') continue;
     const p = toScreen(k.x, k.y);
     if (p.x < -80 || p.y < -80 || p.x > R.w + 200 || p.y > R.h + 80) continue;
     if (k.kind === 'aa') {
@@ -5076,6 +5083,12 @@ const GRAPHIC_KINDS = {
   rel:  { label: 'Release point', short: 'RP', numbered: true },
   trp:  { label: 'Target reference point', short: 'TRP', numbered: true },
 };
+// Control measures grouped as the graphics manuals group them: points, lines and areas.
+const GRAPHIC_GROUPS = [
+  ['Points', ['cp', 'rel', 'rly', 'ccp', 'trp', 'fp', 'sbf']],
+  ['Lines', ['pl', 'loa', 'rte']],
+  ['Areas', ['obj', 'aslt']],
+];
 const TASKS = {
   move:     { label: 'Move to', where: true },
   route:    { label: 'Move along route', where: true, whereKinds: ['rte'] },
@@ -5820,8 +5833,13 @@ const OPORD = {
 
   // Buttons for placing control measures, shared by Execution and the tool palette.
   toolButtons(box) {
+    for (const [label, kinds] of GRAPHIC_GROUPS) {
+    const row = el('div', 'tgroup');
+    row.appendChild(el('span', 'tglab', label));
     const tools = el('div', 'otools');
-    for (const [k, K] of Object.entries(GRAPHIC_KINDS)) {
+    row.appendChild(tools);
+    for (const k of kinds) {
+      const K = GRAPHIC_KINDS[k];
       const b = el('button', 'obtn' + (Plan.tool === k ? ' on' : ''), K.short);
       b.title = 'Place a ' + K.label.toLowerCase();
       b.addEventListener('click', () => {
@@ -5831,7 +5849,8 @@ const OPORD = {
       });
       tools.appendChild(b);
     }
-    box.appendChild(tools);
+    box.appendChild(row);
+    }
     if (Plan.tool === 'rte') {
       const r = el('div', 'otools');
       const fin = el('button', 'obtn primary', 'Finish route (' + (Plan.routeDraft ? Plan.routeDraft.length : 0) + ' points)');
@@ -6065,19 +6084,24 @@ const OPORD = {
       for (const [k, v] of rows) { t.appendChild(el('dt', null, k)); t.appendChild(el('dd', null, v)); }
       d.appendChild(t);
     };
-    sec('Control measures (map)', [
+    sec('Points (one tap)', [
       ['CP · Checkpoint', 'A point on the ground to control and report movement. A unit sent here moves to it and waits for its next line.'],
-      ['RTE · Route', 'A path of waypoints. The unit follows it instead of the shortest way: use it to stay in a draw or behind a tree line.'],
-      ['SBF · Support by fire', 'Where the base of fire sets in to fire onto the objective and cover the assault.'],
-      ['ASLT POS · Assault position', 'The last covered ground short of the objective, where the assault element shakes out and waits for the signal.'],
-      ['OBJ · Objective', 'The ground or enemy position to be seized or cleared.'],
-      ['TRP · Target reference point', 'A marked point that fire can be put onto quickly. Units sent to it suppress it.'],
-      ['FP · Fighting position', 'A defensive position with a sector of fire (set its center and width when selected).'],
-      ['PL · Phase line', 'A line across the ground; crossing it is reported. Used to control and time the movement.'],
-      ['LOA · Limit of advance', 'No one goes past it. Stops the assault from running on into the open or into friendly fire.'],
       ['RP · Release point', 'Where the squad splits and the fire teams go to their own tasks.'],
       ['RLY PT · Rally point', 'Where the squad regroups if it is scattered.'],
       ['CCP · Casualty collection point', 'Where wounded are brought for treatment and evacuation.'],
+      ['TRP · Target reference point', 'A marked point that fire can be put onto quickly. Units sent to it suppress it.'],
+      ['FP · Fighting position', 'A defensive position with a sector of fire (set its center and width when selected).'],
+      ['SBF · Support by fire', 'Where the base of fire sets in to fire onto the objective and cover the assault.'],
+    ]);
+    sec('Lines (two taps; a route, a tap per waypoint)', [
+      ['PL · Phase line', 'A line across the ground; crossing it is reported. Used to control and time the movement.'],
+      ['LOA · Limit of advance', 'No one goes past it. Stops the assault from running on into the open or into friendly fire.'],
+      ['RTE · Route', 'A path of waypoints. The unit follows it instead of the shortest way: use it to stay in a draw or behind a tree line.'],
+    ]);
+    sec('Areas (one tap at the center)', [
+      ['OBJ · Objective', 'The ground or enemy position to be seized or cleared.'],
+      ['ASLT POS · Assault position', 'The last covered ground short of the objective, where the assault element shakes out and waits for the signal.'],
+      ['AA · Assembly area', 'Where the squad starts and prepares. Drawn for you at the start.'],
     ]);
     sec('Tasks (plan lines)', [
       ['Move to', 'Go to the point in the chosen mode: walk, rush or crawl.'],
@@ -6382,7 +6406,7 @@ const View3D = {
   active: false, built: false, mapRef: null, canvas: null,
   renderer: null, scene: null, camera: null, tiles: [], skirt: null, table: null, exag: 2,
   cam: { x: 500, y: 500, yaw: 0, pitch: 0.9, dist: 700 },
-  pointers: new Map(), drag: null, pegs: new Map(), lost: [], symTex: new Map(), dragG: null,
+  pointers: new Map(), drag: null, pegs: new Map(), lost: [], symTex: new Map(), dragG: null, marks: [], marksRef: null, drawingDrape: false,
 
   // ------------------------------------------------------------ opening and closing
   toggle() { if (this.active) this.close(); else this.open(); },
@@ -6453,7 +6477,7 @@ const View3D = {
     let hi = 0;
     for (const v of m.elev) if (v > hi) hi = v;
     // Sand-table exaggeration: low ground raised more, mountains less.
-    this.exag = clamp(180 / Math.max(10, hi), 1.5, 3);
+    this.exag = clamp(180 / Math.max(10, hi), 1.2, 3);
     const seg = Math.round(TILE_M / 8), nt = Math.ceil(MAP_W / TILE_M);
     for (let j = 0; j < nt; j++) for (let i = 0; i < nt; i++) {
       const x0 = i * TILE_M, y0 = j * TILE_M, w = Math.min(TILE_M, MAP_W - x0), h = Math.min(TILE_M, MAP_H - y0);
@@ -6503,6 +6527,7 @@ const View3D = {
     S.add(this.table);
     this.mapRef = m;
     this.clearPegs();
+    this.buildMarks();
     // Start behind the squad, looking toward the reported enemy.
     const c = centroid(G.squads.blue.all), e = Plan.reported || { x: MAP_W / 2, y: MAP_H / 2 };
     Object.assign(this.cam, { x: lerp(c.x, e.x, 0.3), y: lerp(c.y, e.y, 0.3), yaw: Math.atan2(e.y - c.y, e.x - c.x), pitch: 0.95, dist: MAP_W * 0.85 });
@@ -6576,11 +6601,12 @@ const View3D = {
     ctx.drawImage(t.base, 0, 0, res, res);
     const save = { cam: R.cam, w: R.w, h: R.h };
     R.cam = { x: t.x0 + t.w / 2, y: t.y0 + t.h / 2, zoom: res / t.w }; R.w = R.h = res;
+    this.drawingDrape = true; // the terrain flags stand up in 3D instead
     try {
       Fog.draw(ctx);
       drawPlan(ctx); drawOrdersOverlay(ctx); drawProjectiles(ctx); drawEffects(ctx);
       drawCones(ctx); drawGhostFormation(ctx); drawTapes(ctx);
-    } finally { R.cam = save.cam; R.w = save.w; R.h = save.h; }
+    } finally { R.cam = save.cam; R.w = save.w; R.h = save.h; this.drawingDrape = false; }
     t.tex.needsUpdate = true;
     t.drawnAt = performance.now(); t.dirty = false;
   },
@@ -6619,6 +6645,7 @@ const View3D = {
     this.buildSome();
     this.refreshTiles();
     this.updatePegs();
+    this.updateMarks();
     this.renderer.render(this.scene, this.camera);
   },
 
@@ -6688,6 +6715,60 @@ const View3D = {
     }
     for (; n < this.lost.length; n++) this.lost[n].visible = false;
   },
+  // ------------------------------------------------------------ terrain flags
+  // A pennant with a name, as on the flat map, for the top of a flagpole.
+  flagTexture(text, color) {
+    const c = document.createElement('canvas'), ctx = c.getContext('2d');
+    ctx.font = '700 44px "Saira Condensed", "Arial Narrow", sans-serif';
+    const w = Math.ceil(ctx.measureText(text).width) + 48, h = 64;
+    c.width = w; c.height = h;
+    ctx.font = '700 44px "Saira Condensed", "Arial Narrow", sans-serif';
+    ctx.fillStyle = 'rgba(250,248,240,0.97)'; ctx.strokeStyle = color; ctx.lineWidth = 5;
+    ctx.beginPath(); ctx.moveTo(3, 3); ctx.lineTo(w - 3, 3); ctx.lineTo(w - 20, h / 2); ctx.lineTo(w - 3, h - 3); ctx.lineTo(3, h - 3); ctx.closePath();
+    ctx.fill(); ctx.stroke();
+    ctx.fillStyle = color; ctx.textBaseline = 'middle'; ctx.fillText(text, 14, h / 2 + 2);
+    return { tex: new THREE.CanvasTexture(c), aspect: w / h };
+  },
+  // Key terrain, settlements and the reported enemy stand on the sand table as flagpoles;
+  // the enemy's carries a red diamond, the hostile symbol.
+  buildMarks() {
+    for (const m of this.marks) this.scene.remove(m.g);
+    this.marks = [];
+    this.marksRef = Plan.terrain;
+    for (const k of Plan.terrain || []) {
+      if (k.kind === 'aa') continue; // an area: it stays drawn on the ground
+      const red = k.kind === 'eny', ink = red ? '#c62828' : '#161616';
+      const g = new THREE.Group();
+      const pole = new THREE.Mesh(new THREE.CylinderGeometry(1, 1, 1, 8), new THREE.MeshLambertMaterial({ color: red ? 0x8e1c1c : 0x222222 }));
+      const f = this.flagTexture(k.name, ink);
+      const flag = new THREE.Sprite(new THREE.SpriteMaterial({ map: f.tex }));
+      flag.center.set(0, 0.5);
+      const base = new THREE.Mesh(new THREE.CylinderGeometry(1, 1, 1, 24), new THREE.MeshLambertMaterial({ color: red ? 0xf4c4c4 : 0xf7f5ec }));
+      g.add(pole, flag, base);
+      let dia = null;
+      if (red) {
+        dia = new THREE.Mesh(new THREE.OctahedronGeometry(1), new THREE.MeshLambertMaterial({ color: 0xd84343, transparent: true, opacity: 0.8 }));
+        g.add(dia);
+      }
+      g.position.set(k.x - MAP_W / 2, this.height(k.x, k.y), k.y - MAP_H / 2);
+      this.scene.add(g);
+      this.marks.push({ g, pole, flag, base, dia, aspect: f.aspect });
+    }
+  },
+  updateMarks() {
+    if (this.marksRef !== Plan.terrain) this.buildMarks();
+    const k = this.pegScale(), on = !!Plan.showTerrain;
+    for (const m of this.marks) {
+      m.g.visible = on;
+      if (!on) continue;
+      const H = 26 * k, fh = 7.5 * k;
+      m.pole.scale.set(0.5 * k, H, 0.5 * k); m.pole.position.y = H / 2;
+      m.flag.scale.set(fh * m.aspect, fh, 1); m.flag.position.set(0.5 * k, H - fh / 2, 0);
+      m.base.scale.set(2.2 * k, 0.5, 2.2 * k); m.base.position.y = 0.25;
+      if (m.dia) { m.dia.scale.set(4.5 * k, 4.5 * k, 4.5 * k); m.dia.position.y = H * 0.45; m.dia.rotation.y += 0.01; }
+    }
+  },
+
   clearPegs() {
     for (const p of this.pegs.values()) this.scene.remove(p.g);
     this.pegs.clear();

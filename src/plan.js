@@ -17,6 +17,12 @@ const GRAPHIC_KINDS = {
   rel:  { label: 'Release point', short: 'RP', numbered: true },
   trp:  { label: 'Target reference point', short: 'TRP', numbered: true },
 };
+// Control measures grouped as the graphics manuals group them: points, lines and areas.
+const GRAPHIC_GROUPS = [
+  ['Points', ['cp', 'rel', 'rly', 'ccp', 'trp', 'fp', 'sbf']],
+  ['Lines', ['pl', 'loa', 'rte']],
+  ['Areas', ['obj', 'aslt']],
+];
 const TASKS = {
   move:     { label: 'Move to', where: true },
   route:    { label: 'Move along route', where: true, whereKinds: ['rte'] },
