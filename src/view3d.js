@@ -7,13 +7,16 @@
 // control measures can be placed and dragged here too.
 
 const THREE_URL = 'https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js';
-const DRAPE = 2048;      // pixels across the texture laid on the ground
-const DRAPE_RATE = 0.12; // seconds between redraws of the plan, fog and pieces
+// The ground is cut into tiles, each with its own picture of the map and the overlays.
+// Tiles near the camera get a sharper picture than those farther off.
+const TILE_M = 500;            // meters across a ground tile
+const TILE_RES = [512, 1024, 2048]; // picture sizes: far, middle, near (1, 2 and 4 px per meter)
+const TILE_RATE = 0.1;         // least seconds between redraws of one tile's overlays
+const BUILD_MS = 8;            // milliseconds a frame may spend drawing the printed map
 
 const View3D = {
   active: false, built: false, mapRef: null, canvas: null,
-  renderer: null, scene: null, camera: null, terrain: null, skirt: null, texture: null,
-  drape: null, base: null, exag: 2, drapeT: 0,
+  renderer: null, scene: null, camera: null, tiles: [], skirt: null, table: null, exag: 2,
   cam: { x: 500, y: 500, yaw: 0, pitch: 0.9, dist: 700 },
   pointers: new Map(), drag: null, pegs: new Map(), lost: [], symTex: new Map(), dragG: null,
 
@@ -69,34 +72,52 @@ const View3D = {
     const sun = new THREE.DirectionalLight(0xffffff, 0.45);
     sun.position.set(-1, 1.4, -1); // from the northwest, as on the printed shading
     this.scene.add(sun);
-    this.drape = document.createElement('canvas');
-    this.drape.width = this.drape.height = DRAPE;
-    this.texture = new THREE.CanvasTexture(this.drape);
-    this.texture.anisotropy = this.renderer.capabilities.getMaxAnisotropy();
+    this.aniso = this.renderer.capabilities.getMaxAnisotropy();
+    this.frustum = new THREE.Frustum();
     this.raycaster = new THREE.Raycaster();
     this.bindInput();
     window.addEventListener('resize', () => { if (this.active) this.resize(); });
     this.built = true;
   },
 
-  // A new sheet: the ground mesh, its sides, the table, and the printed map to lay on it.
+  // A new sheet: the ground tiles, the sides of the box, the table, and the printed map.
   newMap() {
     const m = G.map, S = this.scene;
-    for (const o of [this.terrain, this.skirt, this.table]) if (o) { S.remove(o); o.geometry.dispose(); }
+    for (const t of this.tiles) { S.remove(t.mesh); t.mesh.geometry.dispose(); t.tex.dispose(); }
+    for (const o of [this.skirt, this.table]) if (o) { S.remove(o); o.geometry.dispose(); }
+    this.tiles = [];
     let hi = 0;
     for (const v of m.elev) if (v > hi) hi = v;
     // Sand-table exaggeration: low ground raised more, mountains less.
     this.exag = clamp(180 / Math.max(10, hi), 1.5, 3);
-    const seg = Math.min(256, Math.round(MAP_W / CELL));
-    const geo = new THREE.PlaneGeometry(MAP_W, MAP_H, seg, seg);
-    geo.rotateX(-Math.PI / 2);
-    const pos = geo.attributes.position;
-    for (let i = 0; i < pos.count; i++) pos.setY(i, this.height(pos.getX(i) + MAP_W / 2, pos.getZ(i) + MAP_H / 2));
-    geo.computeVertexNormals();
-    this.terrain = new THREE.Mesh(geo, new THREE.MeshLambertMaterial({ map: this.texture }));
-    S.add(this.terrain);
+    const seg = Math.round(TILE_M / 8), nt = Math.ceil(MAP_W / TILE_M);
+    for (let j = 0; j < nt; j++) for (let i = 0; i < nt; i++) {
+      const x0 = i * TILE_M, y0 = j * TILE_M, w = Math.min(TILE_M, MAP_W - x0), h = Math.min(TILE_M, MAP_H - y0);
+      const geo = new THREE.PlaneGeometry(w, h, seg, seg);
+      geo.rotateX(-Math.PI / 2);
+      geo.translate(x0 + w / 2 - MAP_W / 2, 0, y0 + h / 2 - MAP_H / 2);
+      const pos = geo.attributes.position, nrm = geo.attributes.normal;
+      for (let k = 0; k < pos.count; k++) {
+        const x = pos.getX(k) + MAP_W / 2, y = pos.getZ(k) + MAP_H / 2;
+        pos.setY(k, this.height(x, y));
+        // Normals from the ground itself, so neighboring tiles meet without a seam.
+        const dx = this.height(x + 4, y) - this.height(x - 4, y), dy = this.height(x, y + 4) - this.height(x, y - 4);
+        const l = Math.hypot(dx, 8, dy);
+        nrm.setXYZ(k, -dx / l, 8 / l, -dy / l);
+      }
+      geo.computeBoundingSphere();
+      const canvas = document.createElement('canvas');
+      canvas.width = canvas.height = TILE_RES[0];
+      const tex = new THREE.CanvasTexture(canvas);
+      tex.anisotropy = this.aniso;
+      const mesh = new THREE.Mesh(geo, new THREE.MeshLambertMaterial({ map: tex }));
+      S.add(mesh);
+      const t = { x0, y0, w, h, mesh, canvas, tex, res: TILE_RES[0], base: null, baseRes: 0, queue: [], drawnAt: -1, dirty: true };
+      this.tiles.push(t);
+      this.setBase(t, TILE_RES[0]);
+    }
     // The sides of the sand box, down to the table.
-    const base = -12, wall = [], N = seg;
+    const base = -12, wall = [], N = nt * seg;
     const edge = (x0, y0, x1, y1) => {
       for (let k = 0; k < N; k++) {
         const ax = lerp(x0, x1, k / N), ay = lerp(y0, y1, k / N), bx = lerp(x0, x1, (k + 1) / N), by = lerp(y0, y1, (k + 1) / N);
@@ -116,7 +137,6 @@ const View3D = {
     this.table = new THREE.Mesh(tg, new THREE.MeshLambertMaterial({ color: 0x2a3122 }));
     this.table.position.y = base;
     S.add(this.table);
-    this.buildBase();
     this.mapRef = m;
     this.clearPegs();
     // Start behind the squad, looking toward the reported enemy.
@@ -130,34 +150,85 @@ const View3D = {
     return m.elevAt(clamp(x, 0, MAP_W - 0.01), clamp(y, 0, MAP_H - 0.01)) * this.exag - (water ? 0.6 : 0);
   },
 
-  // The printed map, drawn once per sheet at the close-tile detail, in pieces.
-  buildBase() {
-    const b = this.base = document.createElement('canvas');
-    b.width = b.height = DRAPE;
-    const bx = b.getContext('2d'), ppm = DRAPE / MAP_W, chunk = 256, piece = document.createElement('canvas');
-    piece.width = piece.height = chunk;
-    const step = chunk / ppm;
-    for (let y0 = 0; y0 < MAP_H; y0 += step) for (let x0 = 0; x0 < MAP_W; x0 += step) {
-      const pc = piece.getContext('2d');
-      pc.setTransform(1, 0, 0, 1, 0, 0); pc.clearRect(0, 0, chunk, chunk);
-      drawMapRegion(pc, G.map, x0, y0, step, step, ppm, 1);
-      bx.drawImage(piece, Math.round(x0 * ppm), Math.round(y0 * ppm));
+  // A tile's printed map at a given size. Until it is drawn, a blown-up copy of what there
+  // is (the last picture, or the whole sheet) stands in, and pieces are drawn a few a frame.
+  setBase(t, res) {
+    const b = document.createElement('canvas');
+    b.width = b.height = res;
+    const bx = b.getContext('2d');
+    bx.imageSmoothingEnabled = true;
+    if (t.base) bx.drawImage(t.base, 0, 0, res, res);
+    else if (R.sheet) {
+      const P = SHEET_PPM;
+      bx.drawImage(R.sheet, (SHEET.ml + t.x0) * P, (SHEET.mt + t.y0) * P, t.w * P, t.h * P, 0, 0, res, res);
+    }
+    t.base = b; t.baseRes = res; t.queue = [];
+    // Smaller pieces for the sharpest pictures, so no one frame does much drawing.
+    const piece = res >= 2048 ? 128 : 256;
+    for (let py = 0; py < res; py += piece) for (let px = 0; px < res; px += piece) t.queue.push({ px, py, n: piece });
+    t.dirty = true;
+  },
+  // Spend a few milliseconds drawing the printed map, nearest tiles first.
+  buildSome() {
+    const t0 = performance.now(), c = this.cam;
+    const todo = this.tiles.filter(t => t.queue.length).sort((a, b) => this.tileDist(a) - this.tileDist(b));
+    const piece = this.piece || (this.piece = document.createElement('canvas'));
+    for (const t of todo) {
+      const ppm = t.baseRes / t.w, level = ppm >= 3 ? 2 : 1;
+      while (t.queue.length) {
+        if (performance.now() - t0 > BUILD_MS) return;
+        const q = t.queue.shift();
+        if (piece.width !== q.n) piece.width = piece.height = q.n;
+        const pc = piece.getContext('2d');
+        pc.setTransform(1, 0, 0, 1, 0, 0); pc.clearRect(0, 0, q.n, q.n);
+        drawMapRegion(pc, G.map, t.x0 + q.px / ppm, t.y0 + q.py / ppm, q.n / ppm, q.n / ppm, ppm, level);
+        t.base.getContext('2d').drawImage(piece, q.px, q.py);
+        t.dirty = true;
+      }
     }
   },
+  tileDist(t) { return dist(t.x0 + t.w / 2, t.y0 + t.h / 2, this.cam.x, this.cam.y); },
 
-  // The overlay drawing of the flat map, pointed at the drape instead of the screen.
-  redrawDrape() {
-    const ctx = this.drape.getContext('2d');
+  // Picture size for a tile: sharpest close to where the camera looks, when it is close.
+  wantRes(t) {
+    const d = this.tileDist(t), near = this.cam.dist;
+    if (near < 700 && d < TILE_M * 0.9) return TILE_RES[2];
+    if (near < 1800 && d < TILE_M * 2.2) return TILE_RES[1];
+    return TILE_RES[0];
+  },
+
+  // A tile's overlays: the flat map's drawing pointed at the tile instead of the screen.
+  redrawTile(t) {
+    const res = this.wantRes(t);
+    if (res !== t.res) {
+      t.canvas.width = t.canvas.height = res; t.res = res;
+      t.tex.dispose();
+      t.tex = new THREE.CanvasTexture(t.canvas); t.tex.anisotropy = this.aniso;
+      t.mesh.material.map = t.tex; t.mesh.material.needsUpdate = true;
+    }
+    if (res > t.baseRes) this.setBase(t, res);
+    const ctx = t.canvas.getContext('2d');
     ctx.setTransform(1, 0, 0, 1, 0, 0);
-    ctx.drawImage(this.base, 0, 0);
+    ctx.drawImage(t.base, 0, 0, res, res);
     const save = { cam: R.cam, w: R.w, h: R.h };
-    R.cam = { x: MAP_W / 2, y: MAP_H / 2, zoom: DRAPE / MAP_W }; R.w = R.h = DRAPE;
+    R.cam = { x: t.x0 + t.w / 2, y: t.y0 + t.h / 2, zoom: res / t.w }; R.w = R.h = res;
     try {
       Fog.draw(ctx);
       drawPlan(ctx); drawOrdersOverlay(ctx); drawProjectiles(ctx); drawEffects(ctx);
       drawCones(ctx); drawGhostFormation(ctx); drawTapes(ctx);
     } finally { R.cam = save.cam; R.w = save.w; R.h = save.h; }
-    this.texture.needsUpdate = true;
+    t.tex.needsUpdate = true;
+    t.drawnAt = performance.now(); t.dirty = false;
+  },
+
+  // Redraw the tiles in view, oldest first, two a frame at most.
+  refreshTiles() {
+    const cam = this.camera, now = performance.now();
+    cam.updateMatrixWorld();
+    this.frustum.setFromProjectionMatrix(new THREE.Matrix4().multiplyMatrices(cam.projectionMatrix, cam.matrixWorldInverse));
+    const due = this.tiles.filter(t => this.frustum.intersectsObject(t.mesh) && (t.dirty || now - t.drawnAt > TILE_RATE * 1000 || this.wantRes(t) !== t.res))
+      .sort((a, b) => (b.dirty - a.dirty) || a.drawnAt - b.drawnAt);
+    for (const t of due.slice(0, 2)) this.redrawTile(t);
   },
 
   resize() {
@@ -180,9 +251,9 @@ const View3D = {
   frame(dt) {
     if (!this.active) return;
     if (this.mapRef !== G.map) this.newMap();
-    this.drapeT -= dt;
-    if (this.drapeT <= 0) { this.drapeT = DRAPE_RATE; this.redrawDrape(); }
     this.placeCamera();
+    this.buildSome();
+    this.refreshTiles();
     this.updatePegs();
     this.renderer.render(this.scene, this.camera);
   },
@@ -264,7 +335,7 @@ const View3D = {
     const r = this.canvas.getBoundingClientRect();
     const ndc = new THREE.Vector2((sx / r.width) * 2 - 1, -(sy / r.height) * 2 + 1);
     this.raycaster.setFromCamera(ndc, this.camera);
-    const hit = this.raycaster.intersectObject(this.terrain)[0];
+    const hit = this.raycaster.intersectObjects(this.tiles.map(t => t.mesh))[0];
     return hit ? { x: hit.point.x + MAP_W / 2, y: hit.point.z + MAP_H / 2 } : null;
   },
   screenOf(x, y, up) {
