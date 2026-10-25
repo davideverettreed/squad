@@ -5386,12 +5386,8 @@ function newMission() {
   UI.logLines = [];
   UI.buildRoster();
   UI.select({ level: 'squad', squad: blue });
-  const gr = gridRef(G.enemyArea.x, G.enemyArea.y);
-  G.log(mode === 'attack' ? 'Mission: attack. Enemy squad reported holding near grid ' + gr + ', bearing ' + pad3(G.axisBearing) + '.'
-    : 'Mission: meeting engagement. Enemy squad reported near grid ' + gr + ', bearing ' + pad3(G.axisBearing) + ', moving toward you.', 'info');
   Plan.reset();
   Radio.reset();
-  G.log('Order received. The planning clock is running: ' + fmtClock(Plan.timeAvail) + ' available, use about a third.', 'plan');
   OPORD.show('O');
   UI.refreshBar();
 }
