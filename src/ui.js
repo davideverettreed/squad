@@ -201,7 +201,19 @@ const UI = {
       return;
     }
     if (enemy && sel) { issueOrder(sel, 'engage', enemy); return; }
-    if (sel) issueOrder(sel, 'move', w);
+    // One click: move in the chosen mode (walk unless another is picked). Two quick clicks
+    // on the same spot: rush. The single click waits a moment to see if a second follows.
+    if (sel) {
+      const now = performance.now(), lt = this.lastMoveTap;
+      if (lt && lt.sel === sel && now - lt.t < 320 && Math.hypot(sx - lt.sx, sy - lt.sy) < 30) {
+        clearTimeout(lt.timer); this.lastMoveTap = null;
+        issueOrder(sel, 'move', { x: w.x, y: w.y, mode: 'rush' });
+        return;
+      }
+      if (lt) { clearTimeout(lt.timer); issueOrder(lt.sel, 'move', lt.w); }
+      const timer = setTimeout(() => { if (this.lastMoveTap && this.lastMoveTap.timer === timer) { this.lastMoveTap = null; issueOrder(sel, 'move', w); } }, 320);
+      this.lastMoveTap = { t: now, sx, sy, sel, w, timer };
+    }
   },
 
   setOrdersOpen(on) {

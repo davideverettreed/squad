@@ -217,7 +217,7 @@ const View3D = {
     try {
       Fog.draw(ctx);
       drawPlan(ctx); drawPlanGhosts(ctx); drawOrdersOverlay(ctx); drawProjectiles(ctx); drawEffects(ctx);
-      drawCones(ctx); drawGhostFormation(ctx); drawTapes(ctx);
+      drawCones(ctx); drawGhostFormation(ctx); drawNudge(ctx); drawTapes(ctx);
     } finally { R.cam = save.cam; R.w = save.w; R.h = save.h; this.drawingDrape = false; }
     t.tex.needsUpdate = true;
     t.drawnAt = performance.now(); t.dirty = false;

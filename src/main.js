@@ -255,6 +255,7 @@ function frame(now) {
     while (sim > 1e-6) { const step = Math.min(0.05, sim); update(step); sim -= step; }
   }
   Fog.update();
+  Nudge.update();
   if (View3D.active) View3D.frame(dt); else render();
   UI.tick(dt);
   requestAnimationFrame(frame);

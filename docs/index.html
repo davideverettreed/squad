@@ -485,7 +485,7 @@ body:not(.roster-min) #btn3d, body:not(.roster-min) #ctl3d { margin-left: 0; }
         <h3>Selecting</h3>
         <p>Tap a Marine to select that Marine. Tap again to select the fire team, and again for the whole squad. The Squad and fire team buttons above the orders do the same. Keys: <kbd>1</kbd> <kbd>2</kbd> <kbd>3</kbd> fire teams, <kbd>0</kbd> squad, <kbd>Esc</kbd> cancel.</p>
         <h3>Moving</h3>
-        <p>While planning, each planned move shows as a dashed blue arrow, and a dashed ghost of the unit stands where its last move ends. Tap a ghost to pick that unit there, then tap the map to plan its next step. While planning, nothing moves: select a unit and tap the map to open a menu that sets a checkpoint, a bound, a route, a fighting position, a support-by-fire position, an assault position, an objective or a target reference point at that spot and adds the line to the plan. After step-off, orders go by radio: pick Walk, Rush or Crawl, then tap the ground. Right-click also moves. Teams and the squad move in their formation. A walking team that takes fire, or sees a new enemy within 250 m, halts on its own, gets down and returns fire; rush, assault or bound to keep moving under fire. Rushing is fast but tiring and easy to spot. Crawling is slow but men can crawl while pinned.</p>
+        <p>While planning, each planned move shows as a dashed blue arrow, and a dashed ghost of the unit stands where its last move ends. Tap a ghost to pick that unit there, then tap the map to plan its next step. While planning, nothing moves: select a unit and tap the map to open a menu that sets a checkpoint, a bound, a route, a fighting position, a support-by-fire position, an assault position, an objective or a target reference point at that spot and adds the line to the plan. After step-off, orders go by radio: tap the ground to move in the chosen mode (Walk unless you pick Rush or Crawl); tap twice quickly to rush. W, A, S and D shift the selected unit forward, left, back and right while it keeps its front; Q and E turn it. A ghost shows where it will end up, the order goes out when you stop pressing, and once there the men take up whatever move they were on. Right-click also moves. Teams and the squad move in their formation. A walking team that takes fire, or sees a new enemy within 250 m, halts on its own, gets down and returns fire; rush, assault or bound to keep moving under fire. Rushing is fast but tiring and easy to spot. Crawling is slow but men can crawl while pinned.</p>
         <h3>Fire and maneuver</h3>
         <p><b>Suppress</b> puts fire on an area, seen enemy or not. <b>Bound</b> sends the squad forward one fire team at a time while the others cover it (a fire team bounds in buddy pairs). <b>Assault</b> walks forward firing and throwing grenades. Tap a visible enemy to make the selection engage that target.</p>
         <h3>Reading the pieces</h3>
@@ -2470,6 +2470,7 @@ function releaseControllers(members) {
 
 function orderMove(s, x, y, mode) {
   if (!commandable(s)) return false;
+  s.nudging = false; s.resume = null; s.holdFacing = null;
   const p = G.map.findPath(s.x, s.y, x, y);
   s.path = p || [];
   s.moveMode = mode;
@@ -2694,9 +2695,13 @@ function issueOrder(sel, type, arg) {
       if (sel.level === 'squad') sel.squad.formation = arg; else team.formation = arg;
       G.toast(who + ': formation ' + FORMATIONS[arg].label.toLowerCase() + '.');
       break;
+    case 'nudge':
+      Nudge.apply(sel, arg);
+      G.toast(who + ': ' + arg.text + '.');
+      break;
     case 'halt':
       releaseControllers(members);
-      for (const s of members) { s.path = []; s.assault = false; s.launchQueue = null; }
+      for (const s of members) { s.path = []; s.assault = false; s.launchQueue = null; s.nudging = false; s.resume = null; s.holdFacing = null; }
       G.toast(who + ': Halt.');
       break;
     case 'cover': {
@@ -2783,6 +2788,12 @@ function updateMovement(s, dt) {
   if (!s.active) return;
   if (s.postureBusy > 0) { s.postureBusy -= dt; return; }
 
+  if (!s.path.length && s.nudging) {
+    // The nudge is done: back onto the route he was on, if any, still facing the new front.
+    s.nudging = false; s.holdFacing = null;
+    const r = s.resume; s.resume = null;
+    if (r) { s.path = r.path; s.moveMode = r.mode; }
+  }
   if (!s.path.length) {
     s.assault = false;
     let want = s.homePosture;
@@ -2821,10 +2832,78 @@ function updateMovement(s, dt) {
   const a = angleTo(s.x, s.y, tgt.x, tgt.y);
   if (step >= d) { s.x = tgt.x; s.y = tgt.y; s.path.shift(); }
   else { s.x += Math.cos(a) * step; s.y += Math.sin(a) * step; }
-  if (!(s.assault && G.time - s.lastFired < 1.5)) s.facing = turnToward(s.facing, a, dt * 6);
+  if (!(s.assault && G.time - s.lastFired < 1.5)) s.facing = turnToward(s.facing, s.holdFacing != null ? s.holdFacing : a, dt * 6);
   s.fatigue = clamp(s.fatigue + (MOVE[mode].fatigue - 1.5) * dt, 0, 100);
 }
 
+// ---------------------------------------------------------------- nudges (W A S D, Q E)
+// A short shift of the selected unit, as in a Total War game: W forward, S back, A and D
+// sideways, Q and E turn the formation. The men keep facing the unit's front while they
+// shift; the order goes out when the keys stop, and when they get there each man takes
+// up again whatever move he was on.
+const NUDGE_STEP = 15, NUDGE_SIDE = 10, NUDGE_TURN = Math.PI / 12, NUDGE_WAIT = 0.7;
+const Nudge = {
+  cur: null,
+
+  key(k) {
+    const sel = G.ui.sel;
+    if (!sel || !G.running || G.over || Plan.planning) return false;
+    const men = selMembers(sel).filter(commandable);
+    if (!men.length) return false;
+    const n = this.cur && this.cur.sel === sel ? this.cur : this.start(sel, men);
+    if (k === 'w') n.f += NUDGE_STEP; else if (k === 's') n.f -= NUDGE_STEP;
+    else if (k === 'a') n.r -= NUDGE_SIDE; else if (k === 'd') n.r += NUDGE_SIDE;
+    else if (k === 'q') n.rot -= NUDGE_TURN; else if (k === 'e') n.rot += NUDGE_TURN;
+    n.t = performance.now();
+    this.cur = n;
+    return true;
+  },
+  start(sel, men) {
+    const lead = (sel.level === 'soldier' ? sel.soldier : (sel.level === 'team' ? sel.team.leader : sel.squad.leader)) || men[0];
+    return { sel, men, c: centroid(men), heading: lead.facing, f: 0, r: 0, rot: 0, t: 0 };
+  },
+  // Where each man ends up: his place in the unit turned by the rotation, then shifted.
+  targets(n) {
+    const h = n.heading, fx = Math.cos(h), fy = Math.sin(h), rx = -fy, ry = fx;
+    const cx = n.c.x + fx * n.f + rx * n.r, cy = n.c.y + fy * n.f + ry * n.r;
+    const ca = Math.cos(n.rot), sa = Math.sin(n.rot);
+    return n.men.map(s => {
+      const ox = s.x - n.c.x, oy = s.y - n.c.y;
+      return { s, x: clamp(cx + ox * ca - oy * sa, 2, MAP_W - 2), y: clamp(cy + ox * sa + oy * ca, 2, MAP_H - 2) };
+    });
+  },
+  text(n) {
+    const parts = [];
+    if (n.f) parts.push((n.f > 0 ? 'move up ' : 'back up ') + Math.abs(n.f) + ' m');
+    if (n.r) parts.push('shift ' + (n.r > 0 ? 'right ' : 'left ') + Math.abs(n.r) + ' m');
+    if (n.rot) parts.push('face ' + (n.rot > 0 ? 'right ' : 'left ') + Math.round(Math.abs(n.rot) * 180 / Math.PI) + '°');
+    return parts.join(', ') || 'hold';
+  },
+  // Each frame: send the order once the keys have been still a moment.
+  update() {
+    const n = this.cur;
+    if (!n || performance.now() - n.t < NUDGE_WAIT * 1000) return;
+    this.cur = null;
+    if (!n.f && !n.r && !n.rot) return;
+    issueOrder(n.sel, 'nudge', { f: n.f, r: n.r, rot: n.rot, heading: n.heading, text: this.text(n) });
+  },
+  // Carry out a nudge from where the men are when the order arrives: a short walk to each
+  // man's new place, facing the new front, then back to his old route if he had one.
+  apply(sel, arg) {
+    const men = selMembers(sel).filter(commandable);
+    if (!men.length) return;
+    const n = { men, c: centroid(men), heading: arg.heading, f: arg.f, r: arg.r, rot: arg.rot };
+    for (const t of this.targets(n)) {
+      const s = t.s;
+      if (!s.resume) s.resume = s.path.length ? { path: s.path.slice(), mode: s.moveMode, faceAngle: s.faceAngle } : null;
+      s.path = G.map.findPath(s.x, s.y, t.x, t.y) || [{ x: t.x, y: t.y }];
+      s.moveMode = 'walk';
+      s.holdFacing = arg.heading + arg.rot;
+      s.faceAngle = arg.heading + arg.rot;
+      s.nudging = true;
+    }
+  },
+};
 // ---- src/ai.js
 'use strict';
 // Enemy squad AI. On contact the heaviest group becomes the base of fire and the
@@ -3740,6 +3819,7 @@ function render() {
   drawCones(ctx);
   drawUnits(ctx);
   drawGhostFormation(ctx);
+  drawNudge(ctx);
   drawTapes(ctx);
   drawFloaters(ctx);
   drawScale(ctx);
@@ -4535,6 +4615,25 @@ function drawGhostFormation(ctx) {
   ctx.restore();
 }
 
+// The unit as a W A S D nudge will leave it: dashed rings with a tick for the new front.
+function drawNudge(ctx) {
+  const n = Nudge.cur;
+  if (!n) return;
+  const r = Math.max(6, Math.min(14, 3 * R.cam.zoom)), h = n.heading + n.rot;
+  ctx.save();
+  ctx.strokeStyle = 'rgba(31,79,191,0.9)'; ctx.fillStyle = 'rgba(128,224,255,0.3)'; ctx.lineWidth = 2;
+  for (const t of Nudge.targets(n)) {
+    const p = toScreen(t.x, t.y), q = toScreen(t.s.x, t.s.y);
+    ctx.setLineDash([2, 3]); ctx.lineWidth = 1;
+    ctx.beginPath(); ctx.moveTo(q.x, q.y); ctx.lineTo(p.x, p.y); ctx.stroke();
+    ctx.setLineDash([3, 2]); ctx.lineWidth = 2;
+    ctx.beginPath(); ctx.arc(p.x, p.y, r, 0, Math.PI * 2); ctx.fill(); ctx.stroke();
+    ctx.setLineDash([]);
+    ctx.beginPath(); ctx.moveTo(p.x, p.y); ctx.lineTo(p.x + Math.cos(h) * r * 1.9, p.y + Math.sin(h) * r * 1.9); ctx.stroke();
+  }
+  ctx.restore();
+}
+
 // Distance and bearing, as a map reader states them: meters, degrees grid and mils.
 function tapeLabel(a, b) {
   const d = dist(a.x, a.y, b.x, b.y), brg = bearing(a.x, a.y, b.x, b.y);
@@ -4787,7 +4886,19 @@ const UI = {
       return;
     }
     if (enemy && sel) { issueOrder(sel, 'engage', enemy); return; }
-    if (sel) issueOrder(sel, 'move', w);
+    // One click: move in the chosen mode (walk unless another is picked). Two quick clicks
+    // on the same spot: rush. The single click waits a moment to see if a second follows.
+    if (sel) {
+      const now = performance.now(), lt = this.lastMoveTap;
+      if (lt && lt.sel === sel && now - lt.t < 320 && Math.hypot(sx - lt.sx, sy - lt.sy) < 30) {
+        clearTimeout(lt.timer); this.lastMoveTap = null;
+        issueOrder(sel, 'move', { x: w.x, y: w.y, mode: 'rush' });
+        return;
+      }
+      if (lt) { clearTimeout(lt.timer); issueOrder(lt.sel, 'move', lt.w); }
+      const timer = setTimeout(() => { if (this.lastMoveTap && this.lastMoveTap.timer === timer) { this.lastMoveTap = null; issueOrder(sel, 'move', w); } }, 320);
+      this.lastMoveTap = { t: now, sx, sy, sel, w, timer };
+    }
   },
 
   setOrdersOpen(on) {
@@ -6435,6 +6546,7 @@ const Radio = {
       case 'fire': return { free: 'fire at will', return: 'return fire only', hold: 'hold fire' }[arg];
       case 'formation': return 'go to ' + FORMATIONS[arg].label.toLowerCase();
       case 'halt': return 'halt';
+      case 'nudge': return arg.text;
       case 'cover': return 'take cover';
       case 'fallback': return 'fall back';
       case 'lift': return 'lift fire';
@@ -6454,7 +6566,7 @@ const Radio = {
   },
 
   send(sel, type, arg) {
-    if (type === 'move') arg = { x: arg.x, y: arg.y, mode: G.ui.moveMode };
+    if (type === 'move') arg = { x: arg.x, y: arg.y, mode: arg.mode || G.ui.moveMode };
     const to = this.callsign(sel);
     G.log(this.sender() + ': ' + to + ', ' + this.text(type, arg) + ', over.', 'radio');
     this.queue.push({ due: G.time + this.delayFor(sel), sel, type, arg, to });
@@ -6697,7 +6809,7 @@ const View3D = {
     try {
       Fog.draw(ctx);
       drawPlan(ctx); drawPlanGhosts(ctx); drawOrdersOverlay(ctx); drawProjectiles(ctx); drawEffects(ctx);
-      drawCones(ctx); drawGhostFormation(ctx); drawTapes(ctx);
+      drawCones(ctx); drawGhostFormation(ctx); drawNudge(ctx); drawTapes(ctx);
     } finally { R.cam = save.cam; R.w = save.w; R.h = save.h; this.drawingDrape = false; }
     t.tex.needsUpdate = true;
     t.drawnAt = performance.now(); t.dirty = false;
@@ -7122,6 +7234,9 @@ const Input = {
       if (e.target.closest && e.target.closest('input, select, textarea')) return;
       if (!G.running) return;
       const k = e.key;
+      const lk = k.length === 1 ? k.toLowerCase() : k;
+      // W A S D shift the selected unit, Q E turn it (after step-off).
+      if ('wasdqe'.includes(lk) && lk.length === 1 && !e.ctrlKey && !e.metaKey && !e.altKey) { if (Nudge.key(lk)) e.preventDefault(); return; }
       if (k === ' ') { e.preventDefault(); togglePause(); }
       else if (k === 'v' || k === 'V') $('btnCones').click();
       else if (k === 'm' || k === 'M') $('btnMeasure').click();
@@ -7398,6 +7513,7 @@ function frame(now) {
     while (sim > 1e-6) { const step = Math.min(0.05, sim); update(step); sim -= step; }
   }
   Fog.update();
+  Nudge.update();
   if (View3D.active) View3D.frame(dt); else render();
   UI.tick(dt);
   requestAnimationFrame(frame);

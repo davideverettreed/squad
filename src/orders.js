@@ -40,6 +40,7 @@ function releaseControllers(members) {
 
 function orderMove(s, x, y, mode) {
   if (!commandable(s)) return false;
+  s.nudging = false; s.resume = null; s.holdFacing = null;
   const p = G.map.findPath(s.x, s.y, x, y);
   s.path = p || [];
   s.moveMode = mode;
@@ -264,9 +265,13 @@ function issueOrder(sel, type, arg) {
       if (sel.level === 'squad') sel.squad.formation = arg; else team.formation = arg;
       G.toast(who + ': formation ' + FORMATIONS[arg].label.toLowerCase() + '.');
       break;
+    case 'nudge':
+      Nudge.apply(sel, arg);
+      G.toast(who + ': ' + arg.text + '.');
+      break;
     case 'halt':
       releaseControllers(members);
-      for (const s of members) { s.path = []; s.assault = false; s.launchQueue = null; }
+      for (const s of members) { s.path = []; s.assault = false; s.launchQueue = null; s.nudging = false; s.resume = null; s.holdFacing = null; }
       G.toast(who + ': Halt.');
       break;
     case 'cover': {
@@ -353,6 +358,12 @@ function updateMovement(s, dt) {
   if (!s.active) return;
   if (s.postureBusy > 0) { s.postureBusy -= dt; return; }
 
+  if (!s.path.length && s.nudging) {
+    // The nudge is done: back onto the route he was on, if any, still facing the new front.
+    s.nudging = false; s.holdFacing = null;
+    const r = s.resume; s.resume = null;
+    if (r) { s.path = r.path; s.moveMode = r.mode; }
+  }
   if (!s.path.length) {
     s.assault = false;
     let want = s.homePosture;
@@ -391,6 +402,75 @@ function updateMovement(s, dt) {
   const a = angleTo(s.x, s.y, tgt.x, tgt.y);
   if (step >= d) { s.x = tgt.x; s.y = tgt.y; s.path.shift(); }
   else { s.x += Math.cos(a) * step; s.y += Math.sin(a) * step; }
-  if (!(s.assault && G.time - s.lastFired < 1.5)) s.facing = turnToward(s.facing, a, dt * 6);
+  if (!(s.assault && G.time - s.lastFired < 1.5)) s.facing = turnToward(s.facing, s.holdFacing != null ? s.holdFacing : a, dt * 6);
   s.fatigue = clamp(s.fatigue + (MOVE[mode].fatigue - 1.5) * dt, 0, 100);
 }
+
+// ---------------------------------------------------------------- nudges (W A S D, Q E)
+// A short shift of the selected unit, as in a Total War game: W forward, S back, A and D
+// sideways, Q and E turn the formation. The men keep facing the unit's front while they
+// shift; the order goes out when the keys stop, and when they get there each man takes
+// up again whatever move he was on.
+const NUDGE_STEP = 15, NUDGE_SIDE = 10, NUDGE_TURN = Math.PI / 12, NUDGE_WAIT = 0.7;
+const Nudge = {
+  cur: null,
+
+  key(k) {
+    const sel = G.ui.sel;
+    if (!sel || !G.running || G.over || Plan.planning) return false;
+    const men = selMembers(sel).filter(commandable);
+    if (!men.length) return false;
+    const n = this.cur && this.cur.sel === sel ? this.cur : this.start(sel, men);
+    if (k === 'w') n.f += NUDGE_STEP; else if (k === 's') n.f -= NUDGE_STEP;
+    else if (k === 'a') n.r -= NUDGE_SIDE; else if (k === 'd') n.r += NUDGE_SIDE;
+    else if (k === 'q') n.rot -= NUDGE_TURN; else if (k === 'e') n.rot += NUDGE_TURN;
+    n.t = performance.now();
+    this.cur = n;
+    return true;
+  },
+  start(sel, men) {
+    const lead = (sel.level === 'soldier' ? sel.soldier : (sel.level === 'team' ? sel.team.leader : sel.squad.leader)) || men[0];
+    return { sel, men, c: centroid(men), heading: lead.facing, f: 0, r: 0, rot: 0, t: 0 };
+  },
+  // Where each man ends up: his place in the unit turned by the rotation, then shifted.
+  targets(n) {
+    const h = n.heading, fx = Math.cos(h), fy = Math.sin(h), rx = -fy, ry = fx;
+    const cx = n.c.x + fx * n.f + rx * n.r, cy = n.c.y + fy * n.f + ry * n.r;
+    const ca = Math.cos(n.rot), sa = Math.sin(n.rot);
+    return n.men.map(s => {
+      const ox = s.x - n.c.x, oy = s.y - n.c.y;
+      return { s, x: clamp(cx + ox * ca - oy * sa, 2, MAP_W - 2), y: clamp(cy + ox * sa + oy * ca, 2, MAP_H - 2) };
+    });
+  },
+  text(n) {
+    const parts = [];
+    if (n.f) parts.push((n.f > 0 ? 'move up ' : 'back up ') + Math.abs(n.f) + ' m');
+    if (n.r) parts.push('shift ' + (n.r > 0 ? 'right ' : 'left ') + Math.abs(n.r) + ' m');
+    if (n.rot) parts.push('face ' + (n.rot > 0 ? 'right ' : 'left ') + Math.round(Math.abs(n.rot) * 180 / Math.PI) + '°');
+    return parts.join(', ') || 'hold';
+  },
+  // Each frame: send the order once the keys have been still a moment.
+  update() {
+    const n = this.cur;
+    if (!n || performance.now() - n.t < NUDGE_WAIT * 1000) return;
+    this.cur = null;
+    if (!n.f && !n.r && !n.rot) return;
+    issueOrder(n.sel, 'nudge', { f: n.f, r: n.r, rot: n.rot, heading: n.heading, text: this.text(n) });
+  },
+  // Carry out a nudge from where the men are when the order arrives: a short walk to each
+  // man's new place, facing the new front, then back to his old route if he had one.
+  apply(sel, arg) {
+    const men = selMembers(sel).filter(commandable);
+    if (!men.length) return;
+    const n = { men, c: centroid(men), heading: arg.heading, f: arg.f, r: arg.r, rot: arg.rot };
+    for (const t of this.targets(n)) {
+      const s = t.s;
+      if (!s.resume) s.resume = s.path.length ? { path: s.path.slice(), mode: s.moveMode, faceAngle: s.faceAngle } : null;
+      s.path = G.map.findPath(s.x, s.y, t.x, t.y) || [{ x: t.x, y: t.y }];
+      s.moveMode = 'walk';
+      s.holdFacing = arg.heading + arg.rot;
+      s.faceAngle = arg.heading + arg.rot;
+      s.nudging = true;
+    }
+  },
+};

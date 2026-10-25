@@ -47,6 +47,7 @@ const Radio = {
       case 'fire': return { free: 'fire at will', return: 'return fire only', hold: 'hold fire' }[arg];
       case 'formation': return 'go to ' + FORMATIONS[arg].label.toLowerCase();
       case 'halt': return 'halt';
+      case 'nudge': return arg.text;
       case 'cover': return 'take cover';
       case 'fallback': return 'fall back';
       case 'lift': return 'lift fire';
@@ -66,7 +67,7 @@ const Radio = {
   },
 
   send(sel, type, arg) {
-    if (type === 'move') arg = { x: arg.x, y: arg.y, mode: G.ui.moveMode };
+    if (type === 'move') arg = { x: arg.x, y: arg.y, mode: arg.mode || G.ui.moveMode };
     const to = this.callsign(sel);
     G.log(this.sender() + ': ' + to + ', ' + this.text(type, arg) + ', over.', 'radio');
     this.queue.push({ due: G.time + this.delayFor(sel), sel, type, arg, to });

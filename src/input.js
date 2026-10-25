@@ -87,6 +87,9 @@ const Input = {
       if (e.target.closest && e.target.closest('input, select, textarea')) return;
       if (!G.running) return;
       const k = e.key;
+      const lk = k.length === 1 ? k.toLowerCase() : k;
+      // W A S D shift the selected unit, Q E turn it (after step-off).
+      if ('wasdqe'.includes(lk) && lk.length === 1 && !e.ctrlKey && !e.metaKey && !e.altKey) { if (Nudge.key(lk)) e.preventDefault(); return; }
       if (k === ' ') { e.preventDefault(); togglePause(); }
       else if (k === 'v' || k === 'V') $('btnCones').click();
       else if (k === 'm' || k === 'M') $('btnMeasure').click();

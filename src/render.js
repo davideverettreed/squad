@@ -676,6 +676,7 @@ function render() {
   drawCones(ctx);
   drawUnits(ctx);
   drawGhostFormation(ctx);
+  drawNudge(ctx);
   drawTapes(ctx);
   drawFloaters(ctx);
   drawScale(ctx);
@@ -1468,6 +1469,25 @@ function drawGhostFormation(ctx) {
   ctx.font = '700 13px "Saira Condensed", sans-serif'; ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
   ctx.lineWidth = 3; ctx.strokeStyle = 'rgba(247,245,236,0.95)'; ctx.strokeText(FORMATIONS[form].label.toUpperCase(), tx, ty - 14);
   ctx.fillStyle = OVL.blue; ctx.fillText(FORMATIONS[form].label.toUpperCase(), tx, ty - 14);
+  ctx.restore();
+}
+
+// The unit as a W A S D nudge will leave it: dashed rings with a tick for the new front.
+function drawNudge(ctx) {
+  const n = Nudge.cur;
+  if (!n) return;
+  const r = Math.max(6, Math.min(14, 3 * R.cam.zoom)), h = n.heading + n.rot;
+  ctx.save();
+  ctx.strokeStyle = 'rgba(31,79,191,0.9)'; ctx.fillStyle = 'rgba(128,224,255,0.3)'; ctx.lineWidth = 2;
+  for (const t of Nudge.targets(n)) {
+    const p = toScreen(t.x, t.y), q = toScreen(t.s.x, t.s.y);
+    ctx.setLineDash([2, 3]); ctx.lineWidth = 1;
+    ctx.beginPath(); ctx.moveTo(q.x, q.y); ctx.lineTo(p.x, p.y); ctx.stroke();
+    ctx.setLineDash([3, 2]); ctx.lineWidth = 2;
+    ctx.beginPath(); ctx.arc(p.x, p.y, r, 0, Math.PI * 2); ctx.fill(); ctx.stroke();
+    ctx.setLineDash([]);
+    ctx.beginPath(); ctx.moveTo(p.x, p.y); ctx.lineTo(p.x + Math.cos(h) * r * 1.9, p.y + Math.sin(h) * r * 1.9); ctx.stroke();
+  }
   ctx.restore();
 }
 
