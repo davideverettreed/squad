@@ -24,6 +24,8 @@ const UI = {
     $('btnPause').addEventListener('click', () => togglePause());
     $('btnSpeed').addEventListener('click', () => { G.speed = G.speed >= 16 ? 1 : G.speed * 2; this.refreshBar(); });
     $('btnMeasure').addEventListener('click', () => this.setMeasuring(!G.ui.measuring));
+    // Phones: the orders fold away under one button, leaving the unit chips.
+    $('btnOrdersMore').addEventListener('click', () => this.setOrdersOpen(!document.body.classList.contains('orders-open')));
     $('btnCones').addEventListener('click', () => { G.ui.cones = !G.ui.cones; $('btnCones').classList.toggle('on', G.ui.cones); });
     $('btnRoster').addEventListener('click', () => document.body.classList.toggle('roster-open'));
     $('rosterTab').addEventListener('click', () => document.body.classList.remove('roster-min'));
@@ -52,7 +54,7 @@ const UI = {
       for (const [kind, val, text] of g.items) {
         const b = el('button', 'obtn', text);
         b.dataset.kind = kind; b.dataset.val = val;
-        b.addEventListener('click', () => this.onOrderButton(kind, val));
+        b.addEventListener('click', () => { this.onOrderButton(kind, val); if (window.innerWidth <= 760) this.setOrdersOpen(false); });
         // Pointing at a formation shows the selected unit's ghost in that formation.
         if (kind === 'formation') {
           b.addEventListener('pointerenter', () => { G.ui.ghostForm = val; });
@@ -189,6 +191,12 @@ const UI = {
     }
     if (enemy && sel) { issueOrder(sel, 'engage', enemy); return; }
     if (sel) issueOrder(sel, 'move', w);
+  },
+
+  setOrdersOpen(on) {
+    document.body.classList.toggle('orders-open', on);
+    $('btnOrdersMore').textContent = on ? 'Orders ▾' : 'Orders ▴';
+    $('btnOrdersMore').setAttribute('aria-expanded', on ? 'true' : 'false');
   },
 
   // ------------------------------------------------------------ measuring tape
