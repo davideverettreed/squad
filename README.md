@@ -5,9 +5,17 @@ Real-time squad tactics in the browser. You command a 13-man Marine rifle squad
 and maneuver on a 240 × 180 m map seen straight down, drawn as a military
 topographic map.
 
-Units are drawn with the billet symbols from the Marine rifle squad organization
-figure: squad leader, fire team leader, automatic rifleman, grenadier, rifleman.
-Blue is friendly, red is enemy.
+The battlefield is a printed map sheet on a planning table, in the standard
+colors of US military topographic maps (FM 3-25.26): black for man-made
+features and the grid, red-brown for contours and elevations, green for
+vegetation. It has a full collar: title, grid values, legend, graphic scale and
+declination diagram.
+
+Men are game pieces printed with the billet symbols from the Marine rifle squad
+organization figure: squad leader, fire team leader, automatic rifleman,
+grenadier, rifleman. Status chits sit on the pieces (posture, suppressed or
+pinned, wounded, no ammunition). Orders are drawn as overlay graphics in the
+doctrinal colors: blue friendly, red enemy, black for targets.
 
 ## Play
 

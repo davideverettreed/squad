@@ -52,7 +52,10 @@ function drawSymbol(ctx, x, y, r, billet, o) {
   }
   ctx.strokeStyle = ink;
   ctx.lineWidth = lw;
+  // A dashed frame marks a suspected or last-known position.
+  if (o.dashed) ctx.setLineDash([r * 0.42, r * 0.3]);
   ctx.beginPath(); ctx.arc(0, 0, r, 0, Math.PI * 2); ctx.stroke();
+  ctx.setLineDash([]);
   ctx.restore();
 }
 
