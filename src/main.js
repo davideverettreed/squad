@@ -227,6 +227,8 @@ function update(dt) {
   }
   G.teamT -= dt;
   if (G.teamT <= 0) { G.teamT = 0.5; updateTeams(0.5); }
+  G.ammoT = (G.ammoT || 0) - dt;
+  if (G.ammoT <= 0) { G.ammoT = 3; shareAmmo(); }
   G.endT -= dt;
   if (G.endT <= 0) { G.endT = 1; checkEnd(); }
 }

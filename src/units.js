@@ -37,6 +37,7 @@ class Soldier {
     this.coneHalf = 0.5; this.alert = 0; this.agit = 0;
     this.assault = false; this.routing = false; this.routed = false;
     this.shots = 0; this.hits = 0; this.dryLogged = false;
+    this.ammoStart = this.ammoLeft;
     this.loadKg = this.computeLoad();
   }
   get alive() { return this.health !== 'kia'; }
@@ -68,9 +69,12 @@ class Soldier {
     if (this.lastFired > G.time - 2) return 'Firing';
     return 'Ready';
   }
+  // Rounds left: the magazine in the weapon and the spares.
+  get ammoLeft() { return this.inMag + this.mags * this.weapon.mag; }
+  get ammoFrac() { return this.ammoStart ? clamp(this.ammoLeft / this.ammoStart, 0, 1) : 0; }
   get ammoText() {
-    if (this.inMag + this.mags === 0) return 'Out';
-    return this.inMag + '+' + this.mags;
+    if (this.ammoLeft === 0) return 'Out';
+    return this.ammoLeft + ' rds';
   }
 }
 
@@ -121,6 +125,7 @@ function applyLoadout(sq, lo) {
     s.inMag = s.weapon.mag; s.mags = l.mags; s.frags = l.frags;
     s.launcherKey = l.launcher || null; s.launcher = l.launcher ? LAUNCHERS[l.launcher] : null;
     s.lRounds = s.launcher ? l.lRounds : 0;
+    s.ammoStart = s.ammoLeft; s.dryLogged = false;
     s.loadKg = s.computeLoad();
   }
 }

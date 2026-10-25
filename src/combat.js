@@ -171,7 +171,7 @@ function updateCombat(s, dt) {
       const clustered = G.soldiers.some(o => o !== e && o.side === e.side && o.active && dist(o.x, o.y, e.x, e.y) < 8);
       if (tgt.exp < 0.6 || clustered || chance(0.25)) { launchAt(s, e.x, e.y); s.fireCD = 2; return; }
     }
-    if (s.frags > 0 && s.fragCD <= 0 && d >= 8 && d <= s.grenade.range && (tgt.exp < 0.6 || s.assault) && chance(0.5)) {
+    if (s.frags > 0 && s.fragCD <= 0 && d >= 8 && d <= s.grenade.range && (tgt.exp < 0.6 || s.assault) && fragSafe(s, e.x, e.y) && chance(0.6)) {
       throwFrag(s, e.x, e.y);
       s.fireCD = 1.5;
       return;
@@ -180,6 +180,18 @@ function updateCombat(s, dt) {
     return;
   }
   s.targetId = null;
+
+  // An enemy last seen within throwing range, gone behind cover: a grenade over it.
+  if (s.frags > 0 && s.fragCD <= 0 && !s.moving && s.fireControl === 'free' && !Plan.planning) {
+    for (const k of G.known[s.side].values()) {
+      if (k.visible || G.time - k.t > 20) continue;
+      const e = G.byId.get(k.id), d = dist(s.x, s.y, k.x, k.y);
+      if (!e || !e.active || d < 8 || d > s.grenade.range || !fragSafe(s, k.x, k.y) || !chance(0.5)) continue;
+      throwFrag(s, k.x, k.y);
+      s.fireCD = 1.5;
+      return;
+    }
+  }
 
   if (s.suppressPt && !s.moving) {
     const p = s.suppressPt;
@@ -219,6 +231,16 @@ function hitChance(s, e, exp, d) {
   return p;
 }
 
+// Fire discipline: the rapid rate at an exposed enemy inside 300 m, in the assault or when
+// the team has just been fired on; otherwise the sustained rate, about a third as fast.
+// A man low on ammunition slows down again to make it last.
+function fireDelay(s, d, exposed) {
+  const rapid = s.assault || (exposed && d < 300) || G.time - s.team.lastFiredUpon < 6;
+  let k = rapid ? 1 : 2.6;
+  if (s.ammoFrac < 0.3) k *= 1.6;
+  return s.weapon.cycle * k;
+}
+
 function fireBurst(s, e, exp) {
   const W = s.weapon, n = Math.min(W.rounds, s.inMag), d = dist(s.x, s.y, e.x, e.y);
   s.inMag -= n; s.shots += n; s.lastFired = G.time;
@@ -237,7 +259,7 @@ function fireBurst(s, e, exp) {
     if (o !== e && o.side === e.side && o.active && dist(o.x, o.y, e.x, e.y) < 5) addSupp(o, W.supp * n * 0.4);
   }
   noteFiredUpon(e.team, s);
-  s.fireCD = W.cycle * randRange(0.8, 1.3) * (s.pinned ? 2.5 : 1) * (s.moving ? 1.6 : 1);
+  s.fireCD = fireDelay(s, d, exp >= 0.6) * randRange(0.8, 1.3) * (s.pinned ? 2.5 : 1) * (s.moving ? 1.6 : 1);
   if (s.inMag <= 0) startReload(s);
 }
 
@@ -261,8 +283,32 @@ function fireArea(s, x, y, rate) {
       for (let i = 0; i < n; i++) if (o.alive && o.health !== 'serious' && chance(0.025 * POSTURE[o.posture].size * exp)) { applyHit(o, s); s.hits++; }
     }
   }
-  s.fireCD = W.cycle * randRange(0.9, 1.4) * (s.pinned ? 2.5 : 1) / (rate || 1);
+  s.fireCD = fireDelay(s, d, false) * randRange(0.9, 1.4) * (s.pinned ? 2.5 : 1) / (rate || 1);
   if (s.inMag <= 0) startReload(s);
+}
+
+// Magazines passed between men who carry the same kind: a man nearly dry takes two from a
+// teammate with plenty, or what a casualty beside him still carries.
+function shareAmmo() {
+  for (const s of G.soldiers) {
+    if (!commandable(s) || s.reloadT > 0 || s.ammoLeft > s.weapon.mag * 1.5) continue;
+    let donor = null, give = 0;
+    for (const o of G.soldiers) {
+      if (o === s || o.side !== s.side || o.routed || o.weapon.magType !== s.weapon.magType || o.weapon.mag !== s.weapon.mag) continue;
+      const down = !o.active, d = dist(s.x, s.y, o.x, o.y);
+      if (down ? d > 10 : (d > 25 || o.mags <= 3)) continue;
+      const n = down ? o.mags : Math.min(2, o.mags - 3);
+      if (n > give) { give = n; donor = o; }
+    }
+    if (!donor || give <= 0) continue;
+    donor.mags -= give; s.mags += give;
+    s.fireCD = Math.max(s.fireCD, 3); s.dryLogged = false;
+    s.loadKg = s.computeLoad(); donor.loadKg = donor.computeLoad();
+    if (s.side === 'blue' && G.time - (s.team.ammoLogT || -99) > 30) {
+      s.team.ammoLogT = G.time;
+      G.log(s.team.short + ': ' + s.label + ' takes ' + give + ' magazines from ' + (donor.active ? donor.label : 'a casualty') + '.', 'warn');
+    }
+  }
 }
 
 function startReload(s) {
@@ -312,6 +358,12 @@ function launchAt(s, x, y) {
   s.facing = angleTo(s.x, s.y, x, y);
   G.effects.push({ type: 'flash', x: s.x, y: s.y, t: 0, life: 0.2 });
   return true;
+}
+
+// No friend within the grenade's casualty radius of where it should land.
+function fragSafe(s, x, y) {
+  const r = s.grenade.casualty * 0.8;
+  return !G.soldiers.some(o => o.side === s.side && o.active && dist(o.x, o.y, x, y) < r);
 }
 
 function throwFrag(s, x, y) {

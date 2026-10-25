@@ -321,6 +321,7 @@ const UI = {
       if (s.launcher) a += ' · ' + s.lRounds + '×40';
       if (s.frags) a += ' · ' + s.frags + 'F';
       r.ammo.textContent = a;
+      r.ammo.dataset.state = s.ammoLeft === 0 ? 'bad' : s.ammoFrac < 0.25 ? 'warn' : '';
       r.row.classList.toggle('dead', !s.alive || s.health === 'serious');
     }
     const sq = G.squads.blue;

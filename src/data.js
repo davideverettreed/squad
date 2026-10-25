@@ -76,28 +76,32 @@ const MOVE = {
   crawl: { label: 'Crawl', speed: 0.45, posture: 'prone', fatigue: 2.5 },
 };
 
-// rounds: rounds per trigger pull. cycle: seconds between pulls at a steady rate.
-// acc: chance per round to hit a standing, exposed man at 100 m or less.
+// rounds: rounds per trigger pull. cycle: seconds between pulls at the rapid rate (a
+// rifle about 35 rounds a minute, the SAW about 220); the sustained rate is about a third
+// of that (see fireDelay). acc: chance per round to hit a standing, exposed man at 100 m
+// or less. mags: magazines (or belts) carried, the one in the weapon included: the Marine
+// basic load is 7 x 30 = 210 rounds for a rifleman, 21 magazines (630) for the IAR
+// gunner, 600 linked rounds for the SAW. magType: which men can share magazines.
 const WEAPONS = {
-  M27:    { name: 'M27 IAR (rifle)', rounds: 1, cycle: 1.7, acc: 0.42, range: 600, supp: 6,  mag: 30,  mags: 7,  reload: 3, kg: 3.6 },
-  M27IAR: { name: 'M27 IAR (auto)',  rounds: 3, cycle: 1.3, acc: 0.30, range: 600, supp: 8,  mag: 30,  mags: 21, reload: 3, kg: 3.6 },
-  M16A4:  { name: 'M16A4',           rounds: 1, cycle: 1.8, acc: 0.40, range: 550, supp: 6,  mag: 30,  mags: 7,  reload: 3, kg: 3.4 },
-  M4:     { name: 'M4 carbine',      rounds: 1, cycle: 1.7, acc: 0.37, range: 500, supp: 6,  mag: 30,  mags: 7,  reload: 3, kg: 3.0 },
-  M249:   { name: 'M249 SAW',        rounds: 6, cycle: 1.6, acc: 0.18, range: 800, supp: 11, mag: 200, mags: 3,  reload: 7, kg: 7.5 },
-  AK74:   { name: 'AK-74M',          rounds: 1, cycle: 1.9, acc: 0.34, range: 500, supp: 6,  mag: 30,  mags: 7,  reload: 3, kg: 3.4 },
-  AKM:    { name: 'AKM',             rounds: 1, cycle: 1.9, acc: 0.30, range: 400, supp: 7,  mag: 30,  mags: 6,  reload: 3, kg: 3.6 },
-  AKS74U: { name: 'AKS-74U',         rounds: 1, cycle: 1.8, acc: 0.28, range: 300, supp: 6,  mag: 30,  mags: 5,  reload: 3, kg: 2.7 },
-  RPK74:  { name: 'RPK-74',          rounds: 4, cycle: 1.6, acc: 0.24, range: 600, supp: 9,  mag: 45,  mags: 9,  reload: 4, kg: 5.0 },
-  PKM:    { name: 'PKM',             rounds: 6, cycle: 1.6, acc: 0.19, range: 1000, supp: 13, mag: 100, mags: 4,  reload: 8, kg: 7.5 },
-  SVD:    { name: 'SVD',             rounds: 1, cycle: 3.0, acc: 0.70, range: 800, supp: 7,  mag: 10,  mags: 8,  reload: 3, kg: 4.3 },
+  M27:    { name: 'M27 IAR (rifle)', rounds: 1, cycle: 1.7, acc: 0.42, range: 600, supp: 6,  mag: 30,  mags: 7,  reload: 3, kg: 3.6 , magType: 'stanag' },
+  M27IAR: { name: 'M27 IAR (auto)',  rounds: 3, cycle: 1.3, acc: 0.30, range: 600, supp: 8,  mag: 30,  mags: 21, reload: 3, kg: 3.6 , magType: 'stanag' },
+  M16A4:  { name: 'M16A4',           rounds: 1, cycle: 1.8, acc: 0.40, range: 550, supp: 6,  mag: 30,  mags: 7,  reload: 3, kg: 3.4 , magType: 'stanag' },
+  M4:     { name: 'M4 carbine',      rounds: 1, cycle: 1.7, acc: 0.37, range: 500, supp: 6,  mag: 30,  mags: 7,  reload: 3, kg: 3.0 , magType: 'stanag' },
+  M249:   { name: 'M249 SAW',        rounds: 6, cycle: 1.6, acc: 0.18, range: 800, supp: 11, mag: 200, mags: 3,  reload: 7, kg: 7.5 , magType: 'belt556' },
+  AK74:   { name: 'AK-74M',          rounds: 1, cycle: 1.9, acc: 0.34, range: 500, supp: 6,  mag: 30,  mags: 7,  reload: 3, kg: 3.4 , magType: 'ak545' },
+  AKM:    { name: 'AKM',             rounds: 1, cycle: 1.9, acc: 0.30, range: 400, supp: 7,  mag: 30,  mags: 6,  reload: 3, kg: 3.6 , magType: 'ak762' },
+  AKS74U: { name: 'AKS-74U',         rounds: 1, cycle: 1.8, acc: 0.28, range: 300, supp: 6,  mag: 30,  mags: 5,  reload: 3, kg: 2.7 , magType: 'ak545' },
+  RPK74:  { name: 'RPK-74',          rounds: 4, cycle: 1.6, acc: 0.24, range: 600, supp: 9,  mag: 45,  mags: 9,  reload: 4, kg: 5.0 , magType: 'rpk545' },
+  PKM:    { name: 'PKM',             rounds: 6, cycle: 1.6, acc: 0.19, range: 1000, supp: 13, mag: 100, mags: 4,  reload: 8, kg: 7.5 , magType: 'belt762' },
+  SVD:    { name: 'SVD',             rounds: 1, cycle: 3.0, acc: 0.70, range: 800, supp: 7,  mag: 10,  mags: 8,  reload: 3, kg: 4.3 , magType: 'svd' },
 };
 // Magazine weight (kg) for the loadout weight figure.
 const MAG_KG = { 30: 0.5, 200: 3.2, 45: 0.8, 100: 3.0, 10: 0.3 };
 
 // scatter: miss distance per meter of range. lethal/casualty: radii in meters.
 const LAUNCHERS = {
-  M203: { name: 'M203 40mm', range: 350, min: 31, cycle: 6, scatter: 0.035, lethal: 5, casualty: 12, rounds: 12, vel: 76,  kg: 0.23 },
-  M320: { name: 'M320 40mm', range: 350, min: 31, cycle: 6, scatter: 0.03,  lethal: 5, casualty: 12, rounds: 12, vel: 76,  kg: 0.23 },
+  M203: { name: 'M203 40mm', range: 350, min: 31, cycle: 6, scatter: 0.035, lethal: 5, casualty: 12, rounds: 18, vel: 76,  kg: 0.23 },
+  M320: { name: 'M320 40mm', range: 350, min: 31, cycle: 6, scatter: 0.03,  lethal: 5, casualty: 12, rounds: 18, vel: 76,  kg: 0.23 },
   GP25: { name: 'GP-25 40mm', range: 400, min: 40, cycle: 7, scatter: 0.04, lethal: 5, casualty: 11, rounds: 10, vel: 76,  kg: 0.25 },
   RPG7: { name: 'RPG-7 (OG-7V)', range: 300, min: 25, cycle: 12, scatter: 0.03, lethal: 6, casualty: 14, rounds: 3, vel: 120, kg: 2.0 },
 };

@@ -274,6 +274,21 @@ const View3D = {
     }
     return this.symTex.get(key);
   },
+  // An ammunition bar for a peg, in steps of a tenth.
+  ammoTexture(f) {
+    const k = Math.round(f * 10);
+    this.ammoTex = this.ammoTex || new Map();
+    if (!this.ammoTex.has(k)) {
+      const c = document.createElement('canvas');
+      c.width = 64; c.height = 12;
+      const x = c.getContext('2d');
+      x.fillStyle = 'rgba(20,20,20,0.8)'; x.fillRect(0, 0, 64, 12);
+      if (k > 0) { x.fillStyle = ammoColor(k / 10); x.fillRect(2, 2, 60 * k / 10, 8); }
+      else { x.strokeStyle = '#d83a2e'; x.lineWidth = 2; x.strokeRect(2, 2, 60, 8); }
+      this.ammoTex.set(k, new THREE.CanvasTexture(c));
+    }
+    return this.ammoTex.get(k);
+  },
   pegFor(s) {
     let p = this.pegs.get(s.id);
     if (p) return p;
@@ -284,8 +299,9 @@ const View3D = {
     const sym = new THREE.Sprite(new THREE.SpriteMaterial({ map: this.symbolTexture(s.side, s.billet), depthTest: true }));
     const ring = new THREE.Mesh(new THREE.RingGeometry(1.35, 2, 28), new THREE.MeshBasicMaterial({ color: 0xffd60a, transparent: true, opacity: 0.9, side: THREE.DoubleSide }));
     ring.rotation.x = -Math.PI / 2;
-    g.add(body, top, sym, ring);
-    p = { g, body, top, sym, ring, side: s.side };
+    const ammo = new THREE.Sprite(new THREE.SpriteMaterial({ map: this.ammoTexture(1) }));
+    g.add(body, top, sym, ring, ammo);
+    p = { g, body, top, sym, ring, ammo, ammoK: 10, side: s.side };
     this.scene.add(g);
     this.pegs.set(s.id, p);
     return p;
@@ -308,6 +324,12 @@ const View3D = {
       p.top.scale.set(r, 1, r); p.top.position.y = h + 0.04;
       p.sym.visible = s.active;
       p.sym.scale.set(4.6 * k, 4.6 * k, 1); p.sym.position.y = h + 3.2 * k;
+      p.ammo.visible = s.active && s.side === 'blue';
+      if (p.ammo.visible) {
+        const ak = Math.round(s.ammoFrac * 10);
+        if (ak !== p.ammoK) { p.ammoK = ak; p.ammo.material.map = this.ammoTexture(ak / 10); p.ammo.material.needsUpdate = true; }
+        p.ammo.scale.set(4.6 * k, 0.86 * k, 1); p.ammo.position.y = h + 0.9 * k;
+      }
       p.ring.visible = sel.has(s);
       p.ring.scale.set(r, r, r); p.ring.position.y = 0.3;
     }

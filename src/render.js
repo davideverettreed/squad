@@ -939,6 +939,16 @@ function drawCounter(ctx, p, sx, sy, s, lifted) {
   return y;
 }
 
+// Ammunition left, as a bar under a friendly piece: green, amber below half, red below a
+// quarter; an empty red frame when he is out.
+function ammoColor(f) { return f > 0.5 ? '#3fae4a' : f > 0.25 ? '#e8a21e' : '#d83a2e'; }
+function drawAmmoBar(ctx, x, y, w, f) {
+  const h = Math.max(3, w * 0.09);
+  ctx.fillStyle = 'rgba(20,20,20,0.7)'; ctx.fillRect(x - w / 2 - 1, y - 1, w + 2, h + 2);
+  if (f > 0) { ctx.fillStyle = ammoColor(f); ctx.fillRect(x - w / 2, y, w * f, h); }
+  else { ctx.strokeStyle = '#d83a2e'; ctx.lineWidth = 1; ctx.strokeRect(x - w / 2 + 0.5, y + 0.5, w - 1, h - 1); }
+}
+
 // Small square status chit stacked against a piece, as in a board wargame.
 function drawChit(ctx, x, y, size, label, bg, fg) {
   ctx.save();
@@ -987,6 +997,10 @@ function drawUnits(ctx) {
     }
     if (p.kind !== 'man') {
       const y = drawCounter(ctx, p, q.x, q.y, 14, lifted);
+      if (p.side === 'blue' && p.live.length) {
+        const tot = p.live.reduce((n, s) => n + s.ammoLeft, 0), st = p.live.reduce((n, s) => n + s.ammoStart, 0);
+        drawAmmoBar(ctx, q.x, y + 14 * 1.25 + 5, 14 * 2.5, st ? tot / st : 0);
+      }
       const pinned = p.live.filter(s => s.pinned).length, supp = p.live.filter(s => s.suppressed).length;
       const chits = [];
       if (p.live.length && pinned * 2 >= p.live.length) chits.push(['PIN', '#b3261e', '#fff']);
@@ -997,6 +1011,7 @@ function drawUnits(ctx) {
     }
     const s = p.soldier, down = !s.active;
     const y = drawDisc(ctx, s.side, s.billet, q.x, q.y, r, lifted);
+    if (!down && s.side === 'blue') drawAmmoBar(ctx, q.x, y + r + Math.max(2, r * 0.22) + 3, r * 1.8, s.ammoFrac);
     // Operational condition (MIL-STD-2525): slash for a casualty, X for killed.
     if (down) {
       ctx.strokeStyle = OVL.black; ctx.lineWidth = 2.6; ctx.lineCap = 'round';
