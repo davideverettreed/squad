@@ -377,6 +377,48 @@ const Plan = {
   },
   liveMembers(u) { return selMembers(this.unitSel(u)).filter(commandable); },
 
+  // Where the plan sends each unit, line by line: a leg for each move, and a ghost of each
+  // unit where its last planned move ends. A squad move sends all three teams together;
+  // a team sent on alone leaves the squad's ghost and gets one of its own.
+  projection() {
+    const sq = G.squads.blue, legs = [], ghosts = [];
+    if (!sq) return { legs, ghosts };
+    const pos = {}, mark = {};
+    for (const n of [1, 2, 3]) {
+      const live = sq.teams[n - 1].members.filter(s => s.active);
+      pos['t' + n] = live.length ? centroid(live) : null;
+    }
+    for (const l of this.lines) {
+      if (TASKS[l.task].noUnit) continue;
+      let dest = null, via = null, g = null;
+      if (l.task === 'assault') { g = this.graphic(l.target); if (g) dest = this.anchor(g); }
+      else if (TASKS[l.task].where) {
+        g = this.graphic(l.where);
+        if (g) { dest = l.task === 'route' ? g.pts[g.pts.length - 1] : this.anchor(g); if (l.task === 'route') via = g.pts; }
+      }
+      if (!dest) continue;
+      const units = l.unit === 'squad' ? ['t1', 't2', 't3'].filter(u => pos[u]) : [l.unit];
+      const starts = units.map(u => pos[u]).filter(Boolean);
+      if (!starts.length) continue;
+      legs.push({ from: centroid(starts), to: dest, via, unit: l.unit, task: l.task });
+      const m = { x: dest.x, y: dest.y, squad: l.unit === 'squad', name: g.name };
+      for (const u of units) { pos[u] = { x: dest.x, y: dest.y }; mark[u] = m; }
+    }
+    const teams = ['t1', 't2', 't3'].filter(u => mark[u]);
+    const whole = teams.length && teams.every(u => mark[u] === mark[teams[0]]) && mark[teams[0]].squad && teams.length === ['t1', 't2', 't3'].filter(u => pos[u]).length;
+    if (whole) ghosts.push({ unit: 'squad', x: mark.t1.x, y: mark.t1.y, name: mark.t1.name });
+    else {
+      // Teams that end on the same spot stand side by side.
+      const at = new Map();
+      for (const u of teams) {
+        const m = mark[u], key = Math.round(m.x) + ',' + Math.round(m.y), k = at.get(key) || 0;
+        at.set(key, k + 1);
+        ghosts.push({ unit: u, x: m.x + k * 14, y: m.y + k * 6, name: m.name });
+      }
+    }
+    return { legs, ghosts };
+  },
+
   triggerMet(l, i) {
     const prev = this.lines[i - 1];
     switch (l.trigger) {

@@ -18,7 +18,7 @@ const View3D = {
   active: false, built: false, mapRef: null, canvas: null,
   renderer: null, scene: null, camera: null, tiles: [], skirt: null, table: null, exag: 2,
   cam: { x: 500, y: 500, yaw: 0, pitch: 0.9, dist: 700 },
-  pointers: new Map(), drag: null, pegs: new Map(), lost: [], symTex: new Map(), dragG: null, marks: [], marksRef: null, drawingDrape: false,
+  ghostPegs: [], pointers: new Map(), drag: null, pegs: new Map(), lost: [], symTex: new Map(), dragG: null, marks: [], marksRef: null, drawingDrape: false,
 
   // ------------------------------------------------------------ opening and closing
   toggle() { if (this.active) this.close(); else this.open(); },
@@ -216,7 +216,7 @@ const View3D = {
     this.drawingDrape = true; // the terrain flags stand up in 3D instead
     try {
       Fog.draw(ctx);
-      drawPlan(ctx); drawOrdersOverlay(ctx); drawProjectiles(ctx); drawEffects(ctx);
+      drawPlan(ctx); drawPlanGhosts(ctx); drawOrdersOverlay(ctx); drawProjectiles(ctx); drawEffects(ctx);
       drawCones(ctx); drawGhostFormation(ctx); drawTapes(ctx);
     } finally { R.cam = save.cam; R.w = save.w; R.h = save.h; this.drawingDrape = false; }
     t.tex.needsUpdate = true;
@@ -258,6 +258,7 @@ const View3D = {
     this.refreshTiles();
     this.updatePegs();
     this.updateMarks();
+    this.updateGhosts();
     this.renderer.render(this.scene, this.camera);
   },
 
@@ -327,6 +328,43 @@ const View3D = {
     }
     for (; n < this.lost.length; n++) this.lost[n].visible = false;
   },
+  // ------------------------------------------------------------ plan ghosts
+  // Where the plan leaves each unit: a pale peg with the unit's name, to tap and plan on from.
+  updateGhosts() {
+    const gs = Plan.planning ? Plan.projection().ghosts : [], k = this.pegScale();
+    this.ghostList = gs;
+    gs.forEach((gh, i) => {
+      let m = this.ghostPegs[i];
+      if (!m) {
+        const g = new THREE.Group();
+        const body = new THREE.Mesh(new THREE.CylinderGeometry(1, 1, 1, 24), new THREE.MeshLambertMaterial({ color: 0x80e0ff, transparent: true, opacity: 0.45 }));
+        const label = new THREE.Sprite(new THREE.SpriteMaterial({ transparent: true }));
+        g.add(body, label);
+        this.scene.add(g);
+        m = this.ghostPegs[i] = { g, body, label, unit: null };
+      }
+      if (m.unit !== gh.unit) {
+        const f = this.flagTexture(PLAN_UNITS[gh.unit], '#1f4fbf');
+        m.label.material.map = f.tex; m.label.material.needsUpdate = true; m.aspect = f.aspect; m.unit = gh.unit;
+      }
+      const r = (gh.unit === 'squad' ? 9 : 6) * k, h = 7 * k;
+      m.g.visible = true;
+      m.g.position.set(gh.x - MAP_W / 2, this.height(gh.x, gh.y), gh.y - MAP_H / 2);
+      m.body.scale.set(r, h, r); m.body.position.y = h / 2;
+      m.label.scale.set(5 * k * m.aspect, 5 * k, 1); m.label.position.y = h + 4 * k;
+    });
+    for (let i = gs.length; i < this.ghostPegs.length; i++) this.ghostPegs[i].g.visible = false;
+  },
+  ghostAt(sx, sy) {
+    let best = null, bd = 30;
+    for (const gh of this.ghostList || []) {
+      const q = this.screenOf(gh.x, gh.y, 3 * this.pegScale());
+      const d = Math.hypot(q.x - sx, q.y - sy);
+      if (q.z <= 1 && d < bd) { bd = d; best = gh; }
+    }
+    return best;
+  },
+
   // ------------------------------------------------------------ terrain flags
   // A pennant with a name, as on the flat map, for the top of a flagpole.
   flagTexture(text, color) {
@@ -472,6 +510,11 @@ const View3D = {
       const p = this.pointers.get(e.pointerId);
       if (!p) return;
       this.pointers.delete(e.pointerId);
+      if (e.type === 'pointerup' && this.dragG && !this.moved && this.pointers.size === 0 && Plan.planning && this.ghostAt(p.x, p.y)) {
+        this.dragG = null;
+        this.tap(p.x, p.y, false);
+        return;
+      }
       if (e.type === 'pointerup' && this.dragG && this.pointers.size === 0) {
         // A tap or drag on a control measure selects it in the order's Execution paragraph.
         Plan.selected = this.dragG.g.id; this.dragG = null;
@@ -494,7 +537,7 @@ const View3D = {
   tap(sx, sy, secondary) {
     const w = this.groundAt(sx, sy);
     if (!w) return;
-    UI.handleTap(sx, sy, secondary, { w, piece: this.pieceAt(sx, sy) });
+    UI.handleTap(sx, sy, secondary, { w, piece: this.pieceAt(sx, sy), ghost: Plan.planning ? this.ghostAt(sx, sy) : null });
   },
 
   // On-screen buttons for phones: turn, tilt, zoom.

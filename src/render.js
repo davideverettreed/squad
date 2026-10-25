@@ -669,6 +669,7 @@ function render() {
   Fog.draw(ctx);
   drawEdgeLabels(ctx);
   drawPlan(ctx);
+  drawPlanGhosts(ctx);
   drawOrdersOverlay(ctx);
   drawProjectiles(ctx);
   drawEffects(ctx);
@@ -1098,6 +1099,48 @@ function drawTerrainMarks(ctx) {
       flag(p.x, p.y, k.name, MAP_INK);
     }
   }
+}
+
+// While planning: a dashed arrow for each planned move, and a dashed ghost counter of each
+// unit where its last move ends. Tapping a ghost picks that unit to plan its next step.
+function drawPlanGhosts(ctx) {
+  if (!Plan.planning || !G.squads.blue) return;
+  const pr = Plan.projection();
+  ctx.save();
+  // Heavier on the sand table, where the drawing is seen at a slant.
+  const lw = View3D.drawingDrape ? Math.max(3, 1.5 * R.cam.zoom) : 2, dl = lw * 3.5;
+  ctx.strokeStyle = 'rgba(31,79,191,0.75)'; ctx.fillStyle = 'rgba(31,79,191,0.75)'; ctx.lineWidth = lw; ctx.setLineDash([dl, dl * 0.7]);
+  for (const lg of pr.legs) {
+    const pts = [lg.from, ...(lg.via ? lg.via : [lg.to])].map(p => toScreen(p.x, p.y));
+    ctx.beginPath(); pts.forEach((p, i) => i ? ctx.lineTo(p.x, p.y) : ctx.moveTo(p.x, p.y)); ctx.stroke();
+    const a = pts[pts.length - 2], b = pts[pts.length - 1], ang = Math.atan2(b.y - a.y, b.x - a.x);
+    if (Math.hypot(b.x - a.x, b.y - a.y) > 14) {
+      ctx.setLineDash([]);
+      const ah = lw * 5.5;
+      ctx.beginPath(); ctx.moveTo(b.x, b.y); ctx.lineTo(b.x - Math.cos(ang - 0.4) * ah, b.y - Math.sin(ang - 0.4) * ah);
+      ctx.lineTo(b.x - Math.cos(ang + 0.4) * ah, b.y - Math.sin(ang + 0.4) * ah); ctx.closePath(); ctx.fill();
+      ctx.setLineDash([dl, dl * 0.7]);
+    }
+  }
+  ctx.setLineDash([]);
+  if (!View3D.drawingDrape) for (const gh of pr.ghosts) {
+    const q = toScreen(gh.x, gh.y);
+    ctx.globalAlpha = 0.85;
+    drawUnitSymbol(ctx, q.x, q.y, 15, 'blue', gh.unit === 'squad' ? 'squad' : 'team', { fill: 'rgba(128,224,255,0.3)', ink: OVL.blue, dashed: true });
+    ctx.globalAlpha = 1;
+    if (gh.unit !== 'squad') {
+      ctx.font = '700 12px "Saira Condensed", "Arial Narrow", sans-serif'; ctx.textAlign = 'left'; ctx.textBaseline = 'middle';
+      ctx.lineWidth = 3; ctx.strokeStyle = 'rgba(247,245,236,0.95)'; ctx.strokeText(gh.unit[1], q.x + 14, q.y - 8);
+      ctx.fillStyle = OVL.blue; ctx.fillText(gh.unit[1], q.x + 14, q.y - 8);
+    }
+  }
+  ctx.restore();
+}
+function ghostAt(sx, sy) {
+  if (!Plan.planning) return null;
+  let best = null, bd = 20;
+  for (const gh of Plan.projection().ghosts) { const q = toScreen(gh.x, gh.y), d = Math.hypot(q.x - sx, q.y - sy); if (d < bd) { bd = d; best = gh; } }
+  return best;
 }
 
 function drawPlan(ctx) {

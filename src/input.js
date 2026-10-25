@@ -50,6 +50,12 @@ const Input = {
       const p = this.pointers.get(e.pointerId);
       if (!p) return;
       this.pointers.delete(e.pointerId);
+      // A tap (no drag) on a plan ghost picks the unit, even when it stands on a control measure.
+      if (e.type === 'pointerup' && this.dragG && !this.moved && this.pointers.size === 0 && ghostAt(p.x, p.y)) {
+        this.dragG = null;
+        UI.handleTap(p.x, p.y, false);
+        return;
+      }
       if (e.type === 'pointerup' && this.dragG && this.pointers.size === 0) {
         Plan.selected = this.dragG.g.id;
         this.dragG = null;

@@ -156,6 +156,13 @@ const UI = {
     const w = at ? at.w : toWorld(sx, sy);
     if (G.ui.measuring && !secondary) { this.tapeTap(sx, sy, w); return; }
     if (Plan.tool && !secondary) { Plan.place(w); return; }
+    // A tap on a ghost picks that unit where the plan leaves it, to plan its next step.
+    const ghost = !secondary && Plan.planning ? (at ? at.ghost : ghostAt(sx, sy)) : null;
+    if (ghost) {
+      this.select(Plan.unitSel(ghost.unit));
+      this.toast(PLAN_UNITS[ghost.unit] + ' at ' + ghost.name + ': tap the map for its next step.');
+      return;
+    }
     const piece = at ? at.piece : pieceAt(sx, sy);
     const sel = G.ui.sel;
     // An enemy piece stands for its nearest visible, effective man.
