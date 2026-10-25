@@ -1,8 +1,10 @@
 'use strict';
 // The sand table: the map sheet laid over a 3D model of the ground, heights exaggerated as
 // on a real sand table, with the plan, the fog of war, the cones and the pieces drawn on
-// it. Drag to pan, right-drag (or two fingers) to turn and tilt, wheel or pinch to zoom.
-// A tap gives the same orders as a tap on the flat map.
+// it. Each man stands on it as a peg with his billet symbol above, sized to stay readable
+// as the camera pulls back. Drag to pan, right-drag (or two fingers) to turn and tilt,
+// wheel or pinch to zoom. Taps give the same orders as on the flat map; while planning,
+// control measures can be placed and dragged here too.
 
 const THREE_URL = 'https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js';
 const DRAPE = 2048;      // pixels across the texture laid on the ground
@@ -13,7 +15,7 @@ const View3D = {
   renderer: null, scene: null, camera: null, terrain: null, skirt: null, texture: null,
   drape: null, base: null, exag: 2, drapeT: 0,
   cam: { x: 500, y: 500, yaw: 0, pitch: 0.9, dist: 700 },
-  pointers: new Map(), drag: null,
+  pointers: new Map(), drag: null, pegs: new Map(), lost: [], symTex: new Map(), dragG: null,
 
   // ------------------------------------------------------------ opening and closing
   toggle() { if (this.active) this.close(); else this.open(); },
@@ -116,6 +118,7 @@ const View3D = {
     S.add(this.table);
     this.buildBase();
     this.mapRef = m;
+    this.clearPegs();
     // Start behind the squad, looking toward the reported enemy.
     const c = centroid(G.squads.blue.all), e = Plan.reported || { x: MAP_W / 2, y: MAP_H / 2 };
     Object.assign(this.cam, { x: lerp(c.x, e.x, 0.3), y: lerp(c.y, e.y, 0.3), yaw: Math.atan2(e.y - c.y, e.x - c.x), pitch: 0.95, dist: MAP_W * 0.85 });
@@ -152,7 +155,7 @@ const View3D = {
     try {
       Fog.draw(ctx);
       drawPlan(ctx); drawOrdersOverlay(ctx); drawProjectiles(ctx); drawEffects(ctx);
-      drawCones(ctx); drawUnits(ctx); drawGhostFormation(ctx); drawTapes(ctx);
+      drawCones(ctx); drawGhostFormation(ctx); drawTapes(ctx);
     } finally { R.cam = save.cam; R.w = save.w; R.h = save.h; }
     this.texture.needsUpdate = true;
   },
@@ -180,7 +183,79 @@ const View3D = {
     this.drapeT -= dt;
     if (this.drapeT <= 0) { this.drapeT = DRAPE_RATE; this.redrawDrape(); }
     this.placeCamera();
+    this.updatePegs();
     this.renderer.render(this.scene, this.camera);
+  },
+
+  // ------------------------------------------------------------ pieces
+  // The billet symbol, as on the flat map's round counters, for the top of a peg.
+  symbolTexture(side, billet) {
+    const key = side + ':' + billet;
+    if (!this.symTex.has(key)) {
+      const c = document.createElement('canvas');
+      c.width = c.height = 64;
+      drawSymbol(c.getContext('2d'), 32, 32, 27, billet, { side });
+      this.symTex.set(key, new THREE.CanvasTexture(c));
+    }
+    return this.symTex.get(key);
+  },
+  pegFor(s) {
+    let p = this.pegs.get(s.id);
+    if (p) return p;
+    const g = new THREE.Group();
+    const col = s.side === 'blue' ? 0x3a7d96 : 0xa14646;
+    const body = new THREE.Mesh(new THREE.CylinderGeometry(1, 1, 1, 18), new THREE.MeshLambertMaterial({ color: col }));
+    const top = new THREE.Mesh(new THREE.CylinderGeometry(1.02, 1.02, 0.08, 18), new THREE.MeshLambertMaterial({ color: s.side === 'blue' ? 0xe9f6fb : 0xfbeaea }));
+    const sym = new THREE.Sprite(new THREE.SpriteMaterial({ map: this.symbolTexture(s.side, s.billet), depthTest: true }));
+    const ring = new THREE.Mesh(new THREE.RingGeometry(1.35, 2, 28), new THREE.MeshBasicMaterial({ color: 0xffd60a, transparent: true, opacity: 0.9, side: THREE.DoubleSide }));
+    ring.rotation.x = -Math.PI / 2;
+    g.add(body, top, sym, ring);
+    p = { g, body, top, sym, ring, side: s.side };
+    this.scene.add(g);
+    this.pegs.set(s.id, p);
+    return p;
+  },
+  // Pegs stand a little taller than life so they read at a distance; the farther the
+  // camera, the bigger they are drawn.
+  pegScale() { return clamp(this.cam.dist / 500, 0.7, 4); },
+  pegHeight(s) { return s.active ? 6 * { stand: 1, kneel: 0.72, prone: 0.4 }[s.posture] : 1.2; },
+
+  updatePegs() {
+    const k = this.pegScale(), sel = new Set(selMembers(G.ui.sel)), seen = new Set();
+    for (const s of G.soldiers) {
+      if (s.routed || !(s.side === 'blue' || G.revealAll || enemyVisible(s))) continue;
+      seen.add(s.id);
+      const p = this.pegFor(s), h = this.pegHeight(s) * k, r = 2 * k;
+      p.g.visible = true;
+      p.g.position.set(s.x - MAP_W / 2, this.height(s.x, s.y), s.y - MAP_H / 2);
+      p.body.scale.set(r, h, r); p.body.position.y = h / 2;
+      p.body.material.color.setHex(s.active ? (s.side === 'blue' ? 0x3a7d96 : 0xa14646) : (s.health === 'kia' ? 0x3a3a3a : 0x7a7a7a));
+      p.top.scale.set(r, 1, r); p.top.position.y = h + 0.04;
+      p.sym.visible = s.active;
+      p.sym.scale.set(4.6 * k, 4.6 * k, 1); p.sym.position.y = h + 3.2 * k;
+      p.ring.visible = sel.has(s);
+      p.ring.scale.set(r, r, r); p.ring.position.y = 0.3;
+    }
+    for (const [id, p] of this.pegs) if (!seen.has(id)) p.g.visible = false;
+    // Last known enemy positions: faint red spheres where a man was last seen.
+    let n = 0;
+    if (!G.revealAll) for (const kn of G.known.blue.values()) {
+      const e = G.byId.get(kn.id);
+      if (kn.visible || !e || !e.active) continue;
+      let m = this.lost[n];
+      if (!m) {
+        m = new THREE.Mesh(new THREE.SphereGeometry(1, 14, 10), new THREE.MeshBasicMaterial({ color: 0xc62828, transparent: true, opacity: 0.35, wireframe: true }));
+        this.scene.add(m); this.lost.push(m);
+      }
+      m.visible = true; m.scale.setScalar(2.4 * k);
+      m.position.set(kn.x - MAP_W / 2, this.height(kn.x, kn.y) + 2.4 * k, kn.y - MAP_H / 2);
+      n++;
+    }
+    for (; n < this.lost.length; n++) this.lost[n].visible = false;
+  },
+  clearPegs() {
+    for (const p of this.pegs.values()) this.scene.remove(p.g);
+    this.pegs.clear();
   },
 
   // ------------------------------------------------------------ picking
@@ -192,8 +267,8 @@ const View3D = {
     const hit = this.raycaster.intersectObject(this.terrain)[0];
     return hit ? { x: hit.point.x + MAP_W / 2, y: hit.point.z + MAP_H / 2 } : null;
   },
-  screenOf(x, y) {
-    const v = new THREE.Vector3(x - MAP_W / 2, this.height(x, y) + 1, y - MAP_H / 2).project(this.camera);
+  screenOf(x, y, up) {
+    const v = new THREE.Vector3(x - MAP_W / 2, this.height(x, y) + (up == null ? 1 : up), y - MAP_H / 2).project(this.camera);
     const r = this.canvas.getBoundingClientRect();
     return { x: (v.x + 1) / 2 * r.width, y: (1 - v.y) / 2 * r.height, z: v.z };
   },
@@ -202,11 +277,22 @@ const View3D = {
     let best = null, bd = 24;
     for (const s of G.soldiers) {
       if (s.routed || (s.side === 'red' && !enemyVisible(s))) continue;
-      const q = this.screenOf(s.x, s.y);
+      const q = this.screenOf(s.x, s.y, this.pegHeight(s) * this.pegScale() * 0.6);
       if (q.z > 1) continue;
       const d = Math.hypot(q.x - sx, q.y - sy) + (s.alive ? 0 : 6) + (s.side === 'blue' ? 0 : 2);
       if (d < bd) { bd = d; best = { kind: 'man', x: s.x, y: s.y, side: s.side, soldier: s }; }
     }
+    return best;
+  },
+
+  // A control measure point near a screen point, for dragging while planning.
+  hitGraphic(sx, sy) {
+    let best = null, bd = 22;
+    for (const g of Plan.graphics) g.pts.forEach((pt, idx) => {
+      const q = this.screenOf(pt.x, pt.y);
+      const d = Math.hypot(q.x - sx, q.y - sy);
+      if (q.z <= 1 && d < bd) { bd = d; best = { g, idx }; }
+    });
     return best;
   },
 
@@ -219,9 +305,15 @@ const View3D = {
       this.pointers.set(e.pointerId, { x: e.offsetX, y: e.offsetY, sx: e.offsetX, sy: e.offsetY, button: e.button });
       this.moved = this.pointers.size > 1;
       this.drag = { turn: e.button === 2 || e.shiftKey };
+      // While planning, a control measure under the finger is dragged instead of the view.
+      this.dragG = this.pointers.size === 1 && G.running && Plan.planning && !Plan.tool && e.button !== 2 ? this.hitGraphic(e.offsetX, e.offsetY) : null;
       if (this.pointers.size === 2) this.pinch = this.twoFinger();
     });
     cv.addEventListener('pointermove', (e) => {
+      // The pointer's ground point, for the tape and route previews.
+      if (e.pointerType === 'mouse' && ((G.ui.measuring && G.ui.tapeStart) || Plan.routeDraft || Plan.plStart)) {
+        G.ui.hover = this.groundAt(e.offsetX, e.offsetY); G.ui.hoverIsPointer = true;
+      }
       const p = this.pointers.get(e.pointerId);
       if (!p) return;
       const dx = e.offsetX - p.x, dy = e.offsetY - p.y;
@@ -234,6 +326,9 @@ const View3D = {
         c.yaw += (now.a - this.pinch.a);
         c.pitch += (now.my - this.pinch.my) * 0.006;
         this.pinch = now;
+      } else if (this.pointers.size === 1 && this.moved && this.dragG) {
+        const w = this.groundAt(p.x, p.y), pt = this.dragG.g.pts[this.dragG.idx];
+        if (w) { pt.x = clamp(w.x, 0, MAP_W); pt.y = clamp(w.y, 0, MAP_H); }
       } else if (this.pointers.size === 1 && this.moved) {
         if (this.drag && this.drag.turn) { c.yaw += dx * 0.006; c.pitch += dy * 0.006; }
         else {
@@ -249,6 +344,12 @@ const View3D = {
       const p = this.pointers.get(e.pointerId);
       if (!p) return;
       this.pointers.delete(e.pointerId);
+      if (e.type === 'pointerup' && this.dragG && this.pointers.size === 0) {
+        // A tap or drag on a control measure selects it in the order's Execution paragraph.
+        Plan.selected = this.dragG.g.id; this.dragG = null;
+        OPORD.show('E');
+        return;
+      }
       if (e.type === 'pointerup' && !this.moved && this.pointers.size === 0) this.tap(p.x, p.y, p.button === 2);
       if (this.pointers.size < 2) this.pinch = null;
       if (this.pointers.size === 0) this.drag = null;
