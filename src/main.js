@@ -48,7 +48,7 @@ function newMission() {
   const mode = set.mode === 'random' ? (chance(0.5) ? 'attack' : 'meeting') : set.mode;
   G.mode = mode;
 
-  // The sides start apart by the echelon's distance (500-700 m for squads), on a random
+  // The sides start apart by the echelon's distance (1.0-1.4 km for squads, beyond spotting range), on a random
   // axis, both well inside the sheet.
   const M = G.echelon.margin, inside = (x, y) => x >= M && y >= M && x <= MAP_W - M && y <= MAP_H - M;
   let axis = 0, sep = G.echelon.sep[0], bx = M, by = M, rx = MAP_W - M, ry = MAP_H - M;

@@ -1,5 +1,5 @@
 'use strict';
-// Terrain grid for the sheet (1 x 1 km for a squad, 3 x 3 km for a platoon): procedural generation (relief, streams and ponds,
+// Terrain grid for the sheet (2 x 2 km for a squad, 4 x 4 km for a platoon): procedural generation (relief, streams and ponds,
 // fields, woods, roads, villages, farms), line of sight, pathfinding and cover search.
 
 

@@ -4,13 +4,14 @@
 // published effective ranges and rates of fire; they are not ballistic tables.
 
 const CELL = 4;                    // meters per terrain cell
-// The map's size goes with the echelon: a squad fights on one 1 km grid square, a
-// platoon on 3 x 3 km, larger units on larger sheets. Set before each map is made.
+// The map's size goes with the echelon: a squad fights on a 2 x 2 km sheet, a platoon on
+// 4 x 4 km, larger units on larger sheets. The sides start beyond spotting range (800 m).
+// Set before each map is made.
 const ECHELONS = {
-  squad:   { label: 'Squad',   size: 1000, sep: [500, 700],   margin: 120, attackTime: 30 },
-  platoon: { label: 'Platoon', size: 3000, sep: [1500, 2500], margin: 250, attackTime: 45 },
+  squad:   { label: 'Squad',   size: 2000, sep: [1000, 1400], margin: 200, attackTime: 40 },
+  platoon: { label: 'Platoon', size: 4000, sep: [2000, 3000], margin: 300, attackTime: 60 },
 };
-let MAP_W = 1000, MAP_H = 1000;    // meters
+let MAP_W = 2000, MAP_H = 2000;    // meters
 let GW = MAP_W / CELL, GH = MAP_H / CELL;
 // Scale of the sheet against the 3 km sheet that the map styles were first drawn for.
 let MAP_K = MAP_W / 3000;

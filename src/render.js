@@ -550,8 +550,8 @@ function buildTerrain(map) {
   });
 
   // Graphic scale, bottom center.
-  // A bar of real ground distance: 1000 m on a large sheet, 300 m on a one-square sheet.
-  const L = MAP_W >= 3000 ? 1000 : 300, Lv = L * vk, sx = VW / 2 - Lv / 2, sy = VH + 120;
+  // A bar of real ground distance: 1000 m on a large sheet, less on a small one.
+  const L = MAP_W >= 3000 ? 1000 : MAP_W >= 2000 ? 500 : 300, Lv = L * vk, sx = VW / 2 - Lv / 2, sy = VH + 120;
   text('GRAPHIC SCALE', VW / 2, sy - 22, 24, { weight: 700, align: 'center' });
   ctx.strokeStyle = MAP_INK; ctx.lineWidth = 2;
   for (let i = 0; i < 10; i++) {

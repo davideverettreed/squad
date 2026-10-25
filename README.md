@@ -2,8 +2,8 @@
 
 *Sand Table Exercise: Rifle Squad* (STEX) is real-time squad tactics in the browser. You command a 13-man Marine rifle squad
 (squad leader and three four-man fire teams) against an enemy squad, using fire
-and maneuver on a 1 × 1 km map (one grid square, 100 m lines) seen straight down.
-The map grows with the echelon: platoon actions will use 3 × 3 km.
+and maneuver on a 2 × 2 km map (four 1 km grid squares) seen straight down.
+The map grows with the echelon: platoon actions will use 4 × 4 km.
 
 The battlefield is a printed 1:25,000-style map sheet on a planning table, in
 the standard colors of US military topographic maps (FM 3-25.26): black for
@@ -109,7 +109,7 @@ casualties 25%, time 15%.
 - Loadout by billet: weapon, magazines, 40mm rounds, grenades, with load weight
   affecting speed.
 - Line of sight over terrain height, walls, buildings, woods, orchards,
-  vineyards and tall grass. Squads start 500–700 m apart; time runs up to 16×.
+  vineyards and tall grass. Squads start 1.0–1.4 km apart, beyond spotting range; time runs up to 16×.
 - Six map regions, each with its own ground, vegetation, water, settlement and
   place names: rolling farmland, the Southern California coast, South Texas
   brush country, North Carolina woods and swamp, the Arizona desert and

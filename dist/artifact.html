@@ -474,7 +474,7 @@ body:not(.roster-min) #btn3d, body:not(.roster-min) #ctl3d { margin-left: 0; }
         <h3>Overlay</h3>
         <p>Orders are drawn as on an acetate overlay: blue for friendly, red for enemy, black for targets. Blue lines with arrowheads are routes (long dashes for a rush, dots for a crawl); a heavy arrow with a solid head is an assault. OBJ marks the objective of a bounding drill. Dashed blue lines run from the shooters to a suppression target, a black cross in a circle. 40MM marks a grenade launcher target.</p>
         <h3>Map key</h3>
-        <p>A squad fights on a sheet of one 1-kilometer grid square, with fainter lines every 100 meters; larger units will get larger sheets. The sheet is in standard US military map colors. White is open ground. Light green with tufts is tall grass, which hides a man lying prone. Green is woods and hedgerows; rows of small green circles are orchards, green row lines are vineyards. Blue lines are streams, which run in shallow gullies that give cover; blue areas are ponds and cannot be crossed. A broad blue band is a river: it can be crossed only at a bridge (two black lines across the road) or at a ford, marked FORD in a dashed blue circle, where men wade slowly in the open. Pale blue-green ground with small blue tufts is swamp: very slow going and no cover, but it hides a man. Red-brown lines are contours (5 or 10 meters apart, as the margin states), with a heavier, numbered index contour every fifth line; numbers with a dot are hilltop heights. Black blocks are buildings. A black line with ticks is a stone wall, which gives hard cover to a kneeling or prone man. The red road is a paved road; the dashed double lines are dirt tracks. Each mission is set in one of six regions, chosen in the New mission dialog or at random: rolling farmland; the Southern California coast (Pacific Ocean on the west edge, sand beach, chaparral); South Texas brush country (mesquite thickets, pasture, stock tanks); North Carolina pine woods and blackwater swamp; the Arizona desert and mountains (open creosote flats, rock outcrops, dry washes shown as dashed blue lines); and the Montana mountains in winter (deep snow, lodgepole pine, frozen ponds). The ground changes the fight: snow, sand, chaparral and rock are slow; brush and grass hide a man lying down; rock gives cover; open desert gives long fields of fire. The 3D button (key T) turns the map into a sand table: the same sheet laid over the ground in 3D, heights exaggerated. Drag to move, right-drag or two fingers to turn and tilt, wheel or pinch to zoom; the buttons beside it turn, tilt and zoom on a phone. Taps give the same orders as on the flat map. Fog of war: ground your squad can see now is clear; ground it has seen before is faded; ground it has never seen is faded more (key F toggles the wash). Point at the map to read the 8-digit grid reference. Measure (key M) lays a tape between two taps and marks the distance, grid bearing and mils on the map; tap a label to remove it. Point at a formation button to see the selected team or squad ghosted in that formation. Zoomed out, your men gather into one counter per fire team, then one for the squad, in the standard unit symbol: a rectangle with an infantry X for friendly, a diamond for enemy.</p>
+        <p>A squad fights on a 2 by 2 kilometer sheet of four 1-kilometer grid squares, starting 1 to 1.4 km from the enemy, beyond spotting range; larger units will get larger sheets. The sheet is in standard US military map colors. White is open ground. Light green with tufts is tall grass, which hides a man lying prone. Green is woods and hedgerows; rows of small green circles are orchards, green row lines are vineyards. Blue lines are streams, which run in shallow gullies that give cover; blue areas are ponds and cannot be crossed. A broad blue band is a river: it can be crossed only at a bridge (two black lines across the road) or at a ford, marked FORD in a dashed blue circle, where men wade slowly in the open. Pale blue-green ground with small blue tufts is swamp: very slow going and no cover, but it hides a man. Red-brown lines are contours (5 or 10 meters apart, as the margin states), with a heavier, numbered index contour every fifth line; numbers with a dot are hilltop heights. Black blocks are buildings. A black line with ticks is a stone wall, which gives hard cover to a kneeling or prone man. The red road is a paved road; the dashed double lines are dirt tracks. Each mission is set in one of six regions, chosen in the New mission dialog or at random: rolling farmland; the Southern California coast (Pacific Ocean on the west edge, sand beach, chaparral); South Texas brush country (mesquite thickets, pasture, stock tanks); North Carolina pine woods and blackwater swamp; the Arizona desert and mountains (open creosote flats, rock outcrops, dry washes shown as dashed blue lines); and the Montana mountains in winter (deep snow, lodgepole pine, frozen ponds). The ground changes the fight: snow, sand, chaparral and rock are slow; brush and grass hide a man lying down; rock gives cover; open desert gives long fields of fire. The 3D button (key T) turns the map into a sand table: the same sheet laid over the ground in 3D, heights exaggerated. Drag to move, right-drag or two fingers to turn and tilt, wheel or pinch to zoom; the buttons beside it turn, tilt and zoom on a phone. Taps give the same orders as on the flat map. Fog of war: ground your squad can see now is clear; ground it has seen before is faded; ground it has never seen is faded more (key F toggles the wash). Point at the map to read the 8-digit grid reference. Measure (key M) lays a tape between two taps and marks the distance, grid bearing and mils on the map; tap a label to remove it. Point at a formation button to see the selected team or squad ghosted in that formation. Zoomed out, your men gather into one counter per fire team, then one for the squad, in the standard unit symbol: a rectangle with an infantry X for friendly, a diamond for enemy.</p>
         <h3>Camera</h3>
         <p>Drag to pan. Use the wheel or pinch to zoom. <kbd>Space</kbd> pauses; you can give orders while paused.</p>
       </div>
@@ -564,13 +564,14 @@ function fmtClock(t) {
 // published effective ranges and rates of fire; they are not ballistic tables.
 
 const CELL = 4;                    // meters per terrain cell
-// The map's size goes with the echelon: a squad fights on one 1 km grid square, a
-// platoon on 3 x 3 km, larger units on larger sheets. Set before each map is made.
+// The map's size goes with the echelon: a squad fights on a 2 x 2 km sheet, a platoon on
+// 4 x 4 km, larger units on larger sheets. The sides start beyond spotting range (800 m).
+// Set before each map is made.
 const ECHELONS = {
-  squad:   { label: 'Squad',   size: 1000, sep: [500, 700],   margin: 120, attackTime: 30 },
-  platoon: { label: 'Platoon', size: 3000, sep: [1500, 2500], margin: 250, attackTime: 45 },
+  squad:   { label: 'Squad',   size: 2000, sep: [1000, 1400], margin: 200, attackTime: 40 },
+  platoon: { label: 'Platoon', size: 4000, sep: [2000, 3000], margin: 300, attackTime: 60 },
 };
-let MAP_W = 1000, MAP_H = 1000;    // meters
+let MAP_W = 2000, MAP_H = 2000;    // meters
 let GW = MAP_W / CELL, GH = MAP_H / CELL;
 // Scale of the sheet against the 3 km sheet that the map styles were first drawn for.
 let MAP_K = MAP_W / 3000;
@@ -836,7 +837,7 @@ const REGION_KEYS = Object.keys(REGIONS);
 
 // ---- src/map.js
 'use strict';
-// Terrain grid for the sheet (1 x 1 km for a squad, 3 x 3 km for a platoon): procedural generation (relief, streams and ponds,
+// Terrain grid for the sheet (2 x 2 km for a squad, 4 x 4 km for a platoon): procedural generation (relief, streams and ponds,
 // fields, woods, roads, villages, farms), line of sight, pathfinding and cover search.
 
 
@@ -3594,8 +3595,8 @@ function buildTerrain(map) {
   });
 
   // Graphic scale, bottom center.
-  // A bar of real ground distance: 1000 m on a large sheet, 300 m on a one-square sheet.
-  const L = MAP_W >= 3000 ? 1000 : 300, Lv = L * vk, sx = VW / 2 - Lv / 2, sy = VH + 120;
+  // A bar of real ground distance: 1000 m on a large sheet, less on a small one.
+  const L = MAP_W >= 3000 ? 1000 : MAP_W >= 2000 ? 500 : 300, Lv = L * vk, sx = VW / 2 - Lv / 2, sy = VH + 120;
   text('GRAPHIC SCALE', VW / 2, sy - 22, 24, { weight: 700, align: 'center' });
   ctx.strokeStyle = MAP_INK; ctx.lineWidth = 2;
   for (let i = 0; i < 10; i++) {
@@ -6782,7 +6783,7 @@ function newMission() {
   const mode = set.mode === 'random' ? (chance(0.5) ? 'attack' : 'meeting') : set.mode;
   G.mode = mode;
 
-  // The sides start apart by the echelon's distance (500-700 m for squads), on a random
+  // The sides start apart by the echelon's distance (1.0-1.4 km for squads, beyond spotting range), on a random
   // axis, both well inside the sheet.
   const M = G.echelon.margin, inside = (x, y) => x >= M && y >= M && x <= MAP_W - M && y <= MAP_H - M;
   let axis = 0, sep = G.echelon.sep[0], bx = M, by = M, rx = MAP_W - M, ry = MAP_H - M;
