@@ -393,6 +393,9 @@ body:not(.roster-min) #btn3d, body:not(.roster-min) #ctl3d { margin-left: 0; }
 /* Roster: ammunition running low or out. */
 .rammo[data-state="warn"] { color: var(--warn); }
 .rammo[data-state="bad"] { color: var(--bad); }
+
+/* A team left out of an "all but" selection. */
+.chip.not { text-decoration: line-through; opacity: 0.6; }
 </style>
 </head>
 <body>
@@ -482,7 +485,7 @@ body:not(.roster-min) #btn3d, body:not(.roster-min) #ctl3d { margin-left: 0; }
         <h3>Selecting</h3>
         <p>Tap a Marine to select that Marine. Tap again to select the fire team, and again for the whole squad. The Squad and fire team buttons above the orders do the same. Keys: <kbd>1</kbd> <kbd>2</kbd> <kbd>3</kbd> fire teams, <kbd>0</kbd> squad, <kbd>Esc</kbd> cancel.</p>
         <h3>Moving</h3>
-        <p>While planning, each planned move shows as a dashed blue arrow, and a dashed ghost of the unit stands where its last move ends. Tap a ghost to pick that unit there, then tap the map to plan its next step. While planning, nothing moves: select a unit and tap the map to open a menu that sets a checkpoint, a bound, a route, a fighting position, a support-by-fire position, an assault position, an objective or a target reference point at that spot and adds the line to the plan. After step-off, orders go by radio: tap the ground to move in the chosen mode (Walk unless you pick Rush or Crawl); tap twice quickly to rush. W, A, S and D shift the selected unit forward, left, back and right while it keeps its front; Q and E turn it. A ghost shows where it will end up, the order goes out when you stop pressing, and once there the men take up whatever move they were on. Right-click also moves. Teams and the squad move in their formation. A walking team that takes fire, or sees a new enemy within 250 m, halts on its own, gets down and returns fire; rush, assault or bound to keep moving under fire. Rushing is fast but tiring and easy to spot. Crawling is slow but men can crawl while pinned.</p>
+        <p>While planning, each planned move shows as a dashed blue arrow, and a dashed ghost of the unit stands where its last move ends. Tap a ghost to pick that unit there, then tap the map to plan its next step. While planning, nothing moves: select a unit and tap the map to open a menu that sets a checkpoint, a bound, a route, a fighting position, a support-by-fire position, an assault position, an objective or a target reference point at that spot and adds the line to the plan. After step-off, orders go by radio: tap the ground to move in the chosen mode (Walk unless you pick Rush or Crawl); tap twice quickly to rush. Double-click a fire team's button to select every other team instead. The squad leader moves with 1st Fire Team, but can still be selected alone, and the other teams move without him. W, A, S and D shift the selected unit forward, left, back and right while it keeps its front; Q and E turn it. A ghost shows where it will end up, the order goes out when you stop pressing, and once there the men take up whatever move they were on. Right-click also moves. Teams and the squad move in their formation. A walking team that takes fire, or sees a new enemy within 250 m, halts on its own, gets down and returns fire; rush, assault or bound to keep moving under fire. Rushing is fast but tiring and easy to spot. Crawling is slow but men can crawl while pinned.</p>
         <h3>Fire and maneuver</h3>
         <p><b>Suppress</b> puts fire on an area, seen enemy or not. <b>Bound</b> sends the squad forward one fire team at a time while the others cover it (a fire team bounds in buddy pairs). <b>Assault</b> walks forward firing and throwing grenades. Tap a visible enemy to make the selection engage that target.</p>
         <h3>Reading the pieces</h3>
@@ -2489,17 +2492,30 @@ const Fog = {
 'use strict';
 // Orders to a Marine, a fire team or the squad, and the movement that carries them out.
 
-// A selection is { level: 'soldier' | 'team' | 'squad', soldier, team, squad }.
+// A selection is { level: 'soldier' | 'team' | 'squad' | 'group', soldier, team, squad },
+// a group being { teams, except }: every team but one, picked by double-clicking it.
+// The squad leader moves with 1st Fire Team: selecting it takes him along. He can still be
+// picked alone, and the other teams move without him.
+function slWith(team) {
+  return team.num === 1 && team.side === 'blue' && team.squad.leader ? [team.squad.leader] : [];
+}
 function selMembers(sel) {
   if (!sel) return [];
   if (sel.level === 'soldier') return [sel.soldier];
-  if (sel.level === 'team') return sel.team.members.slice();
+  if (sel.level === 'team') return [...sel.team.members, ...slWith(sel.team)];
+  if (sel.level === 'group') return sel.teams.flatMap(t => [...t.members, ...slWith(t)]);
   return sel.squad.all;
 }
 function selName(sel) {
   if (sel.level === 'soldier') return sel.soldier.label;
   if (sel.level === 'team') return sel.team.name;
+  if (sel.level === 'group') return 'All but ' + sel.except.short;
   return sel.squad.name;
+}
+// Every team of the squad but this one.
+function groupBut(team) {
+  const sq = team.squad;
+  return { level: 'group', squad: sq, except: team, teams: sq.teams.filter(t => t !== team && t.members.some(s => s.active)) };
 }
 function commandable(s) { return s.active && !s.routing; }
 
@@ -2536,7 +2552,14 @@ function orderMove(s, x, y, mode) {
   return true;
 }
 
-function teamMove(team, x, y, mode, heading) {
+function teamMove(team, x, y, mode, heading, alone) {
+  // Moving on its own, 1st Fire Team brings the squad leader, a little behind its center.
+  const sl = alone === false ? null : slWith(team).find(commandable);
+  if (sl) {
+    const c0 = centroid(team.members.filter(commandable).concat(sl)), h = heading != null ? heading : angleTo(c0.x, c0.y, x, y);
+    const w = rotateOffset(0, -9, h);
+    orderMove(sl, x + w.x, y + w.y, mode);
+  }
   const act = team.members.filter(commandable);
   if (!act.length) return;
   const c = centroid(act);
@@ -2567,7 +2590,7 @@ function squadMove(sq, x, y, mode) {
   const teams = sq.teams.filter(t => t.members.some(commandable));
   teams.forEach((t, k) => {
     const o = squadSlot(sq.formation, k, teams.length), w = rotateOffset(o.x, o.y, heading);
-    teamMove(t, x + w.x, y + w.y, mode, heading);
+    teamMove(t, x + w.x, y + w.y, mode, heading, false);
   });
   const sl = sq.hq.members[0];
   if (commandable(sl)) {
@@ -2618,6 +2641,14 @@ function groupMove(sel, x, y, mode) {
   for (const s of members) { s.assault = false; s.launchQueue = null; }
   if (sel.level === 'soldier') orderMove(sel.soldier, x, y, mode);
   else if (sel.level === 'team') teamMove(sel.team, x, y, mode);
+  else if (sel.level === 'group') {
+    // The teams side by side in a line across the direction of march.
+    const act = members.filter(commandable), c = act.length ? centroid(act) : { x, y }, h = angleTo(c.x, c.y, x, y);
+    sel.teams.forEach((t, k) => {
+      const w = rotateOffset((k - (sel.teams.length - 1) / 2) * 32, 0, h);
+      teamMove(t, x + w.x, y + w.y, mode, h);
+    });
+  }
   else squadMove(sel.squad, x, y, mode);
 }
 
@@ -2714,6 +2745,7 @@ class BoundController {
 }
 
 function boundElements(sel) {
+  if (sel.level === 'group') return sel.teams.map(t => [...t.members, ...slWith(t)].filter(commandable)).filter(e => e.length);
   if (sel.level === 'squad') {
     const teams = sel.squad.teams.map(t => t.members.filter(commandable)).filter(e => e.length);
     const sl = sel.squad.hq.members[0];
@@ -2735,7 +2767,7 @@ function issueOrder(sel, type, arg) {
   const who = selName(sel);
   Plan.override(members, type);
   if (!members.length) { G.toast(who + ' cannot take orders.'); return; }
-  const team = sel.level === 'soldier' ? sel.soldier.team : sel.team;
+  const team = sel.level === 'soldier' ? sel.soldier.team : sel.level === 'group' ? sel.teams[0] : sel.team;
 
   switch (type) {
     case 'move':
@@ -2750,7 +2782,9 @@ function issueOrder(sel, type, arg) {
       G.toast(who + ': ' + { free: 'Fire at will.', return: 'Return fire only.', hold: 'Hold fire.' }[arg]);
       break;
     case 'formation':
-      if (sel.level === 'squad') sel.squad.formation = arg; else team.formation = arg;
+      if (sel.level === 'squad') sel.squad.formation = arg;
+      else if (sel.level === 'group') for (const t of sel.teams) t.formation = arg;
+      else team.formation = arg;
       G.toast(who + ': formation ' + FORMATIONS[arg].label.toLowerCase() + '.');
       break;
     case 'nudge':
@@ -2917,7 +2951,7 @@ const Nudge = {
     return true;
   },
   start(sel, men) {
-    const lead = (sel.level === 'soldier' ? sel.soldier : (sel.level === 'team' ? sel.team.leader : sel.squad.leader)) || men[0];
+    const lead = (sel.level === 'soldier' ? sel.soldier : sel.level === 'team' ? sel.team.leader : sel.level === 'group' ? sel.teams[0].leader : sel.squad.leader) || men[0];
     return { sel, men, c: centroid(men), heading: lead.facing, f: 0, r: 0, rot: 0, t: 0 };
   },
   // Where each man ends up: his place in the unit turned by the rotation, then shifted.
@@ -4829,6 +4863,8 @@ const UI = {
     const mk = (text, fn) => { const b = el('button', 'chip', text); b.addEventListener('click', fn); chips.appendChild(b); return b; };
     this.chipSquad = mk('Squad', () => this.select({ level: 'squad', squad: G.squads.blue }));
     this.chipTeams = [1, 2, 3].map(n => mk(ORDINAL[n - 1] + ' FT', () => this.selectTeam(n)));
+    // Double-click a team: every other team instead (after step-off).
+    this.chipTeams.forEach((c, i) => c.addEventListener('dblclick', () => this.selectAllBut(i + 1)));
   },
 
   onOrderButton(kind, val) {
@@ -4871,7 +4907,8 @@ const UI = {
     this.chipSquad.classList.toggle('on', sel && sel.level === 'squad');
     this.chipTeams.forEach((c, i) => {
       const t = G.squads.blue && G.squads.blue.teams[i];
-      c.classList.toggle('on', !!(sel && sel.level === 'team' && sel.team === t));
+      c.classList.toggle('on', !!(sel && ((sel.level === 'team' && sel.team === t) || (sel.level === 'group' && sel.teams.includes(t)))));
+      c.classList.toggle('not', !!(sel && sel.level === 'group' && sel.except === t));
       c.disabled = !t || !t.members.some(s => s.active);
     });
     let txt = 'Nothing selected. Tap a Marine, tap again for the fire team, again for the squad.';
@@ -4891,6 +4928,13 @@ const UI = {
   selectTeam(n) {
     const t = G.squads.blue.teams[n - 1];
     if (t && t.members.some(s => s.active)) this.select({ level: 'team', team: t, squad: t.squad });
+  },
+  selectAllBut(n) {
+    const t = G.squads.blue && G.squads.blue.teams[n - 1];
+    if (!t) return;
+    if (Plan.planning) { this.toast('A plan line is for the squad or one team. Select all but a team after step-off.'); return; }
+    const g = groupBut(t);
+    if (g.teams.length) this.select(g);
   },
   // Tapping a Marine cycles: the man, his fire team, the squad.
   cycleSelect(s) {
@@ -5043,7 +5087,7 @@ const UI = {
     for (const t of [sq.hq, ...sq.teams]) {
       const sec = el('section', 'rteam');
       const head = el('button', 'rhead');
-      head.appendChild(el('span', 'rname', t.num ? t.name : 'Squad leader'));
+      head.appendChild(el('span', 'rname', t.num ? t.name : 'Squad leader · moves with 1st FT'));
       const mor = el('span', 'rmorale');
       mor.appendChild(el('i'));
       head.appendChild(mor);
@@ -5516,6 +5560,7 @@ const Plan = {
   // The plan unit for a selection: a Marine plans with his fire team, the SL with the squad.
   planUnit(sel) {
     if (!sel) return null;
+    if (sel.level === 'group') return null; // a plan line is for the squad or one team
     const t = sel.level === 'squad' ? null : sel.team;
     return t && t.num ? 't' + t.num : 'squad';
   },
@@ -6589,6 +6634,7 @@ const Radio = {
   callsign(sel) {
     if (sel.level === 'squad') return '1st Squad';
     if (sel.level === 'team') return sel.team.short;
+    if (sel.level === 'group') return sel.teams.map(t => t.short).join(' and ');
     return sel.soldier.label;
   },
   sender() {

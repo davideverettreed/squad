@@ -1,17 +1,30 @@
 'use strict';
 // Orders to a Marine, a fire team or the squad, and the movement that carries them out.
 
-// A selection is { level: 'soldier' | 'team' | 'squad', soldier, team, squad }.
+// A selection is { level: 'soldier' | 'team' | 'squad' | 'group', soldier, team, squad },
+// a group being { teams, except }: every team but one, picked by double-clicking it.
+// The squad leader moves with 1st Fire Team: selecting it takes him along. He can still be
+// picked alone, and the other teams move without him.
+function slWith(team) {
+  return team.num === 1 && team.side === 'blue' && team.squad.leader ? [team.squad.leader] : [];
+}
 function selMembers(sel) {
   if (!sel) return [];
   if (sel.level === 'soldier') return [sel.soldier];
-  if (sel.level === 'team') return sel.team.members.slice();
+  if (sel.level === 'team') return [...sel.team.members, ...slWith(sel.team)];
+  if (sel.level === 'group') return sel.teams.flatMap(t => [...t.members, ...slWith(t)]);
   return sel.squad.all;
 }
 function selName(sel) {
   if (sel.level === 'soldier') return sel.soldier.label;
   if (sel.level === 'team') return sel.team.name;
+  if (sel.level === 'group') return 'All but ' + sel.except.short;
   return sel.squad.name;
+}
+// Every team of the squad but this one.
+function groupBut(team) {
+  const sq = team.squad;
+  return { level: 'group', squad: sq, except: team, teams: sq.teams.filter(t => t !== team && t.members.some(s => s.active)) };
 }
 function commandable(s) { return s.active && !s.routing; }
 
@@ -48,7 +61,14 @@ function orderMove(s, x, y, mode) {
   return true;
 }
 
-function teamMove(team, x, y, mode, heading) {
+function teamMove(team, x, y, mode, heading, alone) {
+  // Moving on its own, 1st Fire Team brings the squad leader, a little behind its center.
+  const sl = alone === false ? null : slWith(team).find(commandable);
+  if (sl) {
+    const c0 = centroid(team.members.filter(commandable).concat(sl)), h = heading != null ? heading : angleTo(c0.x, c0.y, x, y);
+    const w = rotateOffset(0, -9, h);
+    orderMove(sl, x + w.x, y + w.y, mode);
+  }
   const act = team.members.filter(commandable);
   if (!act.length) return;
   const c = centroid(act);
@@ -79,7 +99,7 @@ function squadMove(sq, x, y, mode) {
   const teams = sq.teams.filter(t => t.members.some(commandable));
   teams.forEach((t, k) => {
     const o = squadSlot(sq.formation, k, teams.length), w = rotateOffset(o.x, o.y, heading);
-    teamMove(t, x + w.x, y + w.y, mode, heading);
+    teamMove(t, x + w.x, y + w.y, mode, heading, false);
   });
   const sl = sq.hq.members[0];
   if (commandable(sl)) {
@@ -130,6 +150,14 @@ function groupMove(sel, x, y, mode) {
   for (const s of members) { s.assault = false; s.launchQueue = null; }
   if (sel.level === 'soldier') orderMove(sel.soldier, x, y, mode);
   else if (sel.level === 'team') teamMove(sel.team, x, y, mode);
+  else if (sel.level === 'group') {
+    // The teams side by side in a line across the direction of march.
+    const act = members.filter(commandable), c = act.length ? centroid(act) : { x, y }, h = angleTo(c.x, c.y, x, y);
+    sel.teams.forEach((t, k) => {
+      const w = rotateOffset((k - (sel.teams.length - 1) / 2) * 32, 0, h);
+      teamMove(t, x + w.x, y + w.y, mode, h);
+    });
+  }
   else squadMove(sel.squad, x, y, mode);
 }
 
@@ -226,6 +254,7 @@ class BoundController {
 }
 
 function boundElements(sel) {
+  if (sel.level === 'group') return sel.teams.map(t => [...t.members, ...slWith(t)].filter(commandable)).filter(e => e.length);
   if (sel.level === 'squad') {
     const teams = sel.squad.teams.map(t => t.members.filter(commandable)).filter(e => e.length);
     const sl = sel.squad.hq.members[0];
@@ -247,7 +276,7 @@ function issueOrder(sel, type, arg) {
   const who = selName(sel);
   Plan.override(members, type);
   if (!members.length) { G.toast(who + ' cannot take orders.'); return; }
-  const team = sel.level === 'soldier' ? sel.soldier.team : sel.team;
+  const team = sel.level === 'soldier' ? sel.soldier.team : sel.level === 'group' ? sel.teams[0] : sel.team;
 
   switch (type) {
     case 'move':
@@ -262,7 +291,9 @@ function issueOrder(sel, type, arg) {
       G.toast(who + ': ' + { free: 'Fire at will.', return: 'Return fire only.', hold: 'Hold fire.' }[arg]);
       break;
     case 'formation':
-      if (sel.level === 'squad') sel.squad.formation = arg; else team.formation = arg;
+      if (sel.level === 'squad') sel.squad.formation = arg;
+      else if (sel.level === 'group') for (const t of sel.teams) t.formation = arg;
+      else team.formation = arg;
       G.toast(who + ': formation ' + FORMATIONS[arg].label.toLowerCase() + '.');
       break;
     case 'nudge':
@@ -429,7 +460,7 @@ const Nudge = {
     return true;
   },
   start(sel, men) {
-    const lead = (sel.level === 'soldier' ? sel.soldier : (sel.level === 'team' ? sel.team.leader : sel.squad.leader)) || men[0];
+    const lead = (sel.level === 'soldier' ? sel.soldier : sel.level === 'team' ? sel.team.leader : sel.level === 'group' ? sel.teams[0].leader : sel.squad.leader) || men[0];
     return { sel, men, c: centroid(men), heading: lead.facing, f: 0, r: 0, rot: 0, t: 0 };
   },
   // Where each man ends up: his place in the unit turned by the rotation, then shifted.

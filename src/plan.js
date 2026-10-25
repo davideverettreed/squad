@@ -215,6 +215,7 @@ const Plan = {
   // The plan unit for a selection: a Marine plans with his fire team, the SL with the squad.
   planUnit(sel) {
     if (!sel) return null;
+    if (sel.level === 'group') return null; // a plan line is for the squad or one team
     const t = sel.level === 'squad' ? null : sel.team;
     return t && t.num ? 't' + t.num : 'squad';
   },

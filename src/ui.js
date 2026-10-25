@@ -71,6 +71,8 @@ const UI = {
     const mk = (text, fn) => { const b = el('button', 'chip', text); b.addEventListener('click', fn); chips.appendChild(b); return b; };
     this.chipSquad = mk('Squad', () => this.select({ level: 'squad', squad: G.squads.blue }));
     this.chipTeams = [1, 2, 3].map(n => mk(ORDINAL[n - 1] + ' FT', () => this.selectTeam(n)));
+    // Double-click a team: every other team instead (after step-off).
+    this.chipTeams.forEach((c, i) => c.addEventListener('dblclick', () => this.selectAllBut(i + 1)));
   },
 
   onOrderButton(kind, val) {
@@ -113,7 +115,8 @@ const UI = {
     this.chipSquad.classList.toggle('on', sel && sel.level === 'squad');
     this.chipTeams.forEach((c, i) => {
       const t = G.squads.blue && G.squads.blue.teams[i];
-      c.classList.toggle('on', !!(sel && sel.level === 'team' && sel.team === t));
+      c.classList.toggle('on', !!(sel && ((sel.level === 'team' && sel.team === t) || (sel.level === 'group' && sel.teams.includes(t)))));
+      c.classList.toggle('not', !!(sel && sel.level === 'group' && sel.except === t));
       c.disabled = !t || !t.members.some(s => s.active);
     });
     let txt = 'Nothing selected. Tap a Marine, tap again for the fire team, again for the squad.';
@@ -133,6 +136,13 @@ const UI = {
   selectTeam(n) {
     const t = G.squads.blue.teams[n - 1];
     if (t && t.members.some(s => s.active)) this.select({ level: 'team', team: t, squad: t.squad });
+  },
+  selectAllBut(n) {
+    const t = G.squads.blue && G.squads.blue.teams[n - 1];
+    if (!t) return;
+    if (Plan.planning) { this.toast('A plan line is for the squad or one team. Select all but a team after step-off.'); return; }
+    const g = groupBut(t);
+    if (g.teams.length) this.select(g);
   },
   // Tapping a Marine cycles: the man, his fire team, the squad.
   cycleSelect(s) {
@@ -285,7 +295,7 @@ const UI = {
     for (const t of [sq.hq, ...sq.teams]) {
       const sec = el('section', 'rteam');
       const head = el('button', 'rhead');
-      head.appendChild(el('span', 'rname', t.num ? t.name : 'Squad leader'));
+      head.appendChild(el('span', 'rname', t.num ? t.name : 'Squad leader · moves with 1st FT'));
       const mor = el('span', 'rmorale');
       mor.appendChild(el('i'));
       head.appendChild(mor);

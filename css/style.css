@@ -381,3 +381,6 @@ body:not(.roster-min) #btn3d, body:not(.roster-min) #ctl3d { margin-left: 0; }
 /* Roster: ammunition running low or out. */
 .rammo[data-state="warn"] { color: var(--warn); }
 .rammo[data-state="bad"] { color: var(--bad); }
+
+/* A team left out of an "all but" selection. */
+.chip.not { text-decoration: line-through; opacity: 0.6; }
