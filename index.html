@@ -30,6 +30,9 @@
   </header>
 
   <aside id="roster" aria-label="Squad roster"></aside>
+  <button id="rosterTab" class="edgetab left" title="Show the roster">Roster ▶</button>
+  <button id="opordTab" class="edgetab right" title="Open the order" hidden>◀ Order</button>
+  <div id="toolPalette" aria-label="Planning tools" hidden></div>
   <div id="log" aria-live="polite"></div>
   <div id="toast" hidden></div>
   <div id="loading" role="status" hidden>Drawing the map sheet…</div>
@@ -38,7 +41,7 @@
     <div class="ohead">
       <div id="planClock" class="pclock"></div>
       <button id="btnStepOff" class="obtn primary">Step off</button>
-      <button id="btnOpordMin" class="obtn" title="Hide the order">Hide</button>
+      <button id="btnOpordMin" class="obtn" title="Minimize the order to the right">▶</button>
     </div>
     <nav id="opordTabs" class="otabs"></nav>
     <div id="opordBody" class="obody"></div>

@@ -31,6 +31,7 @@
 }
 
 * { box-sizing: border-box; }
+[hidden] { display: none !important; }
 html, body { height: 100%; margin: 0; overflow: hidden; }
 body { background: var(--ground); color: var(--ink); font: 14px/1.4 var(--display); -webkit-tap-highlight-color: transparent; }
 
@@ -129,6 +130,30 @@ button { font: inherit; color: inherit; }
   background: #f8f5ea; color: #161616; border: 1px solid #161616; box-shadow: 0 6px 18px rgba(0, 0, 0, 0.45);
   font: 600 14px/1.2 var(--mono); letter-spacing: 0.04em; padding: 12px 18px;
 }
+
+/* ---------------- minimized panels: edge tabs and the tool palette */
+.rtop { display: flex; align-items: center; justify-content: space-between; padding: 4px 6px 4px 10px; border-bottom: 1px solid var(--line);
+  font: 700 12px/1 var(--display); letter-spacing: 0.14em; text-transform: uppercase; color: var(--muted); }
+body.roster-min #roster { display: none; }
+.edgetab {
+  position: absolute; z-index: 6; top: 50%; transform: translateY(-50%); writing-mode: vertical-rl;
+  background: var(--panel-solid); color: var(--ink); border: 1px solid var(--line); cursor: pointer;
+  font: 700 12px/1 var(--display); letter-spacing: 0.14em; text-transform: uppercase; padding: 12px 7px;
+}
+.edgetab:focus-visible { outline: 2px solid var(--accent); }
+.edgetab.left { left: env(safe-area-inset-left, 0px); border-left: 0; border-radius: 0 4px 4px 0; display: none; }
+.edgetab.right { right: env(safe-area-inset-right, 0px); border-right: 0; border-radius: 4px 0 0 4px; }
+body.roster-min .edgetab.left { display: block; }
+#toolPalette {
+  position: absolute; z-index: 6; right: calc(max(8px, env(safe-area-inset-right, 0px)) + 30px); top: calc(env(safe-area-inset-top, 0px) + 56px);
+  width: 252px; display: flex; flex-direction: column; gap: 6px; padding: 8px;
+  background: var(--panel-solid); border: 1px solid var(--line); border-radius: 4px; box-shadow: 0 8px 24px rgba(0, 0, 0, 0.45);
+}
+#toolPalette[hidden] { display: none; }
+#toolPalette .otools .obtn { min-height: 30px; padding: 5px 7px; font-size: 12px; }
+.palhead { display: flex; align-items: center; justify-content: space-between; gap: 8px; }
+.palclock { font: 600 13px/1 var(--mono); color: var(--accent); font-variant-numeric: tabular-nums; }
+body.palette-open #log { right: calc(max(8px, env(safe-area-inset-right, 0px)) + 292px); width: min(360px, calc(100% - 640px)); }
 
 /* ---------------- operation order panel */
 #opord {
@@ -275,6 +300,10 @@ kbd { font: 600 12px/1 var(--mono); border: 1px solid var(--line); border-bottom
   .barbtns { gap: 4px; }
   #btnRoster { display: inline-block; }
   #btnCones { display: none; }
+  body.roster-min .edgetab.left { display: none; }
+  #toolPalette { top: auto; bottom: calc(var(--orders-h, 150px) + 8px); right: 40px; left: 8px; width: auto; }
+  body.palette-open #log { display: none; }
+  body.palette-open #toast { bottom: auto; top: calc(env(safe-area-inset-top, 0px) + 58px); }
   #clock { font-size: 13px; white-space: nowrap; }
   #btnHelp { display: none; }
   .obtn { padding: 7px 9px; font-size: 13px; min-height: 36px; }
@@ -318,6 +347,9 @@ kbd { font: 600 12px/1 var(--mono); border: 1px solid var(--line); border-bottom
   </header>
 
   <aside id="roster" aria-label="Squad roster"></aside>
+  <button id="rosterTab" class="edgetab left" title="Show the roster">Roster ▶</button>
+  <button id="opordTab" class="edgetab right" title="Open the order" hidden>◀ Order</button>
+  <div id="toolPalette" aria-label="Planning tools" hidden></div>
   <div id="log" aria-live="polite"></div>
   <div id="toast" hidden></div>
   <div id="loading" role="status" hidden>Drawing the map sheet…</div>
@@ -326,7 +358,7 @@ kbd { font: 600 12px/1 var(--mono); border: 1px solid var(--line); border-bottom
     <div class="ohead">
       <div id="planClock" class="pclock"></div>
       <button id="btnStepOff" class="obtn primary">Step off</button>
-      <button id="btnOpordMin" class="obtn" title="Hide the order">Hide</button>
+      <button id="btnOpordMin" class="obtn" title="Minimize the order to the right">▶</button>
     </div>
     <nav id="opordTabs" class="otabs"></nav>
     <div id="opordBody" class="obody"></div>
@@ -3056,7 +3088,7 @@ function drawEdgeLabels(ctx) {
       ctx.strokeText(t, p.x + 3, top); ctx.fillText(t, p.x + 3, top);
     }
   }
-  const left = R.w > 760 ? 306 : 4;
+  const left = R.w > 760 && !document.body.classList.contains('roster-min') ? 306 : 4;
   if (toScreen(0, 0).x < left) {
     ctx.textAlign = 'left'; ctx.textBaseline = 'bottom';
     for (let n = 1000; n < MAP_H; n += 1000) {
@@ -3732,6 +3764,7 @@ const UI = {
     $('btnSpeed').addEventListener('click', () => { G.speed = G.speed >= 16 ? 1 : G.speed * 2; this.refreshBar(); });
     $('btnCones').addEventListener('click', () => { G.ui.cones = !G.ui.cones; $('btnCones').classList.toggle('on', G.ui.cones); });
     $('btnRoster').addEventListener('click', () => document.body.classList.toggle('roster-open'));
+    $('rosterTab').addEventListener('click', () => document.body.classList.remove('roster-min'));
     $('btnHelp').addEventListener('click', () => this.showModal('help'));
     $('btnMenu').addEventListener('click', () => this.showBriefing());
     document.querySelectorAll('[data-close]').forEach(b => b.addEventListener('click', () => this.hideModal(b.dataset.close)));
@@ -3881,6 +3914,17 @@ const UI = {
     const box = $('roster');
     box.innerHTML = '';
     this.rosterRows = [];
+    const top = el('div', 'rtop');
+    top.appendChild(el('span', null, 'Roster'));
+    const min = el('button', 'obtn mini', '◀');
+    min.title = 'Minimize the roster';
+    min.addEventListener('click', () => {
+      // On a phone the roster is a sheet that the Roster button opens; here it just closes.
+      if (window.innerWidth <= 760) document.body.classList.remove('roster-open');
+      else document.body.classList.add('roster-min');
+    });
+    top.appendChild(min);
+    box.appendChild(top);
     const sq = G.squads.blue;
     for (const t of [sq.hq, ...sq.teams]) {
       const sec = el('section', 'rteam');
@@ -4770,6 +4814,7 @@ const OPORD = {
     }
     $('btnStepOff').addEventListener('click', () => { Plan.stepOffNow(); this.show('T'); UI.refreshBar(); });
     $('btnOpordMin').addEventListener('click', () => this.hide());
+    $('opordTab').addEventListener('click', () => this.show(this.tab));
     $('btnOrder').addEventListener('click', () => this.open ? this.hide() : this.show(this.tab));
     this.built = true;
   },
@@ -4781,11 +4826,72 @@ const OPORD = {
     document.body.classList.add('opord-open');
     this.refresh();
   },
+  // Minimize to the right edge. While planning, a small tool palette stays on the map.
   hide() {
     this.open = false;
     $('opord').hidden = true;
     document.body.classList.remove('opord-open');
-    Plan.tool = null; Plan.plStart = null;
+    if (!Plan.planning) { Plan.tool = null; Plan.plStart = null; }
+    this.refreshPalette();
+  },
+
+  // Buttons for placing control measures, shared by Execution and the tool palette.
+  toolButtons(box) {
+    const tools = el('div', 'otools');
+    for (const [k, K] of Object.entries(GRAPHIC_KINDS)) {
+      const b = el('button', 'obtn' + (Plan.tool === k ? ' on' : ''), K.short);
+      b.title = 'Place a ' + K.label.toLowerCase();
+      b.addEventListener('click', () => {
+        Plan.tool = Plan.tool === k ? null : k; Plan.plStart = null; Plan.routeDraft = null;
+        if (Plan.tool) G.toast(K.multi ? 'Tap each waypoint of the route, then Finish route.' : K.line ? 'Tap one end of the ' + K.label.toLowerCase() + ' on the map.' : 'Tap the map to place the ' + K.label.toLowerCase() + '.');
+        this.refresh();
+      });
+      tools.appendChild(b);
+    }
+    box.appendChild(tools);
+    if (Plan.tool === 'rte') {
+      const r = el('div', 'otools');
+      const fin = el('button', 'obtn primary', 'Finish route (' + (Plan.routeDraft ? Plan.routeDraft.length : 0) + ' points)');
+      fin.addEventListener('click', () => Plan.finishRoute());
+      const cancel = el('button', 'obtn', 'Cancel');
+      cancel.addEventListener('click', () => { Plan.routeDraft = null; Plan.tool = null; this.refresh(); });
+      r.appendChild(fin); r.appendChild(cancel);
+      box.appendChild(r);
+    }
+  },
+
+  // The compact palette shown on the map while planning with the order minimized.
+  refreshPalette() {
+    const pal = $('toolPalette'), tab = $('opordTab');
+    const running = G.running && G.squads.blue && !G.over;
+    tab.hidden = !running || this.open;
+    const show = running && Plan.planning && !this.open;
+    pal.hidden = !show;
+    document.body.classList.toggle('palette-open', show);
+    if (!show) return;
+    pal.innerHTML = '';
+    const head = el('div', 'palhead');
+    head.appendChild(el('span', 'palclock', Plan.countdown()));
+    const go = el('button', 'obtn primary mini', 'Step off');
+    go.addEventListener('click', () => { Plan.stepOffNow(); this.show('T'); UI.refreshBar(); });
+    head.appendChild(go);
+    pal.appendChild(head);
+    pal.appendChild(el('div', 'olabel', 'Add to the map'));
+    this.toolButtons(pal);
+    const g = Plan.graphic(Plan.selected);
+    if (g) {
+      const row = el('div', 'osel');
+      row.appendChild(el('b', null, g.name));
+      const edit = el('button', 'obtn mini', 'Edit');
+      edit.addEventListener('click', () => this.show('E'));
+      const del = el('button', 'obtn mini', 'Delete');
+      del.addEventListener('click', () => { Plan.removeGraphic(g.id); this.refresh(); });
+      row.appendChild(edit); row.appendChild(del);
+      pal.appendChild(row);
+    }
+    const open = el('button', 'obtn mini', '◀ Open the order');
+    open.addEventListener('click', () => this.show('E'));
+    pal.appendChild(open);
   },
 
   refresh() {
@@ -4795,6 +4901,7 @@ const OPORD = {
       b.hidden = b.dataset.tab === 'T' && Plan.planning;
     });
     $('btnStepOff').hidden = !Plan.planning;
+    this.refreshPalette();
     if (!this.open) return;
     const body = $('opordBody');
     body.innerHTML = '';
@@ -4803,6 +4910,8 @@ const OPORD = {
   },
 
   refreshClock() {
+    const pc = document.querySelector('#toolPalette .palclock');
+    if (pc && Plan.timeAvail) pc.textContent = Plan.countdown();
     const box = $('planClock');
     if (!Plan.timeAvail) { box.textContent = ''; return; }
     if (!Plan.planning) {
@@ -4923,28 +5032,7 @@ const OPORD = {
   execution(box) {
     this.para(box, 'Execution', 'Draw control measures on the map, then write the scheme of maneuver line by line. After you step off each line starts on its trigger, and your orders go by radio. A better plan makes a more confident squad.');
     this.gradeCard(box, false);
-    // Tools
-    const tools = el('div', 'otools');
-    for (const [k, K] of Object.entries(GRAPHIC_KINDS)) {
-      const b = el('button', 'obtn' + (Plan.tool === k ? ' on' : ''), K.short);
-      b.title = 'Place a ' + K.label.toLowerCase();
-      b.addEventListener('click', () => {
-        Plan.tool = Plan.tool === k ? null : k; Plan.plStart = null;
-        if (Plan.tool) G.toast(K.line ? 'Tap one end of the phase line on the map.' : 'Tap the map to place the ' + K.label.toLowerCase() + '.');
-        this.refresh();
-      });
-      tools.appendChild(b);
-    }
-    box.appendChild(tools);
-    if (Plan.tool === 'rte') {
-      const r = el('div', 'otools');
-      const fin = el('button', 'obtn primary', 'Finish route (' + (Plan.routeDraft ? Plan.routeDraft.length : 0) + ' points)');
-      fin.addEventListener('click', () => Plan.finishRoute());
-      const cancel = el('button', 'obtn', 'Cancel');
-      cancel.addEventListener('click', () => { Plan.routeDraft = null; Plan.tool = null; this.refresh(); });
-      r.appendChild(fin); r.appendChild(cancel);
-      box.appendChild(r);
-    }
+    this.toolButtons(box);
     const acts = el('div', 'otools');
     const draft = el('button', 'obtn', 'Draft a plan');
     draft.title = 'Replace the plan with a hasty attack drawn from the map';

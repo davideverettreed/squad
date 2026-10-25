@@ -568,7 +568,7 @@ function drawEdgeLabels(ctx) {
       ctx.strokeText(t, p.x + 3, top); ctx.fillText(t, p.x + 3, top);
     }
   }
-  const left = R.w > 760 ? 306 : 4;
+  const left = R.w > 760 && !document.body.classList.contains('roster-min') ? 306 : 4;
   if (toScreen(0, 0).x < left) {
     ctx.textAlign = 'left'; ctx.textBaseline = 'bottom';
     for (let n = 1000; n < MAP_H; n += 1000) {

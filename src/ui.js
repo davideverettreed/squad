@@ -25,6 +25,7 @@ const UI = {
     $('btnSpeed').addEventListener('click', () => { G.speed = G.speed >= 16 ? 1 : G.speed * 2; this.refreshBar(); });
     $('btnCones').addEventListener('click', () => { G.ui.cones = !G.ui.cones; $('btnCones').classList.toggle('on', G.ui.cones); });
     $('btnRoster').addEventListener('click', () => document.body.classList.toggle('roster-open'));
+    $('rosterTab').addEventListener('click', () => document.body.classList.remove('roster-min'));
     $('btnHelp').addEventListener('click', () => this.showModal('help'));
     $('btnMenu').addEventListener('click', () => this.showBriefing());
     document.querySelectorAll('[data-close]').forEach(b => b.addEventListener('click', () => this.hideModal(b.dataset.close)));
@@ -174,6 +175,17 @@ const UI = {
     const box = $('roster');
     box.innerHTML = '';
     this.rosterRows = [];
+    const top = el('div', 'rtop');
+    top.appendChild(el('span', null, 'Roster'));
+    const min = el('button', 'obtn mini', '◀');
+    min.title = 'Minimize the roster';
+    min.addEventListener('click', () => {
+      // On a phone the roster is a sheet that the Roster button opens; here it just closes.
+      if (window.innerWidth <= 760) document.body.classList.remove('roster-open');
+      else document.body.classList.add('roster-min');
+    });
+    top.appendChild(min);
+    box.appendChild(top);
     const sq = G.squads.blue;
     for (const t of [sq.hq, ...sq.teams]) {
       const sec = el('section', 'rteam');

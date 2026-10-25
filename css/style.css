@@ -19,6 +19,7 @@
 }
 
 * { box-sizing: border-box; }
+[hidden] { display: none !important; }
 html, body { height: 100%; margin: 0; overflow: hidden; }
 body { background: var(--ground); color: var(--ink); font: 14px/1.4 var(--display); -webkit-tap-highlight-color: transparent; }
 
@@ -117,6 +118,30 @@ button { font: inherit; color: inherit; }
   background: #f8f5ea; color: #161616; border: 1px solid #161616; box-shadow: 0 6px 18px rgba(0, 0, 0, 0.45);
   font: 600 14px/1.2 var(--mono); letter-spacing: 0.04em; padding: 12px 18px;
 }
+
+/* ---------------- minimized panels: edge tabs and the tool palette */
+.rtop { display: flex; align-items: center; justify-content: space-between; padding: 4px 6px 4px 10px; border-bottom: 1px solid var(--line);
+  font: 700 12px/1 var(--display); letter-spacing: 0.14em; text-transform: uppercase; color: var(--muted); }
+body.roster-min #roster { display: none; }
+.edgetab {
+  position: absolute; z-index: 6; top: 50%; transform: translateY(-50%); writing-mode: vertical-rl;
+  background: var(--panel-solid); color: var(--ink); border: 1px solid var(--line); cursor: pointer;
+  font: 700 12px/1 var(--display); letter-spacing: 0.14em; text-transform: uppercase; padding: 12px 7px;
+}
+.edgetab:focus-visible { outline: 2px solid var(--accent); }
+.edgetab.left { left: env(safe-area-inset-left, 0px); border-left: 0; border-radius: 0 4px 4px 0; display: none; }
+.edgetab.right { right: env(safe-area-inset-right, 0px); border-right: 0; border-radius: 4px 0 0 4px; }
+body.roster-min .edgetab.left { display: block; }
+#toolPalette {
+  position: absolute; z-index: 6; right: calc(max(8px, env(safe-area-inset-right, 0px)) + 30px); top: calc(env(safe-area-inset-top, 0px) + 56px);
+  width: 252px; display: flex; flex-direction: column; gap: 6px; padding: 8px;
+  background: var(--panel-solid); border: 1px solid var(--line); border-radius: 4px; box-shadow: 0 8px 24px rgba(0, 0, 0, 0.45);
+}
+#toolPalette[hidden] { display: none; }
+#toolPalette .otools .obtn { min-height: 30px; padding: 5px 7px; font-size: 12px; }
+.palhead { display: flex; align-items: center; justify-content: space-between; gap: 8px; }
+.palclock { font: 600 13px/1 var(--mono); color: var(--accent); font-variant-numeric: tabular-nums; }
+body.palette-open #log { right: calc(max(8px, env(safe-area-inset-right, 0px)) + 292px); width: min(360px, calc(100% - 640px)); }
 
 /* ---------------- operation order panel */
 #opord {
@@ -263,6 +288,10 @@ kbd { font: 600 12px/1 var(--mono); border: 1px solid var(--line); border-bottom
   .barbtns { gap: 4px; }
   #btnRoster { display: inline-block; }
   #btnCones { display: none; }
+  body.roster-min .edgetab.left { display: none; }
+  #toolPalette { top: auto; bottom: calc(var(--orders-h, 150px) + 8px); right: 40px; left: 8px; width: auto; }
+  body.palette-open #log { display: none; }
+  body.palette-open #toast { bottom: auto; top: calc(env(safe-area-inset-top, 0px) + 58px); }
   #clock { font-size: 13px; white-space: nowrap; }
   #btnHelp { display: none; }
   .obtn { padding: 7px 9px; font-size: 13px; min-height: 36px; }

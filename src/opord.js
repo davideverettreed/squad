@@ -21,6 +21,7 @@ const OPORD = {
     }
     $('btnStepOff').addEventListener('click', () => { Plan.stepOffNow(); this.show('T'); UI.refreshBar(); });
     $('btnOpordMin').addEventListener('click', () => this.hide());
+    $('opordTab').addEventListener('click', () => this.show(this.tab));
     $('btnOrder').addEventListener('click', () => this.open ? this.hide() : this.show(this.tab));
     this.built = true;
   },
@@ -32,11 +33,72 @@ const OPORD = {
     document.body.classList.add('opord-open');
     this.refresh();
   },
+  // Minimize to the right edge. While planning, a small tool palette stays on the map.
   hide() {
     this.open = false;
     $('opord').hidden = true;
     document.body.classList.remove('opord-open');
-    Plan.tool = null; Plan.plStart = null;
+    if (!Plan.planning) { Plan.tool = null; Plan.plStart = null; }
+    this.refreshPalette();
+  },
+
+  // Buttons for placing control measures, shared by Execution and the tool palette.
+  toolButtons(box) {
+    const tools = el('div', 'otools');
+    for (const [k, K] of Object.entries(GRAPHIC_KINDS)) {
+      const b = el('button', 'obtn' + (Plan.tool === k ? ' on' : ''), K.short);
+      b.title = 'Place a ' + K.label.toLowerCase();
+      b.addEventListener('click', () => {
+        Plan.tool = Plan.tool === k ? null : k; Plan.plStart = null; Plan.routeDraft = null;
+        if (Plan.tool) G.toast(K.multi ? 'Tap each waypoint of the route, then Finish route.' : K.line ? 'Tap one end of the ' + K.label.toLowerCase() + ' on the map.' : 'Tap the map to place the ' + K.label.toLowerCase() + '.');
+        this.refresh();
+      });
+      tools.appendChild(b);
+    }
+    box.appendChild(tools);
+    if (Plan.tool === 'rte') {
+      const r = el('div', 'otools');
+      const fin = el('button', 'obtn primary', 'Finish route (' + (Plan.routeDraft ? Plan.routeDraft.length : 0) + ' points)');
+      fin.addEventListener('click', () => Plan.finishRoute());
+      const cancel = el('button', 'obtn', 'Cancel');
+      cancel.addEventListener('click', () => { Plan.routeDraft = null; Plan.tool = null; this.refresh(); });
+      r.appendChild(fin); r.appendChild(cancel);
+      box.appendChild(r);
+    }
+  },
+
+  // The compact palette shown on the map while planning with the order minimized.
+  refreshPalette() {
+    const pal = $('toolPalette'), tab = $('opordTab');
+    const running = G.running && G.squads.blue && !G.over;
+    tab.hidden = !running || this.open;
+    const show = running && Plan.planning && !this.open;
+    pal.hidden = !show;
+    document.body.classList.toggle('palette-open', show);
+    if (!show) return;
+    pal.innerHTML = '';
+    const head = el('div', 'palhead');
+    head.appendChild(el('span', 'palclock', Plan.countdown()));
+    const go = el('button', 'obtn primary mini', 'Step off');
+    go.addEventListener('click', () => { Plan.stepOffNow(); this.show('T'); UI.refreshBar(); });
+    head.appendChild(go);
+    pal.appendChild(head);
+    pal.appendChild(el('div', 'olabel', 'Add to the map'));
+    this.toolButtons(pal);
+    const g = Plan.graphic(Plan.selected);
+    if (g) {
+      const row = el('div', 'osel');
+      row.appendChild(el('b', null, g.name));
+      const edit = el('button', 'obtn mini', 'Edit');
+      edit.addEventListener('click', () => this.show('E'));
+      const del = el('button', 'obtn mini', 'Delete');
+      del.addEventListener('click', () => { Plan.removeGraphic(g.id); this.refresh(); });
+      row.appendChild(edit); row.appendChild(del);
+      pal.appendChild(row);
+    }
+    const open = el('button', 'obtn mini', '◀ Open the order');
+    open.addEventListener('click', () => this.show('E'));
+    pal.appendChild(open);
   },
 
   refresh() {
@@ -46,6 +108,7 @@ const OPORD = {
       b.hidden = b.dataset.tab === 'T' && Plan.planning;
     });
     $('btnStepOff').hidden = !Plan.planning;
+    this.refreshPalette();
     if (!this.open) return;
     const body = $('opordBody');
     body.innerHTML = '';
@@ -54,6 +117,8 @@ const OPORD = {
   },
 
   refreshClock() {
+    const pc = document.querySelector('#toolPalette .palclock');
+    if (pc && Plan.timeAvail) pc.textContent = Plan.countdown();
     const box = $('planClock');
     if (!Plan.timeAvail) { box.textContent = ''; return; }
     if (!Plan.planning) {
@@ -174,28 +239,7 @@ const OPORD = {
   execution(box) {
     this.para(box, 'Execution', 'Draw control measures on the map, then write the scheme of maneuver line by line. After you step off each line starts on its trigger, and your orders go by radio. A better plan makes a more confident squad.');
     this.gradeCard(box, false);
-    // Tools
-    const tools = el('div', 'otools');
-    for (const [k, K] of Object.entries(GRAPHIC_KINDS)) {
-      const b = el('button', 'obtn' + (Plan.tool === k ? ' on' : ''), K.short);
-      b.title = 'Place a ' + K.label.toLowerCase();
-      b.addEventListener('click', () => {
-        Plan.tool = Plan.tool === k ? null : k; Plan.plStart = null;
-        if (Plan.tool) G.toast(K.line ? 'Tap one end of the phase line on the map.' : 'Tap the map to place the ' + K.label.toLowerCase() + '.');
-        this.refresh();
-      });
-      tools.appendChild(b);
-    }
-    box.appendChild(tools);
-    if (Plan.tool === 'rte') {
-      const r = el('div', 'otools');
-      const fin = el('button', 'obtn primary', 'Finish route (' + (Plan.routeDraft ? Plan.routeDraft.length : 0) + ' points)');
-      fin.addEventListener('click', () => Plan.finishRoute());
-      const cancel = el('button', 'obtn', 'Cancel');
-      cancel.addEventListener('click', () => { Plan.routeDraft = null; Plan.tool = null; this.refresh(); });
-      r.appendChild(fin); r.appendChild(cancel);
-      box.appendChild(r);
-    }
+    this.toolButtons(box);
     const acts = el('div', 'otools');
     const draft = el('button', 'obtn', 'Draft a plan');
     draft.title = 'Replace the plan with a hasty attack drawn from the map';
