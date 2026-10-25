@@ -565,17 +565,18 @@ const TER = {
 };
 
 // losH: height above ground the feature blocks sight to.
-// density: share of sight blocked per meter of the feature crossed (vegetation).
+// density: share of sight blocked per meter of the feature crossed (vegetation). Woods
+// block sight after about 50 m, an orchard after about 80 m.
 // cover: share of rounds stopped for a man inside or behind it.
 const TERRAIN = [
   { name: 'Open field',   speed: 1.0,  losH: 0,   density: 0,     cover: 0,   conceal: 0 },
   { name: 'Tall grass',   speed: 0.8,  losH: 0.9, density: 0.1,   cover: 0,   conceal: 0.5 },
-  { name: 'Woods',        speed: 0.6,  losH: 12,  density: 0.14,  cover: 0.3, conceal: 0.6 },
+  { name: 'Woods',        speed: 0.6,  losH: 12,  density: 0.02,  cover: 0.3, conceal: 0.6 },
   { name: 'Dirt road',    speed: 1.15, losH: 0,   density: 0,     cover: 0,   conceal: 0 },
   { name: 'Building',     speed: 0,    losH: 6.5, solid: true,    cover: 1,   conceal: 1 },
   { name: 'Stone wall',   speed: 0.3,  losH: 1.0, solid: true,    cover: 0.9, conceal: 0.3 },
   { name: 'Plowed field', speed: 0.85, losH: 0,   density: 0,     cover: 0,   conceal: 0.1 },
-  { name: 'Orchard',      speed: 0.9,  losH: 4,   density: 0.035, cover: 0.1, conceal: 0.3 },
+  { name: 'Orchard',      speed: 0.9,  losH: 4,   density: 0.012, cover: 0.1, conceal: 0.3 },
   { name: 'Vineyard',     speed: 0.7,  losH: 1.6, density: 0.07,  cover: 0.05, conceal: 0.4 },
   { name: 'Stream',       speed: 0.35, losH: 0,   density: 0,     cover: 0,   conceal: 0.2 },
   { name: 'Pond',         speed: 0,    losH: 0,   density: 0,     cover: 0,   conceal: 0 },
