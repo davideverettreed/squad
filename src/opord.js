@@ -95,6 +95,30 @@ const OPORD = {
     box.appendChild(row);
   },
 
+  // The plan's grade: a checklist, the score and what it does to the squad's confidence.
+  gradeCard(box, final) {
+    const card = el('div', 'ograde');
+    const score = final && Plan.score != null ? Plan.score : Plan.gradeScore();
+    const head = el('div', 'ogradehead');
+    head.appendChild(el('b', 'oletter', Plan.letter(score)));
+    const t = el('div');
+    t.appendChild(el('span', 'ogradet', (final ? 'Plan grade ' : 'Plan grade if you step off now ') + Math.round(score) + '/100'));
+    const conf = final ? Plan.confName() : (score >= 85 ? 'high' : score >= 65 ? 'steady' : score >= 40 ? 'uncertain' : 'shaken');
+    t.appendChild(el('span', 'ogradec', 'Squad confidence: ' + conf + '. Confidence steadies the men under fire, keeps them from breaking, and speeds their answer to radio orders.'));
+    head.appendChild(t);
+    card.appendChild(head);
+    const ul = el('ul', 'ochecks');
+    for (const [label, v, w] of Plan.gradeItems()) {
+      const li = el('li', v >= 1 ? 'ok' : v > 0 ? 'part' : 'no');
+      li.appendChild(el('span', 'ock', v >= 1 ? '✓' : v > 0 ? '½' : '✗'));
+      li.appendChild(el('span', null, label));
+      li.appendChild(el('span', 'ocw', Math.round(v * w) + '/' + w));
+      ul.appendChild(li);
+    }
+    card.appendChild(ul);
+    box.appendChild(card);
+  },
+
   // ------------------------------------------------------------ 1. Orientation
   orientation(box) {
     const f = Plan.terrainFacts(), m = G.map;
@@ -148,7 +172,8 @@ const OPORD = {
 
   // ------------------------------------------------------------ 4. Execution
   execution(box) {
-    this.para(box, 'Execution', 'Draw control measures on the map, then write the scheme of maneuver line by line. After you step off, each line starts on its trigger. You can still give any unit direct orders; that takes it off its current line.');
+    this.para(box, 'Execution', 'Draw control measures on the map, then write the scheme of maneuver line by line. After you step off each line starts on its trigger, and your orders go by radio. A better plan makes a more confident squad.');
+    this.gradeCard(box, false);
     // Tools
     const tools = el('div', 'otools');
     for (const [k, K] of Object.entries(GRAPHIC_KINDS)) {
@@ -162,6 +187,15 @@ const OPORD = {
       tools.appendChild(b);
     }
     box.appendChild(tools);
+    if (Plan.tool === 'rte') {
+      const r = el('div', 'otools');
+      const fin = el('button', 'obtn primary', 'Finish route (' + (Plan.routeDraft ? Plan.routeDraft.length : 0) + ' points)');
+      fin.addEventListener('click', () => Plan.finishRoute());
+      const cancel = el('button', 'obtn', 'Cancel');
+      cancel.addEventListener('click', () => { Plan.routeDraft = null; Plan.tool = null; this.refresh(); });
+      r.appendChild(fin); r.appendChild(cancel);
+      box.appendChild(r);
+    }
     const acts = el('div', 'otools');
     const draft = el('button', 'obtn', 'Draft a plan');
     draft.title = 'Replace the plan with a hasty attack drawn from the map';
@@ -184,13 +218,28 @@ const OPORD = {
       del.addEventListener('click', () => { Plan.removeGraphic(g.id); this.refresh(); });
       row.appendChild(del);
       box.appendChild(row);
+      if (g.kind === 'fp') {
+        // Sector of fire: center bearing and width.
+        const sec = el('div', 'osel');
+        sec.appendChild(el('span', null, 'Sector center'));
+        const brg = el('input'); brg.type = 'number'; brg.min = 0; brg.max = 359; brg.id = 'fpbrg-' + g.id;
+        brg.value = Math.round(((g.dir * 180 / Math.PI) + 90 + 360) % 360);
+        brg.addEventListener('change', () => { g.dir = ((parseInt(brg.value, 10) || 0) - 90) * Math.PI / 180; this.refresh(); });
+        sec.appendChild(brg); sec.appendChild(el('span', null, '° width'));
+        const wd = el('select'); wd.id = 'fpw-' + g.id;
+        for (const deg of [45, 60, 90, 120, 180]) { const o = el('option', null, deg + '°'); o.value = deg; if (Math.round(g.width * 180 / Math.PI) === deg) o.selected = true; wd.appendChild(o); }
+        wd.addEventListener('change', () => { g.width = Number(wd.value) * Math.PI / 180; });
+        sec.appendChild(wd);
+        box.appendChild(sec);
+      }
     } else {
       box.appendChild(el('p', 'onote', 'Drag a control measure to move it; tap it to rename or delete it.'));
     }
 
     // Lines
     box.appendChild(el('h4', null, 'Scheme of maneuver'));
-    const pointGraphics = Plan.graphics.filter(x => x.kind !== 'pl');
+    const pointGraphics = Plan.graphics.filter(x => !GRAPHIC_KINDS[x.kind].line);
+    const whereFor = (T) => T.whereKinds ? Plan.graphics.filter(x => T.whereKinds.includes(x.kind)) : pointGraphics;
     const sel = (opts, value, onChange, id) => {
       const s = el('select'); if (id) s.id = id;
       for (const [v, t] of opts) { const o = el('option', null, t); o.value = v; if (String(v) === String(value)) o.selected = true; s.appendChild(o); }
@@ -221,10 +270,10 @@ const OPORD = {
       const T = TASKS[l.task];
       if (!T.noUnit) row2.appendChild(sel(Object.entries(PLAN_UNITS), l.unit, v => { l.unit = v; }, 'lunit-' + l.id));
       row2.appendChild(sel(Object.entries(TASKS).map(([k, t]) => [k, t.label]), l.task, v => { l.task = v; }, 'ltask-' + l.id));
-      if (T.where) row2.appendChild(sel([['', 'where…'], ...pointGraphics.map(x => [x.id, x.name])], l.where || '', v => { l.where = v ? Number(v) : null; }, 'lwhere-' + l.id));
+      if (T.where) row2.appendChild(sel([['', 'where…'], ...whereFor(T).map(x => [x.id, x.name])], l.where || '', v => { l.where = v ? Number(v) : null; }, 'lwhere-' + l.id));
       if (T.target) row2.appendChild(sel([['', 'target…'], ...pointGraphics.map(x => [x.id, x.name])], l.target || '', v => { l.target = v ? Number(v) : null; }, 'ltgt-' + l.id));
       if (T.signal) row2.appendChild(sel(Object.entries(SIGNALS).map(([k, s]) => [k, s.label]), l.signal, v => { l.signal = v; }, 'lsigt-' + l.id));
-      if (l.task === 'move' || l.task === 'sbf') row2.appendChild(sel(Object.entries(MOVE).map(([k, m]) => [k, m.label]), l.mode, v => { l.mode = v; }, 'lmode-' + l.id));
+      if (l.task === 'move' || l.task === 'sbf' || l.task === 'route') row2.appendChild(sel(Object.entries(MOVE).map(([k, m]) => [k, m.label]), l.mode, v => { l.mode = v; }, 'lmode-' + l.id));
       card.appendChild(row2);
       const bad = Plan.problems(l);
       card.appendChild(el('p', 'oltext' + (bad ? ' bad' : ''), bad || Plan.lineText(l)));
@@ -268,6 +317,8 @@ const OPORD = {
 
   // ------------------------------------------------------------ Tracker
   tracker(box) {
+    this.gradeCard(box, true);
+    if (Radio.queue.length) box.appendChild(el('p', 'onote', 'Radio: ' + Radio.queue.length + ' order' + (Radio.queue.length > 1 ? 's' : '') + ' awaiting acknowledgment.'));
     const sig = el('div', 'otools');
     for (const [k, s] of Object.entries(SIGNALS)) {
       const b = el('button', 'obtn sig', s.label.replace(' star cluster', ''));

@@ -70,7 +70,9 @@ Each mission opens with a five-paragraph order beside the map:
   capabilities as DRAW-D, with the most likely course marked; friendly forces; time available.
 - **Mission**: one generated mission statement with task, place and purpose.
 - **Execution**: the planning board. Place control measures on the map (checkpoint,
-  objective, support-by-fire position, assault position, phase line, CCP) and write
+  objective, support-by-fire position, assault position, phase line, CCP, route,
+  fighting position with a sector of fire, limit of advance, rally point, release
+  point, target reference point) and write
   the scheme of maneuver as lines: trigger, unit, task, place. Triggers: at step-off,
   after or with the line above, on a red, green or white star cluster, at H+ minutes,
   on contact. **Draft a plan** gives a hasty attack (or, in a meeting engagement, a
@@ -82,7 +84,20 @@ The clock runs while you plan, at 4× speed: the one-third, two-thirds rule. In 
 attack the enemy digs in over the time available; in a meeting engagement he keeps
 coming. Planning past your third leaves the fire teams less ready. **Step off** to
 execute; the Tracker shows each line, fires signals, and lets you start a line now
-or resume one halted short by contact. Any direct order takes a unit off its line.
+or resume one halted short by contact. A direct order that moves most of a line's
+men takes that line off the plan.
+
+**The plan is graded at step-off**: objective, a task for every fire team, a base
+of fire, control measures, signals, a CCP, and time discipline. The grade is the
+squad's confidence: it sets morale, how fast the men shake off suppression, and how
+quickly they answer the radio. Stepping off with no plan leaves the squad shaken.
+
+**After step-off, orders go by radio**: "SL: 2nd FT, suppress TRP 1, over." The unit
+answers and acts after a few seconds, longer under fire, without its team leader, or
+with low confidence; a shaken unit under fire may answer "Say again, over."
+
+**The after-action report grades the mission**: plan 25%, result 35%,
+casualties 25%, time 15%.
 
 ## What is modeled
 

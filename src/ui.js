@@ -395,10 +395,22 @@ const UI = {
     pre.textContent = line('', 'Marines', 'Enemy') + '\n' + rows.map(rw => line(rw[0], rw[1], rw[2])).join('\n');
     box.appendChild(pre);
     if (Plan.timeAvail) {
+      const aar = Plan.afterAction(result);
       const done = Plan.lines.filter(l => l.status === 'done').length;
       const used = Plan.planning ? G.time - Plan.planStart : Plan.planUsed;
-      box.appendChild(el('p', 'dsub', 'Planning took ' + fmtClock(used) + ' of ' + fmtClock(Plan.timeAvail) + ' available (one third is ' +
-        fmtClock(Plan.timeAvail / 3) + '). ' + done + ' of ' + Plan.lines.length + ' plan lines completed.'));
+      const head = el('div', 'daar');
+      head.appendChild(el('b', 'oletter', aar.letter));
+      head.appendChild(el('span', null, 'Mission grade ' + Math.round(aar.total) + '/100'));
+      box.appendChild(head);
+      const g = el('pre', 'dtable');
+      const row = (a, v, w, pts) => a.padEnd(12) + String(v).padStart(7) + String(w).padStart(8) + String(pts).padStart(8);
+      g.textContent = [row('', 'Score', 'Weight', 'Points'),
+        ...aar.rows.map(([a, v, w]) => row(a, Math.round(v), w + '%', Math.round(v * w / 100))),
+        '-'.repeat(35), row('Total', '', '', Math.round(aar.total))].join('\n');
+      box.appendChild(g);
+      box.appendChild(el('p', 'dsub', 'Plan grade ' + (Plan.score != null ? Plan.letter(Plan.score) + ' (' + Math.round(Plan.score) + ')' : 'none: the squad never stepped off') +
+        '. Planning took ' + fmtClock(used) + ' of ' + fmtClock(Plan.timeAvail) + ' available (one third is ' + fmtClock(Plan.timeAvail / 3) + '). ' +
+        done + ' of ' + Plan.lines.length + ' plan lines completed.'));
     }
     $('debrief').hidden = false;
   },

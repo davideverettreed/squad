@@ -116,6 +116,8 @@ button { font: inherit; color: inherit; }
 .lline.loss { border-left-color: var(--bad); color: #ffd2cc; }
 .lline.kill { border-left-color: var(--ok); }
 .lline.warn { border-left-color: var(--accent); }
+.lline.radio { border-left-color: var(--blue); color: #d6eef7; }
+.lline.plan { border-left-color: #8fb3ff; }
 #toast {
   position: absolute; z-index: 6; left: 50%; transform: translateX(-50%); bottom: calc(var(--orders-h, 150px) + 12px);
   background: var(--accent); color: #1b1a10; font: 600 15px/1.2 var(--display); letter-spacing: 0.02em;
@@ -188,6 +190,18 @@ body.opord-open #log { right: calc(max(8px, env(safe-area-inset-right, 0px)) + 4
 .otline.stalled .otmark { color: var(--bad); }
 .otmark { font: 700 14px/1 var(--mono); text-align: center; }
 
+.ograde { border: 1px solid var(--line); border-radius: 3px; padding: 8px 10px; background: rgba(255, 255, 255, 0.03); }
+.ogradehead { display: flex; gap: 10px; align-items: flex-start; }
+.oletter { font: 700 30px/1 var(--display); color: var(--accent); min-width: 26px; }
+.ogradet { display: block; font: 700 13px/1.3 var(--display); letter-spacing: 0.06em; text-transform: uppercase; }
+.ogradec { display: block; font: 400 13px/1.35 var(--display); color: var(--muted); }
+.ochecks { list-style: none; margin: 6px 0 0; padding: 0; display: flex; flex-direction: column; gap: 2px; }
+.ochecks li { display: grid; grid-template-columns: 18px 1fr auto; gap: 6px; font: 400 13px/1.35 var(--display); }
+.ochecks .ock { font: 700 13px/1.35 var(--mono); text-align: center; }
+.ochecks .ok .ock { color: var(--ok); } .ochecks .part .ock { color: var(--warn); } .ochecks .no .ock { color: var(--bad); }
+.ochecks .ocw { font: 500 12px/1.35 var(--mono); color: var(--muted); }
+.osel input[type="number"] { width: 64px; }
+
 /* ---------------- orders */
 #orders {
   position: absolute; z-index: 5; left: 0; right: 0; bottom: 0;
@@ -249,6 +263,7 @@ input[type="number"] { width: 56px; }
 kbd { font: 600 12px/1 var(--mono); border: 1px solid var(--line); border-bottom-width: 2px; padding: 2px 5px; border-radius: 3px; background: #262b21; }
 #debriefBody { padding: 12px 22px; }
 .dsub { margin: 0 0 12px; font-size: 16px; }
+.daar { display: flex; align-items: center; gap: 12px; margin: 14px 0 8px; font: 700 16px/1.2 var(--display); letter-spacing: 0.06em; text-transform: uppercase; }
 .dtable {
   margin: 0; padding: 12px 14px; background: #f6f7f9; color: #1c2026; border-radius: 3px;
   font: 500 13px/1.55 var(--mono); overflow-x: auto; font-variant-numeric: tabular-nums;
@@ -362,7 +377,7 @@ kbd { font: 600 12px/1 var(--mono); border: 1px solid var(--line); border-bottom
       <div class="cardhead"><h2>Controls</h2><span class="eyebrow">Mouse, touch and keyboard</span></div>
       <div class="helpbody">
         <h3>The order and the plan</h3>
-        <p>Each mission opens with a five-paragraph order beside the map: <b>O</b>rientation, <b>S</b>ituation (SALUTE and DRAW-D), <b>M</b>ission, <b>E</b>xecution, <b>A</b>dmin &amp; Logistics, <b>C</b>ommand &amp; Signal. In Execution, place control measures on the map (CP, OBJ, SBF, ASLT POS, PL, CCP) and write the scheme of maneuver as lines: a trigger (at step-off, after or with the line above, on a signal, at a time, on contact), a unit, a task and a place. Draft a plan gives you a hasty attack to start from. The clock runs while you plan, at 4× speed: use a third of the time available and leave the rest to the fire teams. Press Step off to execute. The Tracker shows each line; fire signals there. A line halted short by contact waits for you to press Resume. Any direct order takes a unit off its current line.</p>
+        <p>Each mission opens with a five-paragraph order beside the map: <b>O</b>rientation, <b>S</b>ituation (SALUTE and DRAW-D), <b>M</b>ission, <b>E</b>xecution, <b>A</b>dmin &amp; Logistics, <b>C</b>ommand &amp; Signal. In Execution, place control measures on the map (CP, OBJ, SBF, ASLT POS, PL, CCP) and write the scheme of maneuver as lines: a trigger (at step-off, after or with the line above, on a signal, at a time, on contact), a unit, a task and a place. Draft a plan gives you a hasty attack to start from. The clock runs while you plan, at 4× speed: use a third of the time available and leave the rest to the fire teams. Press Step off to execute. The Tracker shows each line; fire signals there. A line halted short by contact waits for you to press Resume. The plan is graded at step-off, and the grade sets the squad's confidence: steadiness under fire, staying power, and how fast it answers the radio. After step-off your orders go by radio and take a few seconds to be acknowledged. The debrief grades the mission on plan, result, casualties and time.</p>
         <h3>Selecting</h3>
         <p>Tap a Marine to select that Marine. Tap again to select the fire team, and again for the whole squad. The Squad and fire team buttons above the orders do the same. Keys: <kbd>1</kbd> <kbd>2</kbd> <kbd>3</kbd> fire teams, <kbd>0</kbd> squad, <kbd>Esc</kbd> cancel.</p>
         <h3>Moving</h3>
@@ -1933,9 +1948,44 @@ function squadMove(sq, x, y, mode) {
   }
 }
 
+// Move along a route: one route is plotted through the waypoints and every man keeps his
+// formation station on it (team slot, plus the team's place in the squad).
+function routeMove(sel, pts, mode) {
+  const members = selMembers(sel).filter(commandable);
+  if (!members.length || pts.length < 2) return;
+  const c = centroid(members);
+  let route = [], px = c.x, py = c.y;
+  for (const p of pts) {
+    const leg = G.map.findPath(px, py, p.x, p.y) || [{ x: p.x, y: p.y }];
+    route = route.concat(leg);
+    px = p.x; py = p.y;
+  }
+  const sq = sel.squad, teams = sq.teams.filter(t => t.members.some(commandable));
+  for (const s of members) {
+    let ox = 0, oy = 0;
+    if (s.team.num) {
+      const i = s.team.members.filter(commandable).indexOf(s), o = teamSlot(s.team.formation, Math.max(0, i));
+      ox += o.x; oy += o.y;
+      if (sel.level === 'squad') { const k = teams.indexOf(s.team), q = squadSlot(sq.formation, Math.max(0, k), teams.length); ox += q.x; oy += q.y; }
+    } else if (sel.level === 'squad') { const q = squadLeaderSlot(sq.formation); ox = q.x; oy = q.y; }
+    s.path = G.map.offsetPath(s.x, s.y, route, ox, oy);
+    s.moveMode = mode; s.faceAngle = null; s.assault = false;
+  }
+}
+
+// Occupy a fighting position: men spread along a line across the sector's center, 6 m apart.
+function occupyPosition(sel, g) {
+  const members = selMembers(sel).filter(commandable);
+  const nx = -Math.sin(g.dir), ny = Math.cos(g.dir);
+  members.forEach((s, i) => {
+    const off = (i - (members.length - 1) / 2) * 6;
+    orderMove(s, g.pts[0].x + nx * off, g.pts[0].y + ny * off, 'walk');
+  });
+}
+
 function groupMove(sel, x, y, mode) {
   const members = selMembers(sel);
-  Plan.override(members);
+  Plan.override(members, 'move');
   releaseControllers(members);
   for (const s of members) { s.assault = false; s.launchQueue = null; }
   if (sel.level === 'soldier') orderMove(sel.soldier, x, y, mode);
@@ -2051,15 +2101,17 @@ function boundElements(sel) {
 
 // ---------------------------------------------------------------- the order set
 function issueOrder(sel, type, arg) {
+  // After step-off the player's orders go by radio and take effect when acknowledged.
+  if (Radio.routes(sel)) { Radio.send(sel, type, arg); return; }
   const members = selMembers(sel).filter(commandable);
   const who = selName(sel);
-  Plan.override(members);
+  Plan.override(members, type);
   if (!members.length) { G.toast(who + ' cannot take orders.'); return; }
   const team = sel.level === 'soldier' ? sel.soldier.team : sel.team;
 
   switch (type) {
     case 'move':
-      groupMove(sel, arg.x, arg.y, G.ui.moveMode);
+      groupMove(sel, arg.x, arg.y, arg.mode || G.ui.moveMode);
       break;
     case 'posture':
       for (const s of members) { s.homePosture = arg; if (!s.moving) setPosture(s, arg); }
@@ -3412,21 +3464,62 @@ function drawPlan(ctx) {
       }
       ctx.shadowBlur = 0;
       label(g.name, p.x - Math.cos(a) * 14, p.y - Math.sin(a) * 14, 12);
-    } else if (g.kind === 'pl') {
+    } else if (g.kind === 'rte') {
+      const q = g.pts.map(pt => toScreen(pt.x, pt.y));
+      ctx.setLineDash([10, 5]);
+      ctx.beginPath(); q.forEach((pt, i) => i ? ctx.lineTo(pt.x, pt.y) : ctx.moveTo(pt.x, pt.y)); ctx.stroke();
+      ctx.setLineDash([]);
+      for (const pt of q.slice(1, -1)) { ctx.beginPath(); ctx.arc(pt.x, pt.y, 3.5, 0, Math.PI * 2); ctx.fill(); }
+      arrowHead(ctx, q[q.length - 2], q[q.length - 1], 10, true);
+      ctx.shadowBlur = 0;
+      const m = Math.floor((q.length - 1) / 2), mx = (q[m].x + q[m + 1].x) / 2, my = (q[m].y + q[m + 1].y) / 2;
+      label(g.name, mx, my - 12, 13);
+    } else if (g.kind === 'fp') {
+      // Fighting position: a bracket open to the rear, with the sector's left and right limits.
+      const a = g.dir, L = Math.max(70, 150 * z), w = 14, nx = -Math.sin(a), ny = Math.cos(a);
+      ctx.beginPath();
+      ctx.moveTo(p.x + nx * w - Math.cos(a) * 8, p.y + ny * w - Math.sin(a) * 8);
+      ctx.lineTo(p.x + nx * w, p.y + ny * w);
+      ctx.lineTo(p.x - nx * w, p.y - ny * w);
+      ctx.lineTo(p.x - nx * w - Math.cos(a) * 8, p.y - ny * w - Math.sin(a) * 8);
+      ctx.stroke();
+      ctx.shadowBlur = 0;
+      ctx.setLineDash([6, 5]); ctx.lineWidth = 1.5;
+      ctx.beginPath();
+      for (const d of [-g.width / 2, g.width / 2]) { ctx.moveTo(p.x, p.y); ctx.lineTo(p.x + Math.cos(a + d) * L, p.y + Math.sin(a + d) * L); }
+      ctx.stroke(); ctx.setLineDash([]);
+      label(g.name, p.x - Math.cos(a) * 18, p.y - Math.sin(a) * 18, 12);
+    } else if (g.kind === 'trp') {
+      ctx.beginPath(); ctx.arc(p.x, p.y, 9, 0, Math.PI * 2); ctx.stroke();
+      ctx.beginPath(); ctx.moveTo(p.x - 13, p.y); ctx.lineTo(p.x + 13, p.y); ctx.moveTo(p.x, p.y - 13); ctx.lineTo(p.x, p.y + 13); ctx.stroke();
+      ctx.shadowBlur = 0;
+      label(g.name, p.x + 16, p.y - 12, 12, 'left');
+    } else if (g.kind === 'pl' || g.kind === 'loa') {
       const q = g.pts.map(pt => toScreen(pt.x, pt.y));
       ctx.beginPath(); q.forEach((pt, i) => i ? ctx.lineTo(pt.x, pt.y) : ctx.moveTo(pt.x, pt.y)); ctx.stroke();
       ctx.shadowBlur = 0;
       label(g.name, q[0].x, q[0].y - 12, 13);
       label(g.name, q[q.length - 1].x, q[q.length - 1].y - 12, 13);
-    } else if (g.kind === 'ccp') {
+    } else if (g.kind === 'ccp' || g.kind === 'rly' || g.kind === 'rel') {
+      const t = g.kind === 'ccp' ? g.name.replace(/\s*1$/, '') : g.name;
+      ctx.font = '700 12px "Saira Condensed", "Arial Narrow", sans-serif';
+      const bw = Math.max(36, ctx.measureText(t).width + 12);
       ctx.fillStyle = 'rgba(247,245,236,0.9)';
-      ctx.fillRect(p.x - 18, p.y - 10, 36, 20); ctx.strokeRect(p.x - 18, p.y - 10, 36, 20);
+      ctx.fillRect(p.x - bw / 2, p.y - 10, bw, 20); ctx.strokeRect(p.x - bw / 2, p.y - 10, bw, 20);
       ctx.shadowBlur = 0;
-      label(g.name.replace(/\s*1$/, ''), p.x, p.y + 1, 12);
+      label(t, p.x, p.y + 1, 12);
     }
     ctx.shadowBlur = 0;
   }
-  // First end of a phase line being drawn.
+  // A route being drawn.
+  if (Plan.routeDraft && Plan.routeDraft.length) {
+    const q = Plan.routeDraft.map(pt => toScreen(pt.x, pt.y));
+    ctx.strokeStyle = OVL.blue; ctx.fillStyle = OVL.blue; ctx.lineWidth = 2; ctx.setLineDash([10, 5]);
+    ctx.beginPath(); q.forEach((pt, i) => i ? ctx.lineTo(pt.x, pt.y) : ctx.moveTo(pt.x, pt.y)); ctx.stroke();
+    ctx.setLineDash([]);
+    for (const pt of q) { ctx.beginPath(); ctx.arc(pt.x, pt.y, 4, 0, Math.PI * 2); ctx.fill(); }
+  }
+  // First end of a line being drawn.
   if (Plan.plStart) {
     const p = toScreen(Plan.plStart.x, Plan.plStart.y);
     ctx.fillStyle = OVL.blue; ctx.beginPath(); ctx.arc(p.x, p.y, 5, 0, Math.PI * 2); ctx.fill();
@@ -4016,10 +4109,22 @@ const UI = {
     pre.textContent = line('', 'Marines', 'Enemy') + '\n' + rows.map(rw => line(rw[0], rw[1], rw[2])).join('\n');
     box.appendChild(pre);
     if (Plan.timeAvail) {
+      const aar = Plan.afterAction(result);
       const done = Plan.lines.filter(l => l.status === 'done').length;
       const used = Plan.planning ? G.time - Plan.planStart : Plan.planUsed;
-      box.appendChild(el('p', 'dsub', 'Planning took ' + fmtClock(used) + ' of ' + fmtClock(Plan.timeAvail) + ' available (one third is ' +
-        fmtClock(Plan.timeAvail / 3) + '). ' + done + ' of ' + Plan.lines.length + ' plan lines completed.'));
+      const head = el('div', 'daar');
+      head.appendChild(el('b', 'oletter', aar.letter));
+      head.appendChild(el('span', null, 'Mission grade ' + Math.round(aar.total) + '/100'));
+      box.appendChild(head);
+      const g = el('pre', 'dtable');
+      const row = (a, v, w, pts) => a.padEnd(12) + String(v).padStart(7) + String(w).padStart(8) + String(pts).padStart(8);
+      g.textContent = [row('', 'Score', 'Weight', 'Points'),
+        ...aar.rows.map(([a, v, w]) => row(a, Math.round(v), w + '%', Math.round(v * w / 100))),
+        '-'.repeat(35), row('Total', '', '', Math.round(aar.total))].join('\n');
+      box.appendChild(g);
+      box.appendChild(el('p', 'dsub', 'Plan grade ' + (Plan.score != null ? Plan.letter(Plan.score) + ' (' + Math.round(Plan.score) + ')' : 'none: the squad never stepped off') +
+        '. Planning took ' + fmtClock(used) + ' of ' + fmtClock(Plan.timeAvail) + ' available (one third is ' + fmtClock(Plan.timeAvail / 3) + '). ' +
+        done + ' of ' + Plan.lines.length + ' plan lines completed.'));
     }
     $('debrief').hidden = false;
   },
@@ -4044,9 +4149,17 @@ const GRAPHIC_KINDS = {
   aslt: { label: 'Assault position', short: 'ASLT POS', numbered: true, r: 25 },
   pl:   { label: 'Phase line', short: 'PL', names: ['RED', 'BLUE', 'GOLD', 'GREEN', 'BLACK'], line: true },
   ccp:  { label: 'Casualty collection point', short: 'CCP', numbered: true },
+  rte:  { label: 'Route', short: 'RTE', names: ['GOLD', 'SILVER', 'COPPER', 'BRASS', 'STEEL'], line: true, multi: true },
+  fp:   { label: 'Fighting position', short: 'FP', numbered: true },
+  loa:  { label: 'Limit of advance', short: 'LOA', single: true, line: true },
+  rly:  { label: 'Rally point', short: 'RLY PT', numbered: true },
+  rel:  { label: 'Release point', short: 'RP', numbered: true },
+  trp:  { label: 'Target reference point', short: 'TRP', numbered: true },
 };
 const TASKS = {
   move:     { label: 'Move to', where: true },
+  route:    { label: 'Move along route', where: true, whereKinds: ['rte'] },
+  occupy:   { label: 'Occupy fighting position', where: true, whereKinds: ['fp'] },
   bound:    { label: 'Bound to', where: true },
   sbf:      { label: 'Support by fire from', where: true, target: true },
   suppress: { label: 'Suppress', target: true },
@@ -4078,6 +4191,7 @@ const Plan = {
     this.phase = 'planning'; this.stepOff = null; this.planStart = G.time; this.planUsed = 0;
     this.signals = {}; this.contact = false; this.tool = null; this.plStart = null; this.selected = null; this.drag = null;
     this.crossings = new Map(); this.timer = 0;
+    this.conf = 1; this.score = null; this.routeDraft = null; this.loaSide = null;
     // The report is a little off, as reports are.
     this.reported = { x: clamp(G.enemyArea.x + gauss() * 50, 30, MAP_W - 30), y: clamp(G.enemyArea.y + gauss() * 50, 30, MAP_H - 30) };
     const sep = dist(centroid(G.squads.blue.all).x, centroid(G.squads.blue.all).y, this.reported.x, this.reported.y);
@@ -4119,11 +4233,14 @@ const Plan = {
   // ---------------------------------------------------------------- control measures
   nextName(kind) {
     const K = GRAPHIC_KINDS[kind], used = this.graphics.filter(g => g.kind === kind).map(g => g.name);
+    if (K.single && !used.includes(K.short)) return K.short;
     if (K.names) return (K.short + ' ' + (K.names.find(n => !used.includes(K.short + ' ' + n)) || K.names[0]));
     for (let n = 1; ; n++) if (!used.includes(K.short + ' ' + n)) return K.short + ' ' + n;
   },
   addGraphic(kind, pts) {
     const g = { id: this.nextId++, kind, name: this.nextName(kind), pts: pts.map(p => ({ x: p.x, y: p.y })), r: GRAPHIC_KINDS[kind].r || 0 };
+    // A fighting position faces the reported enemy, with a 90 degree sector, until changed.
+    if (kind === 'fp') { g.dir = angleTo(pts[0].x, pts[0].y, this.reported.x, this.reported.y); g.width = Math.PI / 2; }
     this.graphics.push(g);
     return g;
   },
@@ -4132,13 +4249,23 @@ const Plan = {
     for (const l of this.lines) { if (l.where === id) l.where = null; if (l.target === id) l.target = null; }
     if (this.selected === id) this.selected = null;
   },
-  // Tap on the map with a tool chosen: place it. A phase line takes two taps.
+  // Tap on the map with a tool chosen: place it. Lines take two taps; a route takes a tap
+  // for each waypoint and ends with Finish route (or a tap on its last point).
   place(w) {
-    const kind = this.tool;
+    const kind = this.tool, K = GRAPHIC_KINDS[kind];
     if (!kind) return false;
-    if (GRAPHIC_KINDS[kind].line) {
-      if (!this.plStart) { this.plStart = { x: w.x, y: w.y }; G.toast('Tap the other end of the phase line.'); return true; }
-      const g = this.addGraphic('pl', [this.plStart, w]);
+    if (K.multi) {
+      this.routeDraft = this.routeDraft || [];
+      const last = this.routeDraft[this.routeDraft.length - 1];
+      if (last && this.routeDraft.length > 1 && dist(last.x, last.y, w.x, w.y) < 18 / R.cam.zoom) return this.finishRoute();
+      this.routeDraft.push({ x: w.x, y: w.y });
+      G.toast('Waypoint ' + this.routeDraft.length + '. Tap the next one, or Finish route.');
+      OPORD.refresh();
+      return true;
+    }
+    if (K.line) {
+      if (!this.plStart) { this.plStart = { x: w.x, y: w.y }; G.toast('Tap the other end of the ' + K.label.toLowerCase() + '.'); return true; }
+      const g = this.addGraphic(kind, [this.plStart, w]);
       this.plStart = null; this.tool = null; this.selected = g.id;
     } else {
       const g = this.addGraphic(kind, [w]);
@@ -4147,14 +4274,23 @@ const Plan = {
     OPORD.refresh();
     return true;
   },
+  finishRoute() {
+    const pts = this.routeDraft || [];
+    if (pts.length >= 2) { const g = this.addGraphic('rte', pts); this.selected = g.id; }
+    else G.toast('A route needs at least two waypoints.');
+    this.routeDraft = null; this.tool = null;
+    OPORD.refresh();
+    return true;
+  },
   anchor(g) {
-    if (g.kind === 'pl') return { x: (g.pts[0].x + g.pts[g.pts.length - 1].x) / 2, y: (g.pts[0].y + g.pts[g.pts.length - 1].y) / 2 };
+    if (g.kind === 'rte') return g.pts[g.pts.length - 1];
+    if (g.kind === 'pl' || g.kind === 'loa') return { x: (g.pts[0].x + g.pts[g.pts.length - 1].x) / 2, y: (g.pts[0].y + g.pts[g.pts.length - 1].y) / 2 };
     return g.pts[0];
   },
   hitGraphic(sx, sy) {
     let best = null, bd = 22;
     for (const g of this.graphics) {
-      if (g.kind === 'pl') {
+      if (GRAPHIC_KINDS[g.kind].line) {
         for (let i = 0; i < g.pts.length; i++) {
           const p = toScreen(g.pts[i].x, g.pts[i].y), d = Math.hypot(p.x - sx, p.y - sy);
           if (d < bd) { bd = d; best = { g, idx: i }; }
@@ -4192,6 +4328,8 @@ const Plan = {
     let what;
     switch (l.task) {
       case 'move': what = 'moves to ' + where + ' (' + MOVE[l.mode].label.toLowerCase() + ')'; break;
+      case 'route': what = 'moves along ' + where + ' to its end (' + MOVE[l.mode].label.toLowerCase() + ')'; break;
+      case 'occupy': { const g = this.graphic(l.where); what = 'occupies ' + where + (g ? ', sector of fire ' + pad3(Math.round(((g.dir * 180 / Math.PI) + 90 + 360) % 360)) + '°' : ''); break; }
       case 'bound': what = 'bounds by overwatch to ' + where; break;
       case 'sbf': what = 'occupies ' + where + ' and supports by fire onto ' + tgt; break;
       case 'suppress': what = 'suppresses ' + tgt; break;
@@ -4205,6 +4343,7 @@ const Plan = {
   problems(l) {
     const T = TASKS[l.task];
     if (T.where && !this.graphic(l.where)) return 'Choose where.';
+    if (T.whereKinds && !T.whereKinds.includes(this.graphic(l.where).kind)) return 'Choose a ' + GRAPHIC_KINDS[T.whereKinds[0]].label.toLowerCase() + '.';
     if (T.target && !this.graphic(l.target)) return 'Choose a target.';
     return '';
   },
@@ -4216,15 +4355,53 @@ const Plan = {
     this.phase = 'execution';
     this.stepOff = G.time;
     this.tool = null; this.plStart = null;
-    // Time taken beyond the leader's third is time the fire teams did not have.
-    const third = this.timeAvail / 3, over = clamp(this.planUsed / third - 1, 0, 1);
-    if (over > 0) {
-      G.squads.blue.training *= 1 + 0.15 * over;
-      G.log('Planning took ' + fmtClock(this.planUsed) + ', past the one-third mark (' + fmtClock(third) + '). The fire teams had little time to prepare.', 'warn');
-    }
+    // The plan is graded, and the grade becomes the squad's confidence: how steady the men
+    // are under fire, how fast they break, how quickly they act on radio orders.
+    this.score = this.gradeScore();
+    this.conf = this.score / 100;
+    const sq = G.squads.blue;
+    sq.morale = 60 + 32 * this.conf;
+    for (const t of [sq.hq, ...sq.teams]) t.morale = sq.morale;
+    sq.training = 0.85 * (1.15 - 0.3 * this.conf);
+    G.log('Plan grade ' + this.letter(this.score) + ' (' + Math.round(this.score) + '). Squad confidence: ' + this.confName() + '.', this.score >= 65 ? 'plan' : 'warn');
+    if (!this.lines.length) G.log('Stepped off without a plan. The fire teams are unsure what is wanted of them.', 'warn');
     G.log('Squad stepping off. H-hour.', 'plan');
+    OPORD.refresh();
     this.timer = 0;
     this.update(0, true);
+  },
+
+  // ---------------------------------------------------------------- plan grade
+  gradeItems() {
+    const kinds = new Set(this.graphics.map(g => g.kind));
+    const tasked = ['t1', 't2', 't3'].filter(u => this.lines.some(l => l.unit === u || (l.unit === 'squad' && !TASKS[l.task].noUnit)));
+    const used = this.planning ? G.time - this.planStart : this.planUsed, third = this.timeAvail / 3;
+    return [
+      ['Objective on the map', kinds.has('obj') ? 1 : 0, 15],
+      ['Every fire team has a task', tasked.length / 3, 20],
+      ['Base of fire designated', this.lines.some(l => l.task === 'sbf' || l.task === 'suppress' || l.task === 'occupy') ? 1 : 0, 15],
+      ['Control measures (CP, route, PL, LOA, RP)', ['cp', 'rte', 'pl', 'loa', 'rel'].some(k => kinds.has(k)) ? 1 : 0, 10],
+      ['Signals planned', this.lines.some(l => l.trigger === 'signal' || l.task === 'signal') ? 1 : 0, 10],
+      ['CCP placed', kinds.has('ccp') ? 1 : 0, 10],
+      ['Planned within your third', used <= third ? 1 : used <= third * 1.5 ? 0.5 : 0, 20],
+    ];
+  },
+  gradeScore() { return this.gradeItems().reduce((n, [, v, w]) => n + v * w, 0); },
+  letter(s) { return s >= 90 ? 'A' : s >= 75 ? 'B' : s >= 60 ? 'C' : s >= 40 ? 'D' : 'F'; },
+  confName() { const c = this.conf; return c >= 0.85 ? 'high' : c >= 0.65 ? 'steady' : c >= 0.4 ? 'uncertain' : 'shaken'; },
+
+  // After-action grade: the plan, the result, the cost and the time, weighted.
+  afterAction(result) {
+    const blue = G.squads.blue.all;
+    const kia = blue.filter(s => s.health === 'kia').length, ser = blue.filter(s => s.health === 'serious').length, wia = blue.filter(s => s.health === 'light').length;
+    const plan = this.score != null ? this.score : 0;
+    const res = result === 'victory' ? 100 : 0;
+    const cas = Math.max(0, 100 - 15 * kia - 8 * ser - 3 * wia);
+    const t = this.stepOff != null ? G.time - this.stepOff : G.time;
+    const time = result !== 'victory' ? 0 : t <= this.timeAvail ? 100 : clamp(100 - (t - this.timeAvail) / this.timeAvail * 100, 0, 100);
+    const rows = [['Plan', plan, 25], ['Result', res, 35], ['Casualties', cas, 25], ['Time', time, 15]];
+    const total = rows.reduce((n, [, v, w]) => n + v * w / 100, 0);
+    return { rows, total, letter: this.letter(total), kia, ser, wia, t };
   },
 
   unitSel(u) {
@@ -4263,7 +4440,30 @@ const Plan = {
       else if (l.status === 'active') this.check(l);
     });
     this.checkPhaseLines();
+    this.checkLOA();
     OPORD.refreshTracker();
+  },
+
+  // Nobody crosses the limit of advance: a man who reaches it halts there.
+  checkLOA() {
+    const loas = this.graphics.filter(g => g.kind === 'loa');
+    if (!loas.length) return;
+    this.loaSide = this.loaSide || new Map();
+    for (const s of G.squads.blue.all) {
+      if (!s.active) continue;
+      for (const g of loas) {
+        const a = g.pts[0], b = g.pts[1], key = s.id + ':' + g.id;
+        const side = Math.sign((b.x - a.x) * (s.y - a.y) - (b.y - a.y) * (s.x - a.x));
+        const len = dist(a.x, a.y, b.x, b.y), proj = ((s.x - a.x) * (b.x - a.x) + (s.y - a.y) * (b.y - a.y)) / (len * len);
+        if (!this.loaSide.has(key)) { this.loaSide.set(key, side); continue; }
+        if (side && side !== this.loaSide.get(key) && proj > -0.1 && proj < 1.1 && s.moving) {
+          s.path = []; s.assault = false;
+          releaseControllers([s]);
+          this.loaSide.set(key, side); // an order to go on past it is obeyed
+          if (!s.team.atLOA) { s.team.atLOA = true; G.log(s.team.short + ': At the ' + g.name + ', halting.', 'plan'); }
+        }
+      }
+    }
   },
 
   start(l) {
@@ -4283,6 +4483,8 @@ const Plan = {
     try {
       switch (l.task) {
         case 'move': groupMove(sel, this.anchor(where).x, this.anchor(where).y, l.mode); break;
+        case 'route': routeMove(sel, where.pts, l.mode); break;
+        case 'occupy': occupyPosition(sel, where); l.stage = 'moving'; break;
         case 'bound': issueOrder(sel, 'bound', this.anchor(where)); break;
         case 'assault': issueOrder(sel, 'assault', this.anchor(tgt)); break;
         case 'sbf': groupMove(sel, this.anchor(where).x, this.anchor(where).y, l.mode); l.stage = 'moving'; break;
@@ -4309,7 +4511,11 @@ const Plan = {
         return;
       }
     }
-    if (l.task === 'sbf' && l.stage === 'moving') {
+    if (l.task === 'occupy' && l.stage === 'moving') {
+      const g = this.graphic(l.where), aim = { x: g.pts[0].x + Math.cos(g.dir) * 150, y: g.pts[0].y + Math.sin(g.dir) * 150 };
+      for (const s of m) { s.faceAngle = g.dir; s.homePosture = firingPosture(s, aim.x, aim.y); s.fireControl = 'free'; }
+      G.log(PLAN_UNITS[l.unit] + ': Set in ' + g.name + ', watching the sector.', 'plan');
+    } else if (l.task === 'sbf' && l.stage === 'moving') {
       G.execIssuing = true;
       try {
         const sel = this.unitSel(l.unit);
@@ -4335,12 +4541,15 @@ const Plan = {
     if (l && (l.status === 'pending' || l.status === 'stalled') && !this.planning) { this.start(l); OPORD.refreshTracker(); }
   },
 
-  // A direct order to men in an active line takes them off the plan for that line.
-  override(members) {
+  // A direct order that moves men takes their line off the plan, if it moves at least half
+  // of the line's men. Posture and fire orders leave the plan running.
+  override(members, type) {
     if (this.planning || G.execIssuing) return;
+    if (type && !['move', 'bound', 'assault', 'halt', 'cover', 'fallback'].includes(type)) return;
     for (const l of this.lines) {
       if (l.status !== 'active') continue;
-      if (this.liveMembers(l.unit).some(s => members.includes(s))) {
+      const lm = this.liveMembers(l.unit);
+      if (lm.filter(s => members.includes(s)).length * 2 >= lm.length) {
         l.status = 'overridden';
         G.log('Line ' + (this.lines.indexOf(l) + 1) + ' overridden by your order.', 'plan');
       }
@@ -4492,6 +4701,9 @@ const Plan = {
     this.addLine({ trigger: 'signal', signal: 'red', unit: 't2', task: 'assault', target: obj.id });
     this.addLine({ trigger: 'with', unit: 't3', task: 'assault', target: obj.id });
     this.addLine({ trigger: 'signal', signal: 'green', unit: base, task: 'lift' });
+    // A limit of advance just past the objective stops the assault running on.
+    const fwd = angleTo(aslt.pts[0].x, aslt.pts[0].y, o.x, o.y), lx = o.x + Math.cos(fwd) * 80, ly = o.y + Math.sin(fwd) * 80;
+    this.addGraphic('loa', [{ x: lx - Math.sin(fwd) * 140, y: ly + Math.cos(fwd) * 140 }, { x: lx + Math.sin(fwd) * 140, y: ly - Math.cos(fwd) * 140 }]);
     OPORD.refresh();
   },
 
@@ -4514,16 +4726,25 @@ const Plan = {
       const s = view * 2 + (ter === TER.WOODS ? 3 : ter === TER.GRASS || ter === TER.ORCHARD || ter === TER.VINEYARD ? 1.5 : 0) + G.map.elevAt(px, py) * 0.05;
       if (s > bs) { bs = s; best = { x: px, y: py }; }
     }
-    const cp = this.addGraphic('cp', [best]);
+    const cp = this.addGraphic('rel', [best]);
     const obj = this.addGraphic('obj', [o]);
     const pa = { x: best.x + Math.cos(ax) * 200, y: best.y + Math.sin(ax) * 200 };
     const nx = -Math.sin(ax), ny = Math.cos(ax);
     this.addGraphic('pl', [{ x: pa.x + nx * 250, y: pa.y + ny * 250 }, { x: pa.x - nx * 250, y: pa.y - ny * 250 }]);
     this.addGraphic('ccp', [{ x: lerp(b.x, best.x, 0.6), y: lerp(b.y, best.y, 0.6) }]);
-    G.squads.blue.formation = 'line';
+    const rly = this.addGraphic('rly', [{ x: best.x - Math.cos(ax) * 150, y: best.y - Math.sin(ax) * 150 }]);
+    // Three fighting positions in line across the approach, 35 m apart, sectors overlapping.
+    const fps = [-1, 0, 1].map(k => {
+      const g = this.addGraphic('fp', [{ x: best.x + nx * 35 * k, y: best.y + ny * 35 * k }]);
+      g.dir = ax - k * 0.25; g.width = Math.PI / 2;
+      return g;
+    });
     this.addLine({ trigger: 'start', unit: 'squad', task: 'move', where: cp.id, mode: 'walk' });
-    this.addLine({ trigger: 'after', unit: 'squad', task: 'hold' });
+    this.addLine({ trigger: 'after', unit: 't1', task: 'occupy', where: fps[1].id });
+    this.addLine({ trigger: 'with', unit: 't2', task: 'occupy', where: fps[0].id });
+    this.addLine({ trigger: 'with', unit: 't3', task: 'occupy', where: fps[2].id });
     this.addLine({ trigger: 'contact', unit: 't1', task: 'suppress', target: obj.id });
+    this.addLine({ trigger: 'signal', signal: 'white', unit: 'squad', task: 'move', where: rly.id, mode: 'rush' });
     OPORD.refresh();
   },
 };
@@ -4630,6 +4851,30 @@ const OPORD = {
     box.appendChild(row);
   },
 
+  // The plan's grade: a checklist, the score and what it does to the squad's confidence.
+  gradeCard(box, final) {
+    const card = el('div', 'ograde');
+    const score = final && Plan.score != null ? Plan.score : Plan.gradeScore();
+    const head = el('div', 'ogradehead');
+    head.appendChild(el('b', 'oletter', Plan.letter(score)));
+    const t = el('div');
+    t.appendChild(el('span', 'ogradet', (final ? 'Plan grade ' : 'Plan grade if you step off now ') + Math.round(score) + '/100'));
+    const conf = final ? Plan.confName() : (score >= 85 ? 'high' : score >= 65 ? 'steady' : score >= 40 ? 'uncertain' : 'shaken');
+    t.appendChild(el('span', 'ogradec', 'Squad confidence: ' + conf + '. Confidence steadies the men under fire, keeps them from breaking, and speeds their answer to radio orders.'));
+    head.appendChild(t);
+    card.appendChild(head);
+    const ul = el('ul', 'ochecks');
+    for (const [label, v, w] of Plan.gradeItems()) {
+      const li = el('li', v >= 1 ? 'ok' : v > 0 ? 'part' : 'no');
+      li.appendChild(el('span', 'ock', v >= 1 ? '✓' : v > 0 ? '½' : '✗'));
+      li.appendChild(el('span', null, label));
+      li.appendChild(el('span', 'ocw', Math.round(v * w) + '/' + w));
+      ul.appendChild(li);
+    }
+    card.appendChild(ul);
+    box.appendChild(card);
+  },
+
   // ------------------------------------------------------------ 1. Orientation
   orientation(box) {
     const f = Plan.terrainFacts(), m = G.map;
@@ -4683,7 +4928,8 @@ const OPORD = {
 
   // ------------------------------------------------------------ 4. Execution
   execution(box) {
-    this.para(box, 'Execution', 'Draw control measures on the map, then write the scheme of maneuver line by line. After you step off, each line starts on its trigger. You can still give any unit direct orders; that takes it off its current line.');
+    this.para(box, 'Execution', 'Draw control measures on the map, then write the scheme of maneuver line by line. After you step off each line starts on its trigger, and your orders go by radio. A better plan makes a more confident squad.');
+    this.gradeCard(box, false);
     // Tools
     const tools = el('div', 'otools');
     for (const [k, K] of Object.entries(GRAPHIC_KINDS)) {
@@ -4697,6 +4943,15 @@ const OPORD = {
       tools.appendChild(b);
     }
     box.appendChild(tools);
+    if (Plan.tool === 'rte') {
+      const r = el('div', 'otools');
+      const fin = el('button', 'obtn primary', 'Finish route (' + (Plan.routeDraft ? Plan.routeDraft.length : 0) + ' points)');
+      fin.addEventListener('click', () => Plan.finishRoute());
+      const cancel = el('button', 'obtn', 'Cancel');
+      cancel.addEventListener('click', () => { Plan.routeDraft = null; Plan.tool = null; this.refresh(); });
+      r.appendChild(fin); r.appendChild(cancel);
+      box.appendChild(r);
+    }
     const acts = el('div', 'otools');
     const draft = el('button', 'obtn', 'Draft a plan');
     draft.title = 'Replace the plan with a hasty attack drawn from the map';
@@ -4719,13 +4974,28 @@ const OPORD = {
       del.addEventListener('click', () => { Plan.removeGraphic(g.id); this.refresh(); });
       row.appendChild(del);
       box.appendChild(row);
+      if (g.kind === 'fp') {
+        // Sector of fire: center bearing and width.
+        const sec = el('div', 'osel');
+        sec.appendChild(el('span', null, 'Sector center'));
+        const brg = el('input'); brg.type = 'number'; brg.min = 0; brg.max = 359; brg.id = 'fpbrg-' + g.id;
+        brg.value = Math.round(((g.dir * 180 / Math.PI) + 90 + 360) % 360);
+        brg.addEventListener('change', () => { g.dir = ((parseInt(brg.value, 10) || 0) - 90) * Math.PI / 180; this.refresh(); });
+        sec.appendChild(brg); sec.appendChild(el('span', null, '° width'));
+        const wd = el('select'); wd.id = 'fpw-' + g.id;
+        for (const deg of [45, 60, 90, 120, 180]) { const o = el('option', null, deg + '°'); o.value = deg; if (Math.round(g.width * 180 / Math.PI) === deg) o.selected = true; wd.appendChild(o); }
+        wd.addEventListener('change', () => { g.width = Number(wd.value) * Math.PI / 180; });
+        sec.appendChild(wd);
+        box.appendChild(sec);
+      }
     } else {
       box.appendChild(el('p', 'onote', 'Drag a control measure to move it; tap it to rename or delete it.'));
     }
 
     // Lines
     box.appendChild(el('h4', null, 'Scheme of maneuver'));
-    const pointGraphics = Plan.graphics.filter(x => x.kind !== 'pl');
+    const pointGraphics = Plan.graphics.filter(x => !GRAPHIC_KINDS[x.kind].line);
+    const whereFor = (T) => T.whereKinds ? Plan.graphics.filter(x => T.whereKinds.includes(x.kind)) : pointGraphics;
     const sel = (opts, value, onChange, id) => {
       const s = el('select'); if (id) s.id = id;
       for (const [v, t] of opts) { const o = el('option', null, t); o.value = v; if (String(v) === String(value)) o.selected = true; s.appendChild(o); }
@@ -4756,10 +5026,10 @@ const OPORD = {
       const T = TASKS[l.task];
       if (!T.noUnit) row2.appendChild(sel(Object.entries(PLAN_UNITS), l.unit, v => { l.unit = v; }, 'lunit-' + l.id));
       row2.appendChild(sel(Object.entries(TASKS).map(([k, t]) => [k, t.label]), l.task, v => { l.task = v; }, 'ltask-' + l.id));
-      if (T.where) row2.appendChild(sel([['', 'where…'], ...pointGraphics.map(x => [x.id, x.name])], l.where || '', v => { l.where = v ? Number(v) : null; }, 'lwhere-' + l.id));
+      if (T.where) row2.appendChild(sel([['', 'where…'], ...whereFor(T).map(x => [x.id, x.name])], l.where || '', v => { l.where = v ? Number(v) : null; }, 'lwhere-' + l.id));
       if (T.target) row2.appendChild(sel([['', 'target…'], ...pointGraphics.map(x => [x.id, x.name])], l.target || '', v => { l.target = v ? Number(v) : null; }, 'ltgt-' + l.id));
       if (T.signal) row2.appendChild(sel(Object.entries(SIGNALS).map(([k, s]) => [k, s.label]), l.signal, v => { l.signal = v; }, 'lsigt-' + l.id));
-      if (l.task === 'move' || l.task === 'sbf') row2.appendChild(sel(Object.entries(MOVE).map(([k, m]) => [k, m.label]), l.mode, v => { l.mode = v; }, 'lmode-' + l.id));
+      if (l.task === 'move' || l.task === 'sbf' || l.task === 'route') row2.appendChild(sel(Object.entries(MOVE).map(([k, m]) => [k, m.label]), l.mode, v => { l.mode = v; }, 'lmode-' + l.id));
       card.appendChild(row2);
       const bad = Plan.problems(l);
       card.appendChild(el('p', 'oltext' + (bad ? ' bad' : ''), bad || Plan.lineText(l)));
@@ -4803,6 +5073,8 @@ const OPORD = {
 
   // ------------------------------------------------------------ Tracker
   tracker(box) {
+    this.gradeCard(box, true);
+    if (Radio.queue.length) box.appendChild(el('p', 'onote', 'Radio: ' + Radio.queue.length + ' order' + (Radio.queue.length > 1 ? 's' : '') + ' awaiting acknowledgment.'));
     const sig = el('div', 'otools');
     for (const [k, s] of Object.entries(SIGNALS)) {
       const b = el('button', 'obtn sig', s.label.replace(' star cluster', ''));
@@ -4835,6 +5107,98 @@ const OPORD = {
 
   refreshTracker() {
     if (this.open && this.tab === 'T') this.refresh();
+  },
+};
+
+// ---- src/radio.js
+'use strict';
+// Orders by radio after step-off. The squad leader calls the order; the unit answers and
+// acts after a delay that grows when it is under fire, when its leader is down and when
+// the squad's confidence is low. A shaken unit under fire may not copy the message at all.
+
+const Radio = {
+  queue: [],
+
+  reset() { this.queue = []; },
+
+  // Orders from the player go by radio once the squad has stepped off.
+  routes(sel) {
+    return G.running && !Plan.planning && !G.execIssuing && !G.radioDelivering && sel && sel.squad && sel.squad.side === 'blue';
+  },
+
+  callsign(sel) {
+    if (sel.level === 'squad') return '1st Squad';
+    if (sel.level === 'team') return sel.team.short;
+    return sel.soldier.label;
+  },
+  sender() {
+    const sl = G.squads.blue.all.find(s => s.billet === 'SL' && s.active);
+    return sl ? 'SL' : 'Acting SL';
+  },
+
+  // A point is called by the nearest control measure if there is one close, else by grid.
+  where(p) {
+    let best = null, bd = 60;
+    for (const g of Plan.graphics) {
+      const a = Plan.anchor(g), d = dist(a.x, a.y, p.x, p.y);
+      if (d < bd) { bd = d; best = g; }
+    }
+    return best ? best.name : 'grid ' + gridRef(p.x, p.y);
+  },
+
+  text(type, arg) {
+    switch (type) {
+      case 'move': return 'move to ' + this.where(arg) + (arg.mode && arg.mode !== 'walk' ? ', ' + MOVE[arg.mode].label.toLowerCase() : '');
+      case 'bound': return 'bound to ' + this.where(arg);
+      case 'assault': return 'assault ' + this.where(arg);
+      case 'suppress': return 'suppress ' + this.where(arg);
+      case 'launcher': return '40 mike-mike on ' + this.where(arg);
+      case 'frag': return 'frag ' + this.where(arg);
+      case 'engage': return 'engage the enemy ' + arg.title.toLowerCase();
+      case 'face': return 'watch bearing ' + pad3(bearing(G.squads.blue.all[0].x, G.squads.blue.all[0].y, arg.x, arg.y));
+      case 'posture': return { stand: 'get up', kneel: 'take a knee', prone: 'get down' }[arg];
+      case 'fire': return { free: 'fire at will', return: 'return fire only', hold: 'hold fire' }[arg];
+      case 'formation': return 'go to ' + FORMATIONS[arg].label.toLowerCase();
+      case 'halt': return 'halt';
+      case 'cover': return 'take cover';
+      case 'fallback': return 'fall back';
+      case 'lift': return 'lift fire';
+    }
+    return type;
+  },
+
+  delayFor(sel) {
+    const m = selMembers(sel).filter(commandable);
+    let d = 2 + rand() * 2;
+    const teams = [...new Set(m.map(s => s.team))];
+    if (teams.some(t => t.num && (!t.leader || t.leader.billet !== 'TL'))) d += 3;
+    const supp = m.length ? m.reduce((n, s) => n + s.supp, 0) / m.length : 0;
+    d += supp / 100 * 4;
+    if (!G.squads.blue.all.some(s => s.billet === 'SL' && s.active)) d += 2;
+    return d * (1.6 - 0.8 * Plan.conf);
+  },
+
+  send(sel, type, arg) {
+    if (type === 'move') arg = { x: arg.x, y: arg.y, mode: G.ui.moveMode };
+    const to = this.callsign(sel);
+    G.log(this.sender() + ': ' + to + ', ' + this.text(type, arg) + ', over.', 'radio');
+    this.queue.push({ due: G.time + this.delayFor(sel), sel, type, arg, to });
+  },
+
+  update() {
+    if (!this.queue.length) return;
+    const due = this.queue.filter(q => q.due <= G.time);
+    if (!due.length) return;
+    this.queue = this.queue.filter(q => q.due > G.time);
+    for (const q of due) {
+      const m = selMembers(q.sel).filter(commandable);
+      if (!m.length) { G.log(q.to + ': (no answer)', 'radio'); continue; }
+      const underFire = m.some(s => G.time - s.team.lastFiredUpon < 3);
+      if (chance((1 - Plan.conf) * (underFire ? 0.35 : 0.12))) { G.log(q.to + ': Say again, over.', 'radio'); continue; }
+      G.log(q.to + ': Roger, out.', 'radio');
+      G.radioDelivering = true;
+      try { issueOrder(q.sel, q.type, q.arg); } finally { G.radioDelivering = false; }
+    }
   },
 };
 
@@ -5033,6 +5397,7 @@ function newMission() {
   G.log(mode === 'attack' ? 'Mission: attack. Enemy squad reported holding near grid ' + gr + ', bearing ' + pad3(G.axisBearing) + '.'
     : 'Mission: meeting engagement. Enemy squad reported near grid ' + gr + ', bearing ' + pad3(G.axisBearing) + ', moving toward you.', 'info');
   Plan.reset();
+  Radio.reset();
   G.log('Order received. The planning clock is running: ' + fmtClock(Plan.timeAvail) + ' available, use about a third.', 'plan');
   OPORD.show('O');
   UI.refreshBar();
@@ -5145,6 +5510,7 @@ function update(dt) {
   G.controllers = G.controllers.filter(c => !c.done);
   updateAI(dt);
   Plan.update(dt);
+  Radio.update();
   for (const s of G.soldiers) {
     if (!s.alive || s.routed) continue;
     updateSuppression(s, dt);

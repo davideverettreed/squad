@@ -96,6 +96,7 @@ function newMission() {
   G.log(mode === 'attack' ? 'Mission: attack. Enemy squad reported holding near grid ' + gr + ', bearing ' + pad3(G.axisBearing) + '.'
     : 'Mission: meeting engagement. Enemy squad reported near grid ' + gr + ', bearing ' + pad3(G.axisBearing) + ', moving toward you.', 'info');
   Plan.reset();
+  Radio.reset();
   G.log('Order received. The planning clock is running: ' + fmtClock(Plan.timeAvail) + ' available, use about a third.', 'plan');
   OPORD.show('O');
   UI.refreshBar();
@@ -208,6 +209,7 @@ function update(dt) {
   G.controllers = G.controllers.filter(c => !c.done);
   updateAI(dt);
   Plan.update(dt);
+  Radio.update();
   for (const s of G.soldiers) {
     if (!s.alive || s.routed) continue;
     updateSuppression(s, dt);

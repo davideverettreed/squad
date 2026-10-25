@@ -87,9 +87,44 @@ function squadMove(sq, x, y, mode) {
   }
 }
 
+// Move along a route: one route is plotted through the waypoints and every man keeps his
+// formation station on it (team slot, plus the team's place in the squad).
+function routeMove(sel, pts, mode) {
+  const members = selMembers(sel).filter(commandable);
+  if (!members.length || pts.length < 2) return;
+  const c = centroid(members);
+  let route = [], px = c.x, py = c.y;
+  for (const p of pts) {
+    const leg = G.map.findPath(px, py, p.x, p.y) || [{ x: p.x, y: p.y }];
+    route = route.concat(leg);
+    px = p.x; py = p.y;
+  }
+  const sq = sel.squad, teams = sq.teams.filter(t => t.members.some(commandable));
+  for (const s of members) {
+    let ox = 0, oy = 0;
+    if (s.team.num) {
+      const i = s.team.members.filter(commandable).indexOf(s), o = teamSlot(s.team.formation, Math.max(0, i));
+      ox += o.x; oy += o.y;
+      if (sel.level === 'squad') { const k = teams.indexOf(s.team), q = squadSlot(sq.formation, Math.max(0, k), teams.length); ox += q.x; oy += q.y; }
+    } else if (sel.level === 'squad') { const q = squadLeaderSlot(sq.formation); ox = q.x; oy = q.y; }
+    s.path = G.map.offsetPath(s.x, s.y, route, ox, oy);
+    s.moveMode = mode; s.faceAngle = null; s.assault = false;
+  }
+}
+
+// Occupy a fighting position: men spread along a line across the sector's center, 6 m apart.
+function occupyPosition(sel, g) {
+  const members = selMembers(sel).filter(commandable);
+  const nx = -Math.sin(g.dir), ny = Math.cos(g.dir);
+  members.forEach((s, i) => {
+    const off = (i - (members.length - 1) / 2) * 6;
+    orderMove(s, g.pts[0].x + nx * off, g.pts[0].y + ny * off, 'walk');
+  });
+}
+
 function groupMove(sel, x, y, mode) {
   const members = selMembers(sel);
-  Plan.override(members);
+  Plan.override(members, 'move');
   releaseControllers(members);
   for (const s of members) { s.assault = false; s.launchQueue = null; }
   if (sel.level === 'soldier') orderMove(sel.soldier, x, y, mode);
@@ -205,15 +240,17 @@ function boundElements(sel) {
 
 // ---------------------------------------------------------------- the order set
 function issueOrder(sel, type, arg) {
+  // After step-off the player's orders go by radio and take effect when acknowledged.
+  if (Radio.routes(sel)) { Radio.send(sel, type, arg); return; }
   const members = selMembers(sel).filter(commandable);
   const who = selName(sel);
-  Plan.override(members);
+  Plan.override(members, type);
   if (!members.length) { G.toast(who + ' cannot take orders.'); return; }
   const team = sel.level === 'soldier' ? sel.soldier.team : sel.team;
 
   switch (type) {
     case 'move':
-      groupMove(sel, arg.x, arg.y, G.ui.moveMode);
+      groupMove(sel, arg.x, arg.y, arg.mode || G.ui.moveMode);
       break;
     case 'posture':
       for (const s of members) { s.homePosture = arg; if (!s.moving) setPosture(s, arg); }

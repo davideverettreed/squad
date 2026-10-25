@@ -969,21 +969,62 @@ function drawPlan(ctx) {
       }
       ctx.shadowBlur = 0;
       label(g.name, p.x - Math.cos(a) * 14, p.y - Math.sin(a) * 14, 12);
-    } else if (g.kind === 'pl') {
+    } else if (g.kind === 'rte') {
+      const q = g.pts.map(pt => toScreen(pt.x, pt.y));
+      ctx.setLineDash([10, 5]);
+      ctx.beginPath(); q.forEach((pt, i) => i ? ctx.lineTo(pt.x, pt.y) : ctx.moveTo(pt.x, pt.y)); ctx.stroke();
+      ctx.setLineDash([]);
+      for (const pt of q.slice(1, -1)) { ctx.beginPath(); ctx.arc(pt.x, pt.y, 3.5, 0, Math.PI * 2); ctx.fill(); }
+      arrowHead(ctx, q[q.length - 2], q[q.length - 1], 10, true);
+      ctx.shadowBlur = 0;
+      const m = Math.floor((q.length - 1) / 2), mx = (q[m].x + q[m + 1].x) / 2, my = (q[m].y + q[m + 1].y) / 2;
+      label(g.name, mx, my - 12, 13);
+    } else if (g.kind === 'fp') {
+      // Fighting position: a bracket open to the rear, with the sector's left and right limits.
+      const a = g.dir, L = Math.max(70, 150 * z), w = 14, nx = -Math.sin(a), ny = Math.cos(a);
+      ctx.beginPath();
+      ctx.moveTo(p.x + nx * w - Math.cos(a) * 8, p.y + ny * w - Math.sin(a) * 8);
+      ctx.lineTo(p.x + nx * w, p.y + ny * w);
+      ctx.lineTo(p.x - nx * w, p.y - ny * w);
+      ctx.lineTo(p.x - nx * w - Math.cos(a) * 8, p.y - ny * w - Math.sin(a) * 8);
+      ctx.stroke();
+      ctx.shadowBlur = 0;
+      ctx.setLineDash([6, 5]); ctx.lineWidth = 1.5;
+      ctx.beginPath();
+      for (const d of [-g.width / 2, g.width / 2]) { ctx.moveTo(p.x, p.y); ctx.lineTo(p.x + Math.cos(a + d) * L, p.y + Math.sin(a + d) * L); }
+      ctx.stroke(); ctx.setLineDash([]);
+      label(g.name, p.x - Math.cos(a) * 18, p.y - Math.sin(a) * 18, 12);
+    } else if (g.kind === 'trp') {
+      ctx.beginPath(); ctx.arc(p.x, p.y, 9, 0, Math.PI * 2); ctx.stroke();
+      ctx.beginPath(); ctx.moveTo(p.x - 13, p.y); ctx.lineTo(p.x + 13, p.y); ctx.moveTo(p.x, p.y - 13); ctx.lineTo(p.x, p.y + 13); ctx.stroke();
+      ctx.shadowBlur = 0;
+      label(g.name, p.x + 16, p.y - 12, 12, 'left');
+    } else if (g.kind === 'pl' || g.kind === 'loa') {
       const q = g.pts.map(pt => toScreen(pt.x, pt.y));
       ctx.beginPath(); q.forEach((pt, i) => i ? ctx.lineTo(pt.x, pt.y) : ctx.moveTo(pt.x, pt.y)); ctx.stroke();
       ctx.shadowBlur = 0;
       label(g.name, q[0].x, q[0].y - 12, 13);
       label(g.name, q[q.length - 1].x, q[q.length - 1].y - 12, 13);
-    } else if (g.kind === 'ccp') {
+    } else if (g.kind === 'ccp' || g.kind === 'rly' || g.kind === 'rel') {
+      const t = g.kind === 'ccp' ? g.name.replace(/\s*1$/, '') : g.name;
+      ctx.font = '700 12px "Saira Condensed", "Arial Narrow", sans-serif';
+      const bw = Math.max(36, ctx.measureText(t).width + 12);
       ctx.fillStyle = 'rgba(247,245,236,0.9)';
-      ctx.fillRect(p.x - 18, p.y - 10, 36, 20); ctx.strokeRect(p.x - 18, p.y - 10, 36, 20);
+      ctx.fillRect(p.x - bw / 2, p.y - 10, bw, 20); ctx.strokeRect(p.x - bw / 2, p.y - 10, bw, 20);
       ctx.shadowBlur = 0;
-      label(g.name.replace(/\s*1$/, ''), p.x, p.y + 1, 12);
+      label(t, p.x, p.y + 1, 12);
     }
     ctx.shadowBlur = 0;
   }
-  // First end of a phase line being drawn.
+  // A route being drawn.
+  if (Plan.routeDraft && Plan.routeDraft.length) {
+    const q = Plan.routeDraft.map(pt => toScreen(pt.x, pt.y));
+    ctx.strokeStyle = OVL.blue; ctx.fillStyle = OVL.blue; ctx.lineWidth = 2; ctx.setLineDash([10, 5]);
+    ctx.beginPath(); q.forEach((pt, i) => i ? ctx.lineTo(pt.x, pt.y) : ctx.moveTo(pt.x, pt.y)); ctx.stroke();
+    ctx.setLineDash([]);
+    for (const pt of q) { ctx.beginPath(); ctx.arc(pt.x, pt.y, 4, 0, Math.PI * 2); ctx.fill(); }
+  }
+  // First end of a line being drawn.
   if (Plan.plStart) {
     const p = toScreen(Plan.plStart.x, Plan.plStart.y);
     ctx.fillStyle = OVL.blue; ctx.beginPath(); ctx.arc(p.x, p.y, 5, 0, Math.PI * 2); ctx.fill();

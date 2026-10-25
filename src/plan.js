@@ -10,9 +10,17 @@ const GRAPHIC_KINDS = {
   aslt: { label: 'Assault position', short: 'ASLT POS', numbered: true, r: 25 },
   pl:   { label: 'Phase line', short: 'PL', names: ['RED', 'BLUE', 'GOLD', 'GREEN', 'BLACK'], line: true },
   ccp:  { label: 'Casualty collection point', short: 'CCP', numbered: true },
+  rte:  { label: 'Route', short: 'RTE', names: ['GOLD', 'SILVER', 'COPPER', 'BRASS', 'STEEL'], line: true, multi: true },
+  fp:   { label: 'Fighting position', short: 'FP', numbered: true },
+  loa:  { label: 'Limit of advance', short: 'LOA', single: true, line: true },
+  rly:  { label: 'Rally point', short: 'RLY PT', numbered: true },
+  rel:  { label: 'Release point', short: 'RP', numbered: true },
+  trp:  { label: 'Target reference point', short: 'TRP', numbered: true },
 };
 const TASKS = {
   move:     { label: 'Move to', where: true },
+  route:    { label: 'Move along route', where: true, whereKinds: ['rte'] },
+  occupy:   { label: 'Occupy fighting position', where: true, whereKinds: ['fp'] },
   bound:    { label: 'Bound to', where: true },
   sbf:      { label: 'Support by fire from', where: true, target: true },
   suppress: { label: 'Suppress', target: true },
@@ -44,6 +52,7 @@ const Plan = {
     this.phase = 'planning'; this.stepOff = null; this.planStart = G.time; this.planUsed = 0;
     this.signals = {}; this.contact = false; this.tool = null; this.plStart = null; this.selected = null; this.drag = null;
     this.crossings = new Map(); this.timer = 0;
+    this.conf = 1; this.score = null; this.routeDraft = null; this.loaSide = null;
     // The report is a little off, as reports are.
     this.reported = { x: clamp(G.enemyArea.x + gauss() * 50, 30, MAP_W - 30), y: clamp(G.enemyArea.y + gauss() * 50, 30, MAP_H - 30) };
     const sep = dist(centroid(G.squads.blue.all).x, centroid(G.squads.blue.all).y, this.reported.x, this.reported.y);
@@ -85,11 +94,14 @@ const Plan = {
   // ---------------------------------------------------------------- control measures
   nextName(kind) {
     const K = GRAPHIC_KINDS[kind], used = this.graphics.filter(g => g.kind === kind).map(g => g.name);
+    if (K.single && !used.includes(K.short)) return K.short;
     if (K.names) return (K.short + ' ' + (K.names.find(n => !used.includes(K.short + ' ' + n)) || K.names[0]));
     for (let n = 1; ; n++) if (!used.includes(K.short + ' ' + n)) return K.short + ' ' + n;
   },
   addGraphic(kind, pts) {
     const g = { id: this.nextId++, kind, name: this.nextName(kind), pts: pts.map(p => ({ x: p.x, y: p.y })), r: GRAPHIC_KINDS[kind].r || 0 };
+    // A fighting position faces the reported enemy, with a 90 degree sector, until changed.
+    if (kind === 'fp') { g.dir = angleTo(pts[0].x, pts[0].y, this.reported.x, this.reported.y); g.width = Math.PI / 2; }
     this.graphics.push(g);
     return g;
   },
@@ -98,13 +110,23 @@ const Plan = {
     for (const l of this.lines) { if (l.where === id) l.where = null; if (l.target === id) l.target = null; }
     if (this.selected === id) this.selected = null;
   },
-  // Tap on the map with a tool chosen: place it. A phase line takes two taps.
+  // Tap on the map with a tool chosen: place it. Lines take two taps; a route takes a tap
+  // for each waypoint and ends with Finish route (or a tap on its last point).
   place(w) {
-    const kind = this.tool;
+    const kind = this.tool, K = GRAPHIC_KINDS[kind];
     if (!kind) return false;
-    if (GRAPHIC_KINDS[kind].line) {
-      if (!this.plStart) { this.plStart = { x: w.x, y: w.y }; G.toast('Tap the other end of the phase line.'); return true; }
-      const g = this.addGraphic('pl', [this.plStart, w]);
+    if (K.multi) {
+      this.routeDraft = this.routeDraft || [];
+      const last = this.routeDraft[this.routeDraft.length - 1];
+      if (last && this.routeDraft.length > 1 && dist(last.x, last.y, w.x, w.y) < 18 / R.cam.zoom) return this.finishRoute();
+      this.routeDraft.push({ x: w.x, y: w.y });
+      G.toast('Waypoint ' + this.routeDraft.length + '. Tap the next one, or Finish route.');
+      OPORD.refresh();
+      return true;
+    }
+    if (K.line) {
+      if (!this.plStart) { this.plStart = { x: w.x, y: w.y }; G.toast('Tap the other end of the ' + K.label.toLowerCase() + '.'); return true; }
+      const g = this.addGraphic(kind, [this.plStart, w]);
       this.plStart = null; this.tool = null; this.selected = g.id;
     } else {
       const g = this.addGraphic(kind, [w]);
@@ -113,14 +135,23 @@ const Plan = {
     OPORD.refresh();
     return true;
   },
+  finishRoute() {
+    const pts = this.routeDraft || [];
+    if (pts.length >= 2) { const g = this.addGraphic('rte', pts); this.selected = g.id; }
+    else G.toast('A route needs at least two waypoints.');
+    this.routeDraft = null; this.tool = null;
+    OPORD.refresh();
+    return true;
+  },
   anchor(g) {
-    if (g.kind === 'pl') return { x: (g.pts[0].x + g.pts[g.pts.length - 1].x) / 2, y: (g.pts[0].y + g.pts[g.pts.length - 1].y) / 2 };
+    if (g.kind === 'rte') return g.pts[g.pts.length - 1];
+    if (g.kind === 'pl' || g.kind === 'loa') return { x: (g.pts[0].x + g.pts[g.pts.length - 1].x) / 2, y: (g.pts[0].y + g.pts[g.pts.length - 1].y) / 2 };
     return g.pts[0];
   },
   hitGraphic(sx, sy) {
     let best = null, bd = 22;
     for (const g of this.graphics) {
-      if (g.kind === 'pl') {
+      if (GRAPHIC_KINDS[g.kind].line) {
         for (let i = 0; i < g.pts.length; i++) {
           const p = toScreen(g.pts[i].x, g.pts[i].y), d = Math.hypot(p.x - sx, p.y - sy);
           if (d < bd) { bd = d; best = { g, idx: i }; }
@@ -158,6 +189,8 @@ const Plan = {
     let what;
     switch (l.task) {
       case 'move': what = 'moves to ' + where + ' (' + MOVE[l.mode].label.toLowerCase() + ')'; break;
+      case 'route': what = 'moves along ' + where + ' to its end (' + MOVE[l.mode].label.toLowerCase() + ')'; break;
+      case 'occupy': { const g = this.graphic(l.where); what = 'occupies ' + where + (g ? ', sector of fire ' + pad3(Math.round(((g.dir * 180 / Math.PI) + 90 + 360) % 360)) + '°' : ''); break; }
       case 'bound': what = 'bounds by overwatch to ' + where; break;
       case 'sbf': what = 'occupies ' + where + ' and supports by fire onto ' + tgt; break;
       case 'suppress': what = 'suppresses ' + tgt; break;
@@ -171,6 +204,7 @@ const Plan = {
   problems(l) {
     const T = TASKS[l.task];
     if (T.where && !this.graphic(l.where)) return 'Choose where.';
+    if (T.whereKinds && !T.whereKinds.includes(this.graphic(l.where).kind)) return 'Choose a ' + GRAPHIC_KINDS[T.whereKinds[0]].label.toLowerCase() + '.';
     if (T.target && !this.graphic(l.target)) return 'Choose a target.';
     return '';
   },
@@ -182,15 +216,53 @@ const Plan = {
     this.phase = 'execution';
     this.stepOff = G.time;
     this.tool = null; this.plStart = null;
-    // Time taken beyond the leader's third is time the fire teams did not have.
-    const third = this.timeAvail / 3, over = clamp(this.planUsed / third - 1, 0, 1);
-    if (over > 0) {
-      G.squads.blue.training *= 1 + 0.15 * over;
-      G.log('Planning took ' + fmtClock(this.planUsed) + ', past the one-third mark (' + fmtClock(third) + '). The fire teams had little time to prepare.', 'warn');
-    }
+    // The plan is graded, and the grade becomes the squad's confidence: how steady the men
+    // are under fire, how fast they break, how quickly they act on radio orders.
+    this.score = this.gradeScore();
+    this.conf = this.score / 100;
+    const sq = G.squads.blue;
+    sq.morale = 60 + 32 * this.conf;
+    for (const t of [sq.hq, ...sq.teams]) t.morale = sq.morale;
+    sq.training = 0.85 * (1.15 - 0.3 * this.conf);
+    G.log('Plan grade ' + this.letter(this.score) + ' (' + Math.round(this.score) + '). Squad confidence: ' + this.confName() + '.', this.score >= 65 ? 'plan' : 'warn');
+    if (!this.lines.length) G.log('Stepped off without a plan. The fire teams are unsure what is wanted of them.', 'warn');
     G.log('Squad stepping off. H-hour.', 'plan');
+    OPORD.refresh();
     this.timer = 0;
     this.update(0, true);
+  },
+
+  // ---------------------------------------------------------------- plan grade
+  gradeItems() {
+    const kinds = new Set(this.graphics.map(g => g.kind));
+    const tasked = ['t1', 't2', 't3'].filter(u => this.lines.some(l => l.unit === u || (l.unit === 'squad' && !TASKS[l.task].noUnit)));
+    const used = this.planning ? G.time - this.planStart : this.planUsed, third = this.timeAvail / 3;
+    return [
+      ['Objective on the map', kinds.has('obj') ? 1 : 0, 15],
+      ['Every fire team has a task', tasked.length / 3, 20],
+      ['Base of fire designated', this.lines.some(l => l.task === 'sbf' || l.task === 'suppress' || l.task === 'occupy') ? 1 : 0, 15],
+      ['Control measures (CP, route, PL, LOA, RP)', ['cp', 'rte', 'pl', 'loa', 'rel'].some(k => kinds.has(k)) ? 1 : 0, 10],
+      ['Signals planned', this.lines.some(l => l.trigger === 'signal' || l.task === 'signal') ? 1 : 0, 10],
+      ['CCP placed', kinds.has('ccp') ? 1 : 0, 10],
+      ['Planned within your third', used <= third ? 1 : used <= third * 1.5 ? 0.5 : 0, 20],
+    ];
+  },
+  gradeScore() { return this.gradeItems().reduce((n, [, v, w]) => n + v * w, 0); },
+  letter(s) { return s >= 90 ? 'A' : s >= 75 ? 'B' : s >= 60 ? 'C' : s >= 40 ? 'D' : 'F'; },
+  confName() { const c = this.conf; return c >= 0.85 ? 'high' : c >= 0.65 ? 'steady' : c >= 0.4 ? 'uncertain' : 'shaken'; },
+
+  // After-action grade: the plan, the result, the cost and the time, weighted.
+  afterAction(result) {
+    const blue = G.squads.blue.all;
+    const kia = blue.filter(s => s.health === 'kia').length, ser = blue.filter(s => s.health === 'serious').length, wia = blue.filter(s => s.health === 'light').length;
+    const plan = this.score != null ? this.score : 0;
+    const res = result === 'victory' ? 100 : 0;
+    const cas = Math.max(0, 100 - 15 * kia - 8 * ser - 3 * wia);
+    const t = this.stepOff != null ? G.time - this.stepOff : G.time;
+    const time = result !== 'victory' ? 0 : t <= this.timeAvail ? 100 : clamp(100 - (t - this.timeAvail) / this.timeAvail * 100, 0, 100);
+    const rows = [['Plan', plan, 25], ['Result', res, 35], ['Casualties', cas, 25], ['Time', time, 15]];
+    const total = rows.reduce((n, [, v, w]) => n + v * w / 100, 0);
+    return { rows, total, letter: this.letter(total), kia, ser, wia, t };
   },
 
   unitSel(u) {
@@ -229,7 +301,30 @@ const Plan = {
       else if (l.status === 'active') this.check(l);
     });
     this.checkPhaseLines();
+    this.checkLOA();
     OPORD.refreshTracker();
+  },
+
+  // Nobody crosses the limit of advance: a man who reaches it halts there.
+  checkLOA() {
+    const loas = this.graphics.filter(g => g.kind === 'loa');
+    if (!loas.length) return;
+    this.loaSide = this.loaSide || new Map();
+    for (const s of G.squads.blue.all) {
+      if (!s.active) continue;
+      for (const g of loas) {
+        const a = g.pts[0], b = g.pts[1], key = s.id + ':' + g.id;
+        const side = Math.sign((b.x - a.x) * (s.y - a.y) - (b.y - a.y) * (s.x - a.x));
+        const len = dist(a.x, a.y, b.x, b.y), proj = ((s.x - a.x) * (b.x - a.x) + (s.y - a.y) * (b.y - a.y)) / (len * len);
+        if (!this.loaSide.has(key)) { this.loaSide.set(key, side); continue; }
+        if (side && side !== this.loaSide.get(key) && proj > -0.1 && proj < 1.1 && s.moving) {
+          s.path = []; s.assault = false;
+          releaseControllers([s]);
+          this.loaSide.set(key, side); // an order to go on past it is obeyed
+          if (!s.team.atLOA) { s.team.atLOA = true; G.log(s.team.short + ': At the ' + g.name + ', halting.', 'plan'); }
+        }
+      }
+    }
   },
 
   start(l) {
@@ -249,6 +344,8 @@ const Plan = {
     try {
       switch (l.task) {
         case 'move': groupMove(sel, this.anchor(where).x, this.anchor(where).y, l.mode); break;
+        case 'route': routeMove(sel, where.pts, l.mode); break;
+        case 'occupy': occupyPosition(sel, where); l.stage = 'moving'; break;
         case 'bound': issueOrder(sel, 'bound', this.anchor(where)); break;
         case 'assault': issueOrder(sel, 'assault', this.anchor(tgt)); break;
         case 'sbf': groupMove(sel, this.anchor(where).x, this.anchor(where).y, l.mode); l.stage = 'moving'; break;
@@ -275,7 +372,11 @@ const Plan = {
         return;
       }
     }
-    if (l.task === 'sbf' && l.stage === 'moving') {
+    if (l.task === 'occupy' && l.stage === 'moving') {
+      const g = this.graphic(l.where), aim = { x: g.pts[0].x + Math.cos(g.dir) * 150, y: g.pts[0].y + Math.sin(g.dir) * 150 };
+      for (const s of m) { s.faceAngle = g.dir; s.homePosture = firingPosture(s, aim.x, aim.y); s.fireControl = 'free'; }
+      G.log(PLAN_UNITS[l.unit] + ': Set in ' + g.name + ', watching the sector.', 'plan');
+    } else if (l.task === 'sbf' && l.stage === 'moving') {
       G.execIssuing = true;
       try {
         const sel = this.unitSel(l.unit);
@@ -301,12 +402,15 @@ const Plan = {
     if (l && (l.status === 'pending' || l.status === 'stalled') && !this.planning) { this.start(l); OPORD.refreshTracker(); }
   },
 
-  // A direct order to men in an active line takes them off the plan for that line.
-  override(members) {
+  // A direct order that moves men takes their line off the plan, if it moves at least half
+  // of the line's men. Posture and fire orders leave the plan running.
+  override(members, type) {
     if (this.planning || G.execIssuing) return;
+    if (type && !['move', 'bound', 'assault', 'halt', 'cover', 'fallback'].includes(type)) return;
     for (const l of this.lines) {
       if (l.status !== 'active') continue;
-      if (this.liveMembers(l.unit).some(s => members.includes(s))) {
+      const lm = this.liveMembers(l.unit);
+      if (lm.filter(s => members.includes(s)).length * 2 >= lm.length) {
         l.status = 'overridden';
         G.log('Line ' + (this.lines.indexOf(l) + 1) + ' overridden by your order.', 'plan');
       }
@@ -458,6 +562,9 @@ const Plan = {
     this.addLine({ trigger: 'signal', signal: 'red', unit: 't2', task: 'assault', target: obj.id });
     this.addLine({ trigger: 'with', unit: 't3', task: 'assault', target: obj.id });
     this.addLine({ trigger: 'signal', signal: 'green', unit: base, task: 'lift' });
+    // A limit of advance just past the objective stops the assault running on.
+    const fwd = angleTo(aslt.pts[0].x, aslt.pts[0].y, o.x, o.y), lx = o.x + Math.cos(fwd) * 80, ly = o.y + Math.sin(fwd) * 80;
+    this.addGraphic('loa', [{ x: lx - Math.sin(fwd) * 140, y: ly + Math.cos(fwd) * 140 }, { x: lx + Math.sin(fwd) * 140, y: ly - Math.cos(fwd) * 140 }]);
     OPORD.refresh();
   },
 
@@ -480,16 +587,25 @@ const Plan = {
       const s = view * 2 + (ter === TER.WOODS ? 3 : ter === TER.GRASS || ter === TER.ORCHARD || ter === TER.VINEYARD ? 1.5 : 0) + G.map.elevAt(px, py) * 0.05;
       if (s > bs) { bs = s; best = { x: px, y: py }; }
     }
-    const cp = this.addGraphic('cp', [best]);
+    const cp = this.addGraphic('rel', [best]);
     const obj = this.addGraphic('obj', [o]);
     const pa = { x: best.x + Math.cos(ax) * 200, y: best.y + Math.sin(ax) * 200 };
     const nx = -Math.sin(ax), ny = Math.cos(ax);
     this.addGraphic('pl', [{ x: pa.x + nx * 250, y: pa.y + ny * 250 }, { x: pa.x - nx * 250, y: pa.y - ny * 250 }]);
     this.addGraphic('ccp', [{ x: lerp(b.x, best.x, 0.6), y: lerp(b.y, best.y, 0.6) }]);
-    G.squads.blue.formation = 'line';
+    const rly = this.addGraphic('rly', [{ x: best.x - Math.cos(ax) * 150, y: best.y - Math.sin(ax) * 150 }]);
+    // Three fighting positions in line across the approach, 35 m apart, sectors overlapping.
+    const fps = [-1, 0, 1].map(k => {
+      const g = this.addGraphic('fp', [{ x: best.x + nx * 35 * k, y: best.y + ny * 35 * k }]);
+      g.dir = ax - k * 0.25; g.width = Math.PI / 2;
+      return g;
+    });
     this.addLine({ trigger: 'start', unit: 'squad', task: 'move', where: cp.id, mode: 'walk' });
-    this.addLine({ trigger: 'after', unit: 'squad', task: 'hold' });
+    this.addLine({ trigger: 'after', unit: 't1', task: 'occupy', where: fps[1].id });
+    this.addLine({ trigger: 'with', unit: 't2', task: 'occupy', where: fps[0].id });
+    this.addLine({ trigger: 'with', unit: 't3', task: 'occupy', where: fps[2].id });
     this.addLine({ trigger: 'contact', unit: 't1', task: 'suppress', target: obj.id });
+    this.addLine({ trigger: 'signal', signal: 'white', unit: 'squad', task: 'move', where: rly.id, mode: 'rush' });
     OPORD.refresh();
   },
 };
