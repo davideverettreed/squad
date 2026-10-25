@@ -249,7 +249,7 @@ const UI = {
   refreshBar() {
     const planning = G.running && Plan.planning;
     $('clock').textContent = !G.running || !Plan.timeAvail ? fmtClock(G.time)
-      : planning ? 'PLAN ' + fmtClock(G.time - Plan.planStart) : 'H+' + fmtClock(G.time - Plan.stepOff);
+      : planning ? Plan.countdown() : 'H+' + fmtClock(G.time - Plan.stepOff);
     $('btnSpeed').disabled = planning;
     OPORD.refreshClock();
     $('btnPause').textContent = G.paused ? 'Resume' : 'Pause';

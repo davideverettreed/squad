@@ -138,6 +138,7 @@ body.opord-open #log { right: calc(max(8px, env(safe-area-inset-right, 0px)) + 4
 .ohead { display: flex; align-items: center; gap: 8px; padding: 8px 10px; border-bottom: 1px solid var(--line); }
 .pclock { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 2px; }
 .pcl { font: 600 15px/1 var(--mono); color: var(--accent); font-variant-numeric: tabular-nums; }
+.pcl.over { color: var(--bad); }
 .pcs { font: 500 11px/1.2 var(--mono); color: var(--muted); }
 .pbar { position: relative; height: 5px; background: #33392a; border-radius: 3px; margin-top: 3px; }
 .pbar i { display: block; height: 100%; border-radius: 3px; background: var(--ok); }
@@ -163,6 +164,7 @@ body.opord-open #log { right: calc(max(8px, env(safe-area-inset-right, 0px)) + 4
 .ofact:has(.sigdot) { grid-template-columns: 16px 130px 1fr; }
 .omission { margin: 4px 0; padding: 10px 12px; border-left: 3px solid var(--accent); background: rgba(255, 224, 102, 0.07); font: 600 16px/1.45 var(--display); }
 .otools { display: flex; flex-wrap: wrap; gap: 4px; }
+.otoggle { display: flex; gap: 8px; align-items: center; font: 400 14px/1.3 var(--display); cursor: pointer; }
 .obtn.mini { min-height: 26px; padding: 4px 8px; font-size: 12px; }
 .obtn.sig { border-color: var(--sig); color: var(--ink); box-shadow: inset 4px 0 0 var(--sig); }
 .obtn.sig.fired { opacity: 0.55; }
@@ -3317,8 +3319,54 @@ function drawCones(ctx) {
 // ---------------------------------------------------------------- the plan's control measures
 // Friendly control measures in blue, as drawn on an acetate overlay (ADP 1-02 forms):
 // checkpoint, objective, support-by-fire position, assault position, phase line, CCP.
+// Orientation marks. Key terrain is marked as on a terrain overlay, with a circled K, and
+// named on a flag; our assembly area is a blue outline (AA); the reported enemy is the
+// hostile infantry symbol in a dashed frame, as suspected.
+function drawTerrainMarks(ctx) {
+  if (!Plan.terrain || !Plan.showTerrain) return;
+  const flag = (x, y, text, color) => {
+    const top = y - 46;
+    ctx.strokeStyle = color; ctx.lineWidth = 1.6;
+    ctx.beginPath(); ctx.moveTo(x, y - 10); ctx.lineTo(x, top); ctx.stroke();
+    ctx.font = '700 12px "Saira Condensed", "Arial Narrow", sans-serif';
+    const w = ctx.measureText(text).width + 14, h = 17;
+    ctx.fillStyle = 'rgba(250,248,240,0.96)';
+    ctx.beginPath(); ctx.moveTo(x, top); ctx.lineTo(x + w, top); ctx.lineTo(x + w - 6, top + h / 2); ctx.lineTo(x + w, top + h); ctx.lineTo(x, top + h); ctx.closePath();
+    ctx.fill(); ctx.stroke();
+    ctx.fillStyle = color; ctx.textAlign = 'left'; ctx.textBaseline = 'middle';
+    ctx.fillText(text, x + 5, top + h / 2 + 0.5);
+  };
+  for (const k of Plan.terrain) {
+    const p = toScreen(k.x, k.y);
+    if (p.x < -80 || p.y < -80 || p.x > R.w + 200 || p.y > R.h + 80) continue;
+    if (k.kind === 'aa') {
+      const rr = Math.max(26, 60 * R.cam.zoom);
+      ctx.strokeStyle = OVL.blue; ctx.lineWidth = 2.2;
+      ctx.beginPath();
+      for (let i = 0; i <= 30; i++) { const a = i / 30 * Math.PI * 2, w = 1 + 0.08 * Math.sin(a * 4); i ? ctx.lineTo(p.x + Math.cos(a) * rr * w, p.y + Math.sin(a) * rr * 0.75 * w) : ctx.moveTo(p.x + rr * w, p.y); }
+      ctx.closePath(); ctx.stroke();
+      ctx.font = '700 13px "Saira Condensed", "Arial Narrow", sans-serif'; ctx.fillStyle = OVL.blue; ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+      ctx.fillText('AA', p.x, p.y - rr * 0.75 - 9);
+    } else if (k.kind === 'eny') {
+      ctx.save();
+      ctx.globalAlpha = 0.9;
+      drawUnitSymbol(ctx, p.x, p.y, 16, 'red', 'squad', { fill: 'rgba(255,128,128,0.25)', ink: OVL.red, dashed: true });
+      ctx.restore();
+      flag(p.x + 14, p.y, k.name, OVL.red);
+    } else {
+      // Circled K on the spot, with the name on a flag.
+      ctx.fillStyle = 'rgba(250,248,240,0.9)'; ctx.strokeStyle = MAP_INK; ctx.lineWidth = 2;
+      ctx.beginPath(); ctx.arc(p.x, p.y, 10, 0, Math.PI * 2); ctx.fill(); ctx.stroke();
+      ctx.font = '700 13px "Saira Condensed", "Arial Narrow", sans-serif'; ctx.fillStyle = MAP_INK;
+      ctx.textAlign = 'center'; ctx.textBaseline = 'middle'; ctx.fillText('K', p.x, p.y + 1);
+      flag(p.x, p.y, k.name, MAP_INK);
+    }
+  }
+}
+
 function drawPlan(ctx) {
   if (!G.squads.blue || !Plan.graphics) return;
+  drawTerrainMarks(ctx);
   const z = R.cam.zoom;
   const label = (t, x, y, size, align) => {
     ctx.font = '700 ' + size + 'px "Saira Condensed", "Arial Narrow", sans-serif';
@@ -3822,7 +3870,7 @@ const UI = {
   refreshBar() {
     const planning = G.running && Plan.planning;
     $('clock').textContent = !G.running || !Plan.timeAvail ? fmtClock(G.time)
-      : planning ? 'PLAN ' + fmtClock(G.time - Plan.planStart) : 'H+' + fmtClock(G.time - Plan.stepOff);
+      : planning ? Plan.countdown() : 'H+' + fmtClock(G.time - Plan.stepOff);
     $('btnSpeed').disabled = planning;
     OPORD.refreshClock();
     $('btnPause').textContent = G.paused ? 'Resume' : 'Pause';
@@ -4037,9 +4085,34 @@ const Plan = {
     // attack, until the enemy finishes digging in.
     this.timeAvail = G.mode === 'meeting' ? Math.round(sep / 1.25 / 60) * 60 : 45 * 60;
     this.intel = this.makeIntel();
+    this.terrain = this.keyTerrain();
+    this.showTerrain = true;
+  },
+
+  // Marks for the orientation: our assembly area, the reported enemy, and key terrain
+  // (hills and settlements near the axis, and the high ground on the direct line).
+  keyTerrain() {
+    const f = this.terrainFacts(), m = G.map, mid = { x: (f.b.x + f.e.x) / 2, y: (f.b.y + f.e.y) / 2 };
+    const reach = f.d / 2 + 700;
+    const out = [{ kind: 'aa', name: 'AA', x: f.b.x, y: f.b.y }, { kind: 'eny', name: 'ENY (REPORTED)', x: f.e.x, y: f.e.y }];
+    for (const p of m.peaks.filter(p => dist(p.x, p.y, mid.x, mid.y) < reach).slice(0, 3)) {
+      out.push({ kind: 'hill', name: 'HILL ' + Math.round(m.elevBase + p.e), x: p.x, y: p.y, note: 'Hilltop' });
+    }
+    if (!out.some(k => k.kind === 'hill' && dist(k.x, k.y, f.hi.x, f.hi.y) < 250)) {
+      out.push({ kind: 'hill', name: 'HIGH GROUND ' + Math.round(m.elevBase + f.hi.e), x: f.hi.x, y: f.hi.y, note: 'Highest point on the direct line' });
+    }
+    for (const p of m.places.filter(p => dist(p.x, p.y, mid.x, mid.y) < reach).slice(0, 4)) {
+      out.push({ kind: 'town', name: p.name.toUpperCase(), x: p.x, y: p.y, note: p.kind === 'village' ? 'Village' : 'Farm' });
+    }
+    return out;
   },
 
   get planning() { return this.phase === 'planning'; },
+  // Header clock while planning: time left in the leader's third, then time over it.
+  countdown() {
+    const left = this.timeAvail / 3 - (G.time - this.planStart);
+    return left >= 0 ? 'PLAN −' + fmtClock(left) : 'OVER +' + fmtClock(-left);
+  },
   graphic(id) { return this.graphics.find(g => g.id === id) || null; },
   gname(g) { return g ? g.name : '—'; },
 
@@ -4524,10 +4597,12 @@ const OPORD = {
       box.appendChild(el('span', 'pcs', 'Planning took ' + fmtClock(Plan.planUsed)));
       return;
     }
-    const used = G.time - Plan.planStart, third = Plan.timeAvail / 3;
+    const used = G.time - Plan.planStart, third = Plan.timeAvail / 3, left = third - used;
     box.innerHTML = '';
-    box.appendChild(el('span', 'pcl', 'Planning ' + fmtClock(used)));
-    box.appendChild(el('span', 'pcs', 'Your third: ' + fmtClock(third) + ' of ' + fmtClock(Plan.timeAvail) + ' available'));
+    const big = el('span', 'pcl', left >= 0 ? 'Plan ' + fmtClock(left) + ' left' : 'Over by ' + fmtClock(-left));
+    if (left < 0) big.classList.add('over');
+    box.appendChild(big);
+    box.appendChild(el('span', 'pcs', 'Time available: ' + fmtClock(Math.max(0, Plan.timeAvail - used)) + ' of ' + fmtClock(Plan.timeAvail) + ' left'));
     const bar = el('div', 'pbar'), fill = el('i'), tick = el('b');
     fill.style.width = clamp(used / Plan.timeAvail * 100, 0, 100) + '%';
     fill.dataset.state = used > third * 1.5 ? 'bad' : used > third ? 'warn' : 'ok';
@@ -4564,10 +4639,14 @@ const OPORD = {
     this.factRow(box, 'Between', f.woodsPct + '% of the direct line is woods or orchard. ' + (f.streams ? f.streams + ' stream' + (f.streams > 1 ? 's' : '') + ' to cross. ' : 'No streams on the direct line. ') + (f.roads ? f.roads + ' road crossing' + (f.roads > 1 ? 's' : '') + '.' : ''), null);
     this.factRow(box, 'High ground', 'Highest point on the direct line: ' + Math.round(m.elevBase + f.hi.e) + ' m at grid ' + gridRef(f.hi.x, f.hi.y) + '. Ground that sees the objective is key terrain.', f.hi, 1.6);
     box.appendChild(el('h4', null, 'Key terrain'));
-    const peaks = m.peaks.filter(p => dist(p.x, p.y, (f.b.x + f.e.x) / 2, (f.b.y + f.e.y) / 2) < 1400).slice(0, 3);
-    for (const p of peaks) this.factRow(box, 'Hill ' + Math.round(m.elevBase + p.e), 'Grid ' + gridRef(p.x, p.y) + '.', p, 1.4);
-    const places = m.places.filter(p => dist(p.x, p.y, (f.b.x + f.e.x) / 2, (f.b.y + f.e.y) / 2) < 1300).slice(0, 4);
-    for (const p of places) this.factRow(box, p.name, (p.kind === 'village' ? 'Village' : 'Farm') + ', grid ' + gridRef(p.x, p.y) + '.', p, 1.6);
+    const tog = el('label', 'otoggle');
+    const cb = el('input'); cb.type = 'checkbox'; cb.id = 'showTerrain'; cb.checked = Plan.showTerrain;
+    cb.addEventListener('change', () => { Plan.showTerrain = cb.checked; });
+    tog.appendChild(cb); tog.appendChild(el('span', null, 'Mark key terrain on the map (circled K)'));
+    box.appendChild(tog);
+    for (const k of Plan.terrain.filter(t => t.kind === 'hill' || t.kind === 'town')) {
+      this.factRow(box, k.name, k.note + ', grid ' + gridRef(k.x, k.y) + '.', k, 1.6);
+    }
     const all = el('button', 'obtn', 'Show both positions');
     all.addEventListener('click', () => {
       const z = Math.min(R.w / (Math.abs(f.e.x - f.b.x) + 500), (R.h - 260) / (Math.abs(f.e.y - f.b.y) + 500));
@@ -4902,14 +4981,22 @@ function newMission() {
   const mode = set.mode === 'random' ? (chance(0.5) ? 'attack' : 'meeting') : set.mode;
   G.mode = mode;
 
-  // The squads start about a kilometer apart, on a random axis.
-  const axis = randRange(0, Math.PI * 2), sep = randRange(900, 1150);
-  const mid = { x: MAP_W / 2 + randRange(-400, 400), y: MAP_H / 2 + randRange(-400, 400) };
-  const bx = clamp(mid.x - Math.cos(axis) * sep / 2, 250, MAP_W - 250), by = clamp(mid.y - Math.sin(axis) * sep / 2, 250, MAP_H - 250);
+  // The squads start 1.5 to 2.5 km apart, on a random axis, both well inside the sheet.
+  const M = 250, inside = (x, y) => x >= M && y >= M && x <= MAP_W - M && y <= MAP_H - M;
+  let axis = 0, sep = 1500, bx = M, by = M, rx = MAP_W - M, ry = MAP_H - M;
+  // Choose the distance first, then find a placement that fits, so long distances are as
+  // likely as short ones.
+  sep = randRange(1500, 2500);
+  for (let k = 0; k < 2000; k++) {
+    axis = randRange(0, Math.PI * 2);
+    bx = randRange(M, MAP_W - M); by = randRange(M, MAP_H - M);
+    rx = bx + Math.cos(axis) * sep; ry = by + Math.sin(axis) * sep;
+    if (inside(rx, ry)) break;
+  }
+  if (!inside(rx, ry)) { bx = M; by = M; rx = MAP_W - M; ry = MAP_H - M; axis = angleTo(bx, by, rx, ry); }
   const toEnemy = axis;
   placeSquad(blue, G.map, bx, by, toEnemy);
   const blueStart = { x: bx, y: by };
-  let rx = clamp(bx + Math.cos(axis) * sep, 250, MAP_W - 250), ry = clamp(by + Math.sin(axis) * sep, 250, MAP_H - 250);
 
   if (mode === 'attack') {
     // Defenders hold the nearest village or farm to their area, or the ground where they are.

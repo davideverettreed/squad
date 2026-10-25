@@ -51,9 +51,34 @@ const Plan = {
     // attack, until the enemy finishes digging in.
     this.timeAvail = G.mode === 'meeting' ? Math.round(sep / 1.25 / 60) * 60 : 45 * 60;
     this.intel = this.makeIntel();
+    this.terrain = this.keyTerrain();
+    this.showTerrain = true;
+  },
+
+  // Marks for the orientation: our assembly area, the reported enemy, and key terrain
+  // (hills and settlements near the axis, and the high ground on the direct line).
+  keyTerrain() {
+    const f = this.terrainFacts(), m = G.map, mid = { x: (f.b.x + f.e.x) / 2, y: (f.b.y + f.e.y) / 2 };
+    const reach = f.d / 2 + 700;
+    const out = [{ kind: 'aa', name: 'AA', x: f.b.x, y: f.b.y }, { kind: 'eny', name: 'ENY (REPORTED)', x: f.e.x, y: f.e.y }];
+    for (const p of m.peaks.filter(p => dist(p.x, p.y, mid.x, mid.y) < reach).slice(0, 3)) {
+      out.push({ kind: 'hill', name: 'HILL ' + Math.round(m.elevBase + p.e), x: p.x, y: p.y, note: 'Hilltop' });
+    }
+    if (!out.some(k => k.kind === 'hill' && dist(k.x, k.y, f.hi.x, f.hi.y) < 250)) {
+      out.push({ kind: 'hill', name: 'HIGH GROUND ' + Math.round(m.elevBase + f.hi.e), x: f.hi.x, y: f.hi.y, note: 'Highest point on the direct line' });
+    }
+    for (const p of m.places.filter(p => dist(p.x, p.y, mid.x, mid.y) < reach).slice(0, 4)) {
+      out.push({ kind: 'town', name: p.name.toUpperCase(), x: p.x, y: p.y, note: p.kind === 'village' ? 'Village' : 'Farm' });
+    }
+    return out;
   },
 
   get planning() { return this.phase === 'planning'; },
+  // Header clock while planning: time left in the leader's third, then time over it.
+  countdown() {
+    const left = this.timeAvail / 3 - (G.time - this.planStart);
+    return left >= 0 ? 'PLAN −' + fmtClock(left) : 'OVER +' + fmtClock(-left);
+  },
   graphic(id) { return this.graphics.find(g => g.id === id) || null; },
   gname(g) { return g ? g.name : '—'; },
 

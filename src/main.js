@@ -44,14 +44,22 @@ function newMission() {
   const mode = set.mode === 'random' ? (chance(0.5) ? 'attack' : 'meeting') : set.mode;
   G.mode = mode;
 
-  // The squads start about a kilometer apart, on a random axis.
-  const axis = randRange(0, Math.PI * 2), sep = randRange(900, 1150);
-  const mid = { x: MAP_W / 2 + randRange(-400, 400), y: MAP_H / 2 + randRange(-400, 400) };
-  const bx = clamp(mid.x - Math.cos(axis) * sep / 2, 250, MAP_W - 250), by = clamp(mid.y - Math.sin(axis) * sep / 2, 250, MAP_H - 250);
+  // The squads start 1.5 to 2.5 km apart, on a random axis, both well inside the sheet.
+  const M = 250, inside = (x, y) => x >= M && y >= M && x <= MAP_W - M && y <= MAP_H - M;
+  let axis = 0, sep = 1500, bx = M, by = M, rx = MAP_W - M, ry = MAP_H - M;
+  // Choose the distance first, then find a placement that fits, so long distances are as
+  // likely as short ones.
+  sep = randRange(1500, 2500);
+  for (let k = 0; k < 2000; k++) {
+    axis = randRange(0, Math.PI * 2);
+    bx = randRange(M, MAP_W - M); by = randRange(M, MAP_H - M);
+    rx = bx + Math.cos(axis) * sep; ry = by + Math.sin(axis) * sep;
+    if (inside(rx, ry)) break;
+  }
+  if (!inside(rx, ry)) { bx = M; by = M; rx = MAP_W - M; ry = MAP_H - M; axis = angleTo(bx, by, rx, ry); }
   const toEnemy = axis;
   placeSquad(blue, G.map, bx, by, toEnemy);
   const blueStart = { x: bx, y: by };
-  let rx = clamp(bx + Math.cos(axis) * sep, 250, MAP_W - 250), ry = clamp(by + Math.sin(axis) * sep, 250, MAP_H - 250);
 
   if (mode === 'attack') {
     // Defenders hold the nearest village or farm to their area, or the ground where they are.

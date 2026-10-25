@@ -62,10 +62,12 @@ const OPORD = {
       box.appendChild(el('span', 'pcs', 'Planning took ' + fmtClock(Plan.planUsed)));
       return;
     }
-    const used = G.time - Plan.planStart, third = Plan.timeAvail / 3;
+    const used = G.time - Plan.planStart, third = Plan.timeAvail / 3, left = third - used;
     box.innerHTML = '';
-    box.appendChild(el('span', 'pcl', 'Planning ' + fmtClock(used)));
-    box.appendChild(el('span', 'pcs', 'Your third: ' + fmtClock(third) + ' of ' + fmtClock(Plan.timeAvail) + ' available'));
+    const big = el('span', 'pcl', left >= 0 ? 'Plan ' + fmtClock(left) + ' left' : 'Over by ' + fmtClock(-left));
+    if (left < 0) big.classList.add('over');
+    box.appendChild(big);
+    box.appendChild(el('span', 'pcs', 'Time available: ' + fmtClock(Math.max(0, Plan.timeAvail - used)) + ' of ' + fmtClock(Plan.timeAvail) + ' left'));
     const bar = el('div', 'pbar'), fill = el('i'), tick = el('b');
     fill.style.width = clamp(used / Plan.timeAvail * 100, 0, 100) + '%';
     fill.dataset.state = used > third * 1.5 ? 'bad' : used > third ? 'warn' : 'ok';
@@ -102,10 +104,14 @@ const OPORD = {
     this.factRow(box, 'Between', f.woodsPct + '% of the direct line is woods or orchard. ' + (f.streams ? f.streams + ' stream' + (f.streams > 1 ? 's' : '') + ' to cross. ' : 'No streams on the direct line. ') + (f.roads ? f.roads + ' road crossing' + (f.roads > 1 ? 's' : '') + '.' : ''), null);
     this.factRow(box, 'High ground', 'Highest point on the direct line: ' + Math.round(m.elevBase + f.hi.e) + ' m at grid ' + gridRef(f.hi.x, f.hi.y) + '. Ground that sees the objective is key terrain.', f.hi, 1.6);
     box.appendChild(el('h4', null, 'Key terrain'));
-    const peaks = m.peaks.filter(p => dist(p.x, p.y, (f.b.x + f.e.x) / 2, (f.b.y + f.e.y) / 2) < 1400).slice(0, 3);
-    for (const p of peaks) this.factRow(box, 'Hill ' + Math.round(m.elevBase + p.e), 'Grid ' + gridRef(p.x, p.y) + '.', p, 1.4);
-    const places = m.places.filter(p => dist(p.x, p.y, (f.b.x + f.e.x) / 2, (f.b.y + f.e.y) / 2) < 1300).slice(0, 4);
-    for (const p of places) this.factRow(box, p.name, (p.kind === 'village' ? 'Village' : 'Farm') + ', grid ' + gridRef(p.x, p.y) + '.', p, 1.6);
+    const tog = el('label', 'otoggle');
+    const cb = el('input'); cb.type = 'checkbox'; cb.id = 'showTerrain'; cb.checked = Plan.showTerrain;
+    cb.addEventListener('change', () => { Plan.showTerrain = cb.checked; });
+    tog.appendChild(cb); tog.appendChild(el('span', null, 'Mark key terrain on the map (circled K)'));
+    box.appendChild(tog);
+    for (const k of Plan.terrain.filter(t => t.kind === 'hill' || t.kind === 'town')) {
+      this.factRow(box, k.name, k.note + ', grid ' + gridRef(k.x, k.y) + '.', k, 1.6);
+    }
     const all = el('button', 'obtn', 'Show both positions');
     all.addEventListener('click', () => {
       const z = Math.min(R.w / (Math.abs(f.e.x - f.b.x) + 500), (R.h - 260) / (Math.abs(f.e.y - f.b.y) + 500));

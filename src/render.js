@@ -876,8 +876,54 @@ function drawCones(ctx) {
 // ---------------------------------------------------------------- the plan's control measures
 // Friendly control measures in blue, as drawn on an acetate overlay (ADP 1-02 forms):
 // checkpoint, objective, support-by-fire position, assault position, phase line, CCP.
+// Orientation marks. Key terrain is marked as on a terrain overlay, with a circled K, and
+// named on a flag; our assembly area is a blue outline (AA); the reported enemy is the
+// hostile infantry symbol in a dashed frame, as suspected.
+function drawTerrainMarks(ctx) {
+  if (!Plan.terrain || !Plan.showTerrain) return;
+  const flag = (x, y, text, color) => {
+    const top = y - 46;
+    ctx.strokeStyle = color; ctx.lineWidth = 1.6;
+    ctx.beginPath(); ctx.moveTo(x, y - 10); ctx.lineTo(x, top); ctx.stroke();
+    ctx.font = '700 12px "Saira Condensed", "Arial Narrow", sans-serif';
+    const w = ctx.measureText(text).width + 14, h = 17;
+    ctx.fillStyle = 'rgba(250,248,240,0.96)';
+    ctx.beginPath(); ctx.moveTo(x, top); ctx.lineTo(x + w, top); ctx.lineTo(x + w - 6, top + h / 2); ctx.lineTo(x + w, top + h); ctx.lineTo(x, top + h); ctx.closePath();
+    ctx.fill(); ctx.stroke();
+    ctx.fillStyle = color; ctx.textAlign = 'left'; ctx.textBaseline = 'middle';
+    ctx.fillText(text, x + 5, top + h / 2 + 0.5);
+  };
+  for (const k of Plan.terrain) {
+    const p = toScreen(k.x, k.y);
+    if (p.x < -80 || p.y < -80 || p.x > R.w + 200 || p.y > R.h + 80) continue;
+    if (k.kind === 'aa') {
+      const rr = Math.max(26, 60 * R.cam.zoom);
+      ctx.strokeStyle = OVL.blue; ctx.lineWidth = 2.2;
+      ctx.beginPath();
+      for (let i = 0; i <= 30; i++) { const a = i / 30 * Math.PI * 2, w = 1 + 0.08 * Math.sin(a * 4); i ? ctx.lineTo(p.x + Math.cos(a) * rr * w, p.y + Math.sin(a) * rr * 0.75 * w) : ctx.moveTo(p.x + rr * w, p.y); }
+      ctx.closePath(); ctx.stroke();
+      ctx.font = '700 13px "Saira Condensed", "Arial Narrow", sans-serif'; ctx.fillStyle = OVL.blue; ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+      ctx.fillText('AA', p.x, p.y - rr * 0.75 - 9);
+    } else if (k.kind === 'eny') {
+      ctx.save();
+      ctx.globalAlpha = 0.9;
+      drawUnitSymbol(ctx, p.x, p.y, 16, 'red', 'squad', { fill: 'rgba(255,128,128,0.25)', ink: OVL.red, dashed: true });
+      ctx.restore();
+      flag(p.x + 14, p.y, k.name, OVL.red);
+    } else {
+      // Circled K on the spot, with the name on a flag.
+      ctx.fillStyle = 'rgba(250,248,240,0.9)'; ctx.strokeStyle = MAP_INK; ctx.lineWidth = 2;
+      ctx.beginPath(); ctx.arc(p.x, p.y, 10, 0, Math.PI * 2); ctx.fill(); ctx.stroke();
+      ctx.font = '700 13px "Saira Condensed", "Arial Narrow", sans-serif'; ctx.fillStyle = MAP_INK;
+      ctx.textAlign = 'center'; ctx.textBaseline = 'middle'; ctx.fillText('K', p.x, p.y + 1);
+      flag(p.x, p.y, k.name, MAP_INK);
+    }
+  }
+}
+
 function drawPlan(ctx) {
   if (!G.squads.blue || !Plan.graphics) return;
+  drawTerrainMarks(ctx);
   const z = R.cam.zoom;
   const label = (t, x, y, size, align) => {
     ctx.font = '700 ' + size + 'px "Saira Condensed", "Arial Narrow", sans-serif';
