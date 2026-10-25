@@ -295,7 +295,7 @@ const UI = {
     for (const t of [sq.hq, ...sq.teams]) {
       const sec = el('section', 'rteam');
       const head = el('button', 'rhead');
-      head.appendChild(el('span', 'rname', t.num ? t.name : 'Squad leader · moves with 1st FT'));
+      head.appendChild(el('span', 'rname', t.num ? t.name : 'Squad leader · with 1st FT'));
       const mor = el('span', 'rmorale');
       mor.appendChild(el('i'));
       head.appendChild(mor);
@@ -495,33 +495,90 @@ const UI = {
     recalc();
   },
 
+  // The engagement summed up as an encyclopedia battle box: name, a sketch of the field,
+  // when and where, the result, then the two sides column by column.
+  battleInfobox(result) {
+    const blue = G.squads.blue, red = G.squads.red, m = G.map;
+    const fighters = G.soldiers.filter(s => s.shots > 0);
+    const c = fighters.length ? centroid(fighters) : { x: (centroid(blue.all).x + G.enemyArea.x) / 2, y: (centroid(blue.all).y + G.enemyArea.y) / 2 };
+    // Named for the nearest settlement or hill to where the fighting was.
+    let name = null, bd = Infinity;
+    for (const p of m.places) { const d = dist(p.x, p.y, c.x, c.y); if (d < bd) { bd = d; name = p.name.replace(/ (Farm|Ranch)$/, ' $1'); } }
+    for (const p of m.peaks) { const d = dist(p.x, p.y, c.x, c.y) * 1.3; if (d < bd) { bd = d; name = 'Hill ' + Math.round(m.elevBase + p.e); } }
+    const box = el('table', 'wbox');
+    const tr = (cls) => { const r = el('tr', cls); box.appendChild(r); return r; };
+    const th = (text, cls) => { const r = tr(); const h = el('th', cls || 'wband', text); h.colSpan = 2; r.appendChild(h); return r; };
+    const pair = (a, b, cls) => { const r = tr(cls); const x = el('td'), y = el('td'); for (const [cell, v] of [[x, a], [y, b]]) { if (v instanceof Node) cell.appendChild(v); else cell.innerHTML = v; } r.appendChild(x); r.appendChild(y); return r; };
+    const lines = (arr) => arr.filter(Boolean).join('<br>');
+    th('Battle of ' + (name || gridRef(c.x, c.y)), 'wtitle');
+    th('Part of Sand Table Exercise ' + String(G.settings.seed).padStart(5, '0') + ', ' + m.R.label, 'wpart');
+    // A sketch of the field: the sheet around the fight, each man where he ended.
+    const cell = el('td', 'wimg'); cell.colSpan = 2;
+    const cv = el('canvas'); cv.width = 320; cv.height = 210;
+    // Framed to take in every man still on the field, with a margin.
+    const on = G.soldiers.filter(s => !s.routed);
+    let bx0 = Math.min(...on.map(s => s.x)), bx1 = Math.max(...on.map(s => s.x)), by0 = Math.min(...on.map(s => s.y)), by1 = Math.max(...on.map(s => s.y));
+    const asp = cv.height / cv.width, span = Math.max(500, bx1 - bx0 + 160, (by1 - by0 + 160) / asp);
+    const mx = (bx0 + bx1) / 2, my = (by0 + by1) / 2;
+    const ctx = cv.getContext('2d'), k = cv.width / span, x0 = mx - span / 2, y0 = my - span * asp / 2, P = SHEET_PPM;
+    if (R.sheet) ctx.drawImage(R.sheet, (SHEET.ml + x0) * P, (SHEET.mt + y0) * P, span * P, span * cv.height / cv.width * P, 0, 0, cv.width, cv.height);
+    for (const s of G.soldiers) {
+      if (s.routed) continue;
+      const px = (s.x - x0) * k, py = (s.y - y0) * k;
+      ctx.fillStyle = s.side === 'blue' ? '#1f4fbf' : '#c62828'; ctx.strokeStyle = '#fff'; ctx.lineWidth = 1;
+      ctx.beginPath();
+      if (s.side === 'blue') ctx.arc(px, py, 3.2, 0, Math.PI * 2);
+      else { ctx.moveTo(px, py - 4); ctx.lineTo(px + 4, py); ctx.lineTo(px, py + 4); ctx.lineTo(px - 4, py); ctx.closePath(); }
+      ctx.fill(); ctx.stroke();
+      if (!s.active) { ctx.strokeStyle = '#111'; ctx.lineWidth = 1.5; ctx.beginPath(); ctx.moveTo(px - 4, py - 4); ctx.lineTo(px + 4, py + 4); ctx.moveTo(px + 4, py - 4); ctx.lineTo(px - 4, py + 4); ctx.stroke(); }
+    }
+    cell.appendChild(cv);
+    cell.appendChild(el('div', 'wcap', 'The field at the end, H+' + fmtClock(Plan.stepOff != null ? G.time - Plan.stepOff : G.time) + ': Marines blue, enemy red, casualties crossed.'));
+    tr().appendChild(cell);
+    const kv = (k, v) => { const r = tr('wkv'); r.appendChild(el('th', 'wk', k)); const d = el('td'); d.innerHTML = v; r.appendChild(d); };
+    const dur = Plan.stepOff != null ? G.time - Plan.stepOff : G.time;
+    kv('Date', 'H-hour to H+' + fmtClock(dur) + ' (' + Math.max(1, Math.round(dur / 60)) + ' min)');
+    kv('Location', m.R.label + '<br><span class="wlink">◉ Grid ' + gridRef(c.x, c.y) + '</span>');
+    kv('Result', result === 'victory' ? '<span class="wlink">United States</span> victory' : '<span class="wlink">Opposing force</span> victory');
+    th('Belligerents');
+    pair('<span class="wlink">United States</span><br>U.S. Marine Corps', '<span class="wlink">Opposing force</span>');
+    th('Commanders and leaders');
+    const sl = blue.leader, el0 = red.leader || red.all[0];
+    pair('<span class="wlink">' + sl.rank + ' ' + sl.name + '</span>' + (sl.health === 'kia' ? ' †' : ''), '<span class="wlink">' + (el0 ? el0.title : 'Unknown') + '</span>' + (el0 && el0.health === 'kia' ? ' †' : ''));
+    th('Units involved');
+    pair('<span class="wlink">1st Squad</span>, three fire teams', '<span class="wlink">Enemy squad</span>, ' + red.teams.length + ' groups');
+    th('Strength');
+    const arms = (sq) => {
+      const n = new Map();
+      for (const s of sq.all) { n.set(s.weapon.name, (n.get(s.weapon.name) || 0) + 1); if (s.launcher) n.set(s.launcher.name, (n.get(s.launcher.name) || 0) + 1); }
+      return [...n].map(([w, k]) => k + ' ' + w);
+    };
+    pair(lines([blue.all.length + ' Marines', ...arms(blue)]), lines([red.all.length + ' men', ...arms(red)]));
+    th('Casualties and losses');
+    const loss = (sq, men) => {
+      const kia = sq.all.filter(s => s.health === 'kia').length, ser = sq.all.filter(s => s.health === 'serious').length, wia = sq.all.filter(s => s.health === 'light').length, fled = sq.all.filter(s => s.routed || s.routing).length;
+      return lines([kia + ' killed', ser + ' seriously wounded', wia + ' wounded', fled ? fled + ' fled' : '', (sq.all.length - kia - ser - fled) + ' of ' + sq.all.length + ' ' + men + ' still fighting']);
+    };
+    pair(loss(blue, 'Marines'), loss(red, 'men'));
+    th('Ammunition expended');
+    const spent = (sq) => {
+      const rds = sq.all.reduce((n, s) => n + s.shots, 0), hits = sq.all.reduce((n, s) => n + s.hits, 0);
+      const fr = sq.all.reduce((n, s) => n + ((s.fragsStart || 0) - s.frags), 0), gl = sq.all.reduce((n, s) => n + ((s.lStart || 0) - s.lRounds), 0);
+      return lines([rds + ' rounds', hits + ' hits' + (rds ? ' (' + (hits / rds * 100).toFixed(1) + '%)' : ''), fr + ' hand grenades', gl ? gl + ' launcher rounds' : '']);
+    };
+    pair(spent(blue), spent(red));
+    return box;
+  },
+
   showDebrief(result) {
     const box = $('debriefBody');
     box.innerHTML = '';
     const won = result === 'victory';
     $('debriefTitle').textContent = won ? 'Enemy defeated' : 'Squad combat ineffective';
-    box.appendChild(el('p', 'dsub', (won ? 'The enemy is destroyed or has withdrawn.' : 'Your squad can no longer fight.') + ' Elapsed time ' + fmtClock(G.time) + '.'));
-    const count = (sq) => {
-      const all = sq.all;
-      return {
-        kia: all.filter(s => s.health === 'kia').length,
-        serious: all.filter(s => s.health === 'serious').length,
-        light: all.filter(s => s.health === 'light').length,
-        gone: all.filter(s => s.routed || s.routing).length,
-        effective: all.filter(s => s.active && !s.routing).length,
-        total: all.length,
-        shots: all.reduce((n, s) => n + s.shots, 0),
-        hits: all.reduce((n, s) => n + s.hits, 0),
-      };
-    };
-    const b = count(G.squads.blue), r = count(G.squads.red);
-    const rows = [['Strength', b.total, r.total], ['Killed', b.kia, r.kia], ['Serious casualties', b.serious, r.serious],
-      ['Wounded, fighting', b.light, r.light], ['Withdrew or fled', b.gone, r.gone], ['Effective at end', b.effective, r.effective],
-      ['Rounds fired', b.shots, r.shots], ['Hits', b.hits, r.hits]];
-    const pre = el('pre', 'dtable');
-    const line = (a, x, y) => a.padEnd(19) + String(x).padStart(8) + String(y).padStart(7);
-    pre.textContent = line('', 'Marines', 'Enemy') + '\n' + rows.map(rw => line(rw[0], rw[1], rw[2])).join('\n');
-    box.appendChild(pre);
+    const wrap = el('div', 'dgrid');
+    wrap.appendChild(this.battleInfobox(result));
+    const side = el('div', 'dside');
+    side.appendChild(el('p', 'dsub', (won ? 'The enemy is destroyed or has withdrawn.' : 'Your squad can no longer fight.') + ' Elapsed time ' + fmtClock(G.time) + '.'));
     if (Plan.timeAvail) {
       const aar = Plan.afterAction(result);
       const done = Plan.lines.filter(l => l.status === 'done').length;
@@ -529,17 +586,19 @@ const UI = {
       const head = el('div', 'daar');
       head.appendChild(el('b', 'oletter', aar.letter));
       head.appendChild(el('span', null, 'Mission grade ' + Math.round(aar.total) + '/100'));
-      box.appendChild(head);
+      side.appendChild(head);
       const g = el('pre', 'dtable');
       const row = (a, v, w, pts) => a.padEnd(12) + String(v).padStart(7) + String(w).padStart(8) + String(pts).padStart(8);
       g.textContent = [row('', 'Score', 'Weight', 'Points'),
         ...aar.rows.map(([a, v, w]) => row(a, Math.round(v), w + '%', Math.round(v * w / 100))),
         '-'.repeat(35), row('Total', '', '', Math.round(aar.total))].join('\n');
-      box.appendChild(g);
-      box.appendChild(el('p', 'dsub', 'Plan grade ' + (Plan.score != null ? Plan.letter(Plan.score) + ' (' + Math.round(Plan.score) + ')' : 'none: the squad never stepped off') +
+      side.appendChild(g);
+      side.appendChild(el('p', 'dsub', 'Plan grade ' + (Plan.score != null ? Plan.letter(Plan.score) + ' (' + Math.round(Plan.score) + ')' : 'none: the squad never stepped off') +
         '. Planning took ' + fmtClock(used) + ' of ' + fmtClock(Plan.timeAvail) + ' available (one third is ' + fmtClock(Plan.timeAvail / 3) + '). ' +
         done + ' of ' + Plan.lines.length + ' plan lines completed.'));
     }
+    wrap.appendChild(side);
+    box.appendChild(wrap);
     $('debrief').hidden = false;
   },
 };

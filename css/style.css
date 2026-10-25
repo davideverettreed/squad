@@ -384,3 +384,23 @@ body:not(.roster-min) #btn3d, body:not(.roster-min) #ctl3d { margin-left: 0; }
 
 /* A team left out of an "all but" selection. */
 .chip.not { text-decoration: line-through; opacity: 0.6; }
+
+/* After-action report: a battle box in the manner of an encyclopedia infobox, and the
+   grade beside it. */
+.dgrid { display: grid; grid-template-columns: 340px minmax(0, 1fr); gap: 18px; align-items: start; }
+.wbox { width: 100%; border-collapse: separate; border-spacing: 3px; background: #f8f9fa; color: #202122; border: 1px solid #a2a9b1;
+  font: 13px/1.4 "Linux Libertine", Georgia, "Times New Roman", serif; }
+.wbox th, .wbox td { padding: 3px 6px; vertical-align: top; text-align: left; }
+.wbox .wtitle { background: #b0c4de; text-align: center; font-size: 16px; font-weight: 700; padding: 4px; }
+.wbox .wpart { background: #dcdcdc; text-align: center; font-weight: 400; font-size: 12.5px; }
+.wbox .wband { background: #b0c4de; text-align: center; font-weight: 700; }
+.wbox .wimg { text-align: center; padding: 4px; }
+.wbox .wimg canvas { width: 100%; height: auto; display: block; border: 1px solid #c8ccd1; }
+.wbox .wcap { font-size: 12px; padding-top: 3px; }
+.wbox .wk { width: 30%; font-weight: 700; }
+.wbox tr:not(.wkv) > td { width: 50%; border-top: 1px solid #c8ccd1; }
+.wbox tr:not(.wkv) > td + td { border-left: 1px solid #c8ccd1; }
+.wlink { color: #0645ad; }
+.dside .daar:first-of-type { margin-top: 6px; }
+#debrief .card.small { width: min(900px, 100%); }
+@media (max-width: 760px) { .dgrid { grid-template-columns: minmax(0, 1fr); } }

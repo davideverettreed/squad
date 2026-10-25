@@ -37,7 +37,7 @@ class Soldier {
     this.coneHalf = 0.5; this.alert = 0; this.agit = 0;
     this.assault = false; this.routing = false; this.routed = false;
     this.shots = 0; this.hits = 0; this.dryLogged = false;
-    this.ammoStart = this.ammoLeft;
+    this.ammoStart = this.ammoLeft; this.fragsStart = this.frags; this.lStart = this.lRounds;
     this.loadKg = this.computeLoad();
   }
   get alive() { return this.health !== 'kia'; }
@@ -125,7 +125,7 @@ function applyLoadout(sq, lo) {
     s.inMag = s.weapon.mag; s.mags = l.mags; s.frags = l.frags;
     s.launcherKey = l.launcher || null; s.launcher = l.launcher ? LAUNCHERS[l.launcher] : null;
     s.lRounds = s.launcher ? l.lRounds : 0;
-    s.ammoStart = s.ammoLeft; s.dryLogged = false;
+    s.ammoStart = s.ammoLeft; s.fragsStart = s.frags; s.lStart = s.lRounds; s.dryLogged = false;
     s.loadKg = s.computeLoad();
   }
 }
