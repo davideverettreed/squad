@@ -18,7 +18,7 @@ const G = {
 function loadSettings() {
   let saved = null;
   try { saved = JSON.parse(localStorage.getItem('squad.settings') || 'null'); } catch (e) { saved = null; }
-  const s = { seed: Math.floor(Math.random() * 99999) + 1, mode: 'random', region: 'random', loadout: defaultLoadout() };
+  const s = { seed: Math.floor(Math.random() * 99999) + 1, mode: 'random', region: 'random', echelon: 'squad', loadout: defaultLoadout() };
   if (saved && saved.loadout) {
     for (const k of Object.keys(s.loadout)) {
       const l = saved.loadout[k];
@@ -37,6 +37,8 @@ function newMission() {
   const set = G.settings;
   saveSettings();
   NEXT_ID = 1;
+  G.echelon = ECHELONS[set.echelon] || ECHELONS.squad;
+  setMapSize(G.echelon.size); resizeSheet();
   G.map = new GameMap(set.seed, set.region);
   // Grid: a small 100 km digit and two principal digits for each kilometer line.
   G.grid = { e: randInt(10, 85), n: randInt(10, 85), le: randInt(1, 8), ln: randInt(1, 8) };
@@ -46,12 +48,13 @@ function newMission() {
   const mode = set.mode === 'random' ? (chance(0.5) ? 'attack' : 'meeting') : set.mode;
   G.mode = mode;
 
-  // The squads start 1.5 to 2.5 km apart, on a random axis, both well inside the sheet.
-  const M = 250, inside = (x, y) => x >= M && y >= M && x <= MAP_W - M && y <= MAP_H - M;
-  let axis = 0, sep = 1500, bx = M, by = M, rx = MAP_W - M, ry = MAP_H - M;
+  // The sides start apart by the echelon's distance (500-700 m for squads), on a random
+  // axis, both well inside the sheet.
+  const M = G.echelon.margin, inside = (x, y) => x >= M && y >= M && x <= MAP_W - M && y <= MAP_H - M;
+  let axis = 0, sep = G.echelon.sep[0], bx = M, by = M, rx = MAP_W - M, ry = MAP_H - M;
   // Choose the distance first, then find a placement that fits, so long distances are as
   // likely as short ones.
-  sep = randRange(1500, 2500);
+  sep = randRange(G.echelon.sep[0], G.echelon.sep[1]);
   for (let k = 0; k < 2000; k++) {
     axis = randRange(0, Math.PI * 2);
     bx = randRange(M, MAP_W - M); by = randRange(M, MAP_H - M);
@@ -254,7 +257,7 @@ function frame(now) {
   requestAnimationFrame(frame);
 }
 
-// Building a 3 km sheet takes a few seconds; show a notice and let it paint first.
+// Building a sheet can take a second or two; show a notice and let it paint first.
 function withLoading(text, fn) {
   $('loading').textContent = text;
   $('loading').hidden = false;
@@ -280,6 +283,7 @@ function boot() {
   requestAnimationFrame(frame);
   // Draw a map behind the briefing so the first view is the ground, not a blank table.
   withLoading('Drawing the map sheet…', () => {
+    setMapSize(ECHELONS[G.settings.echelon].size); resizeSheet();
     G.map = new GameMap(G.settings.seed, G.settings.region);
     buildTerrain(G.map);
     fitCamera(null, R.minZoom);

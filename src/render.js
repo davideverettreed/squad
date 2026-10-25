@@ -7,10 +7,18 @@ const R = {
   canvas: null, ctx: null, w: 0, h: 0, dpr: 1, cam: { x: MAP_W / 2, y: MAP_H / 2, zoom: 1 },
   sheet: null, tiles: new Map(), queue: [], minZoom: 0.1, table: null, grain: null,
 };
-// Collar (margin) around the map body, in meters, holding the marginal information.
+// Collar (margin) around the map body, in meters, holding the marginal information. It
+// is laid out for a 3 km sheet and scaled with the sheet, so it prints the same size.
 const SHEET = { ml: 170, mr: 170, mt: 200, mb: 480 };
-const SHEET_W = MAP_W + SHEET.ml + SHEET.mr, SHEET_H = MAP_H + SHEET.mt + SHEET.mb;
-const SHEET_PPM = 0.55; // whole-sheet pixels per meter
+let SHEET_W = 0, SHEET_H = 0, SHEET_PPM = 0.55; // whole-sheet pixels per meter
+function sizeSheet() {
+  Object.assign(SHEET, { ml: 170 * MAP_K, mr: 170 * MAP_K, mt: 200 * MAP_K, mb: 480 * MAP_K });
+  SHEET_W = MAP_W + SHEET.ml + SHEET.mr; SHEET_H = MAP_H + SHEET.mt + SHEET.mb;
+  SHEET_PPM = Math.min(1.6, 0.55 / MAP_K);
+}
+sizeSheet();
+// Grid lines every kilometer; on a one-square sheet, fainter lines every 100 m inside it.
+const gridStep = () => MAP_W <= 1000 ? 100 : 1000;
 const LEVELS = [null, { ppm: 1.4, size: 600, label: 11 }, { ppm: 4, size: 200, label: 12 }];
 const TILE_CACHE = 28;
 
@@ -20,6 +28,8 @@ function initRender(canvas) {
   resizeView();
   window.addEventListener('resize', resizeView);
 }
+// A new sheet size: margins, the zoom that fits the sheet, and the camera.
+function resizeSheet() { sizeSheet(); if (R.canvas) resizeView(); }
 
 function resizeView() {
   const c = R.canvas;
@@ -365,10 +375,11 @@ function drawMapRegion(ctx, map, x0, y0, w, h, ppm, level) {
     ctx.fillRect(bd.x0 + m, bd.y0 + m, Math.max(bd.x1 - bd.x0 - 2 * m, 1.5 * pxm), Math.max(bd.y1 - bd.y0 - 2 * m, 1.5 * pxm));
   }
 
-  // Grid: 1 km squares.
-  ctx.strokeStyle = 'rgba(10,10,10,0.85)'; ctx.lineWidth = Math.max(1.2, 0.9 * pxm);
-  for (let x = 1000; x < MAP_W; x += 1000) { ctx.beginPath(); ctx.moveTo(x, 0); ctx.lineTo(x, MAP_H); ctx.stroke(); }
-  for (let n = 1000; n < MAP_H; n += 1000) { ctx.beginPath(); ctx.moveTo(0, MAP_H - n); ctx.lineTo(MAP_W, MAP_H - n); ctx.stroke(); }
+  // Grid: 1 km squares; on a one-square sheet, finer 100 m lines.
+  const gs = gridStep();
+  ctx.strokeStyle = gs < 1000 ? 'rgba(10,10,10,0.45)' : 'rgba(10,10,10,0.85)'; ctx.lineWidth = Math.max(gs < 1000 ? 0.8 : 1.2, 0.9 * pxm);
+  for (let x = gs; x < MAP_W; x += gs) { ctx.beginPath(); ctx.moveTo(x, 0); ctx.lineTo(x, MAP_H); ctx.stroke(); }
+  for (let n = gs; n < MAP_H; n += gs) { ctx.beginPath(); ctx.moveTo(0, MAP_H - n); ctx.lineTo(MAP_W, MAP_H - n); ctx.stroke(); }
 
   // Lettering: sized in screen pixels for each level, as each would be printed.
   const fs = (level === 0 ? 10 : LEVELS[level].label) * pxm;
@@ -416,6 +427,9 @@ function buildTerrain(map) {
   ctx.save();
   ctx.scale(P, P);
   ctx.translate(SHEET.ml, SHEET.mt);
+  // The collar is laid out on a 3 km sheet (VW x VH) and scaled to this one.
+  ctx.scale(MAP_K, MAP_K);
+  const VW = MAP_W / MAP_K, VH = MAP_H / MAP_K, vk = 1 / MAP_K;
   const text = (t, x, y, size, opts) => {
     opts = opts || {};
     ctx.font = (opts.weight || 600) + ' ' + size + 'px ' + (opts.serif ? '"Saira Condensed", "Arial Narrow", sans-serif' : '"IBM Plex Mono", ui-monospace, monospace');
@@ -424,7 +438,7 @@ function buildTerrain(map) {
     ctx.fillText(t, x, y);
   };
   ctx.strokeStyle = MAP_INK; ctx.lineWidth = 3;
-  ctx.strokeRect(0, 0, MAP_W, MAP_H);
+  ctx.strokeRect(0, 0, VW, VH);
 
   // Grid values: small 100 km digit, large principal digits; full values at the corners.
   const gridLabel = (lead, v, x, y, align) => {
@@ -439,32 +453,41 @@ function buildTerrain(map) {
   };
   for (let x = 0; x <= MAP_W; x += 1000) {
     const v = G.grid.e + x / 1000;
-    gridLabel(G.grid.le, v, x, -14, 'center');
-    gridLabel(G.grid.le, v, x, MAP_H + 50, 'center');
+    gridLabel(G.grid.le, v, x * vk, -14, 'center');
+    gridLabel(G.grid.le, v, x * vk, VH + 50, 'center');
   }
   for (let n = 0; n <= MAP_H; n += 1000) {
-    const y = MAP_H - n, v = G.grid.n + n / 1000;
+    const y = VH - n * vk, v = G.grid.n + n / 1000;
     gridLabel(G.grid.ln, v, -14, y + 14, 'right');
-    gridLabel(G.grid.ln, v, MAP_W + 14, y + 14, 'left');
+    gridLabel(G.grid.ln, v, VW + 14, y + 14, 'left');
+  }
+  // On a one-square sheet, the hundreds digit at each 100 m line.
+  if (gridStep() < 1000) {
+    for (let m = 100; m < MAP_W; m += 100) {
+      const d = String(m / 100);
+      text(d, m * vk, -18, 26, { align: 'center' }); text(d, m * vk, VH + 44, 26, { align: 'center' });
+      text(d, -18, VH - m * vk + 9, 26, { align: 'right' }); text(d, VW + 18, VH - m * vk + 9, 26, { align: 'left' });
+    }
   }
   text(G.grid.le + String(G.grid.e).padStart(2, '0') + '000mE.', 0, -64, 20, { weight: 600 });
-  text(G.grid.ln + String(G.grid.n).padStart(2, '0') + '000mN.', -14, MAP_H + 92, 20, { weight: 600, align: 'right' });
+  text(G.grid.ln + String(G.grid.n).padStart(2, '0') + '000mN.', -14, VH + 92, 20, { weight: 600, align: 'right' });
   // 100 m ticks along the neatline.
   ctx.lineWidth = 2;
-  for (let m = 100; m < MAP_W; m += 100) {
-    ctx.beginPath(); ctx.moveTo(m, 0); ctx.lineTo(m, -12); ctx.moveTo(m, MAP_H); ctx.lineTo(m, MAP_H + 12);
-    ctx.moveTo(0, m); ctx.lineTo(-12, m); ctx.moveTo(MAP_W, m); ctx.lineTo(MAP_W + 12, m); ctx.stroke();
+  for (let m0 = 100; m0 < MAP_W; m0 += 100) {
+    const m = m0 * vk;
+    ctx.beginPath(); ctx.moveTo(m, 0); ctx.lineTo(m, -12); ctx.moveTo(m, VH); ctx.lineTo(m, VH + 12);
+    ctx.moveTo(0, m); ctx.lineTo(-12, m); ctx.moveTo(VW, m); ctx.lineTo(VW + 12, m); ctx.stroke();
   }
 
   // Title block.
   text('STEX: RIFLE SQUAD', 0, -140, 34, { weight: 700 });
   text('SERIES T25 · EDITION 1 · ' + map.R.label.toUpperCase(), 0, -104, 22, { weight: 500 });
-  text(('HILL ' + map.peak).toUpperCase(), MAP_W / 2, -118, 76, { weight: 700, serif: true, align: 'center' });
-  text('SHEET ' + String(G.settings ? G.settings.seed : 0).padStart(5, '0'), MAP_W, -140, 34, { weight: 700, align: 'right' });
-  text('1:25 000 · 3 × 3 KM', MAP_W, -104, 22, { weight: 500, align: 'right' });
+  text(('HILL ' + map.peak).toUpperCase(), VW / 2, -118, 76, { weight: 700, serif: true, align: 'center' });
+  text('SHEET ' + String(G.settings ? G.settings.seed : 0).padStart(5, '0'), VW, -140, 34, { weight: 700, align: 'right' });
+  text('1:25 000 · ' + MAP_W / 1000 + ' × ' + MAP_H / 1000 + ' KM', VW, -104, 22, { weight: 500, align: 'right' });
 
   // Legend, bottom left.
-  const ly = MAP_H + 160;
+  const ly = VH + 160;
   text('LEGEND', 0, ly, 26, { weight: 700 });
   // Only what is on this sheet goes in the legend.
   const has = new Uint8Array(32);
@@ -523,22 +546,23 @@ function buildTerrain(map) {
   });
 
   // Graphic scale, bottom center.
-  const sx = MAP_W / 2 - 500, sy = MAP_H + 120;
-  text('GRAPHIC SCALE', MAP_W / 2, sy - 22, 24, { weight: 700, align: 'center' });
+  // A bar of real ground distance: 1000 m on a large sheet, 300 m on a one-square sheet.
+  const L = MAP_W >= 3000 ? 1000 : 300, Lv = L * vk, sx = VW / 2 - Lv / 2, sy = VH + 120;
+  text('GRAPHIC SCALE', VW / 2, sy - 22, 24, { weight: 700, align: 'center' });
   ctx.strokeStyle = MAP_INK; ctx.lineWidth = 2;
   for (let i = 0; i < 10; i++) {
     ctx.fillStyle = i % 2 ? 'rgb(' + MAPC.paper.join(',') + ')' : MAP_INK;
-    ctx.fillRect(sx + i * 100, sy, 100, 14); ctx.strokeRect(sx + i * 100, sy, 100, 14);
+    ctx.fillRect(sx + i * Lv / 10, sy, Lv / 10, 14); ctx.strokeRect(sx + i * Lv / 10, sy, Lv / 10, 14);
   }
-  for (let m = 0; m <= 1000; m += 200) text(String(m), sx + m, sy + 44, 22, { align: 'center' });
-  text('METERS', sx + 1030, sy + 14, 22, { weight: 700 });
+  for (let m = 0; m <= L; m += L / 5) text(String(m), sx + m * vk, sy + 44, 22, { align: 'center' });
+  text('METERS', sx + Lv + 30, sy + 14, 22, { weight: 700 });
   // The declination diagram and notes sit at the bottom right.
-  const nx = MAP_W - 520;
-  text('CONTOUR INTERVAL ' + map.ci + ' METERS', nx, MAP_H + 200, 24, { weight: 700 });
-  text('ELEVATIONS IN METERS ABOVE MEAN SEA LEVEL', nx, MAP_H + 234, 19, { weight: 500 });
-  text('GRID: 1000 METER SQUARES', nx, MAP_H + 262, 19, { weight: 500 });
-  text('TO GIVE A GRID REFERENCE: READ RIGHT, THEN UP', nx, MAP_H + 290, 19, { weight: 500 });
-  const dx = MAP_W - 70, dy = MAP_H + 440, gm = map.gmAngle;
+  const nx = VW - 520;
+  text('CONTOUR INTERVAL ' + map.ci + ' METERS', nx, VH + 200, 24, { weight: 700 });
+  text('ELEVATIONS IN METERS ABOVE MEAN SEA LEVEL', nx, VH + 234, 19, { weight: 500 });
+  text('GRID: 1000 METER SQUARES' + (gridStep() < 1000 ? ', 100 M LINES' : ''), nx, VH + 262, 19, { weight: 500 });
+  text('TO GIVE A GRID REFERENCE: READ RIGHT, THEN UP', nx, VH + 290, 19, { weight: 500 });
+  const dx = VW - 70, dy = VH + 440, gm = map.gmAngle;
   const ray = (deg, len) => ({ x: dx + Math.sin(deg * Math.PI / 180) * len, y: dy - Math.cos(deg * Math.PI / 180) * len });
   ctx.strokeStyle = MAP_INK; ctx.lineWidth = 3;
   const tn = ray(0, 120), gn = ray(-1.2, 120), mn = ray(gm, 108);
@@ -550,8 +574,8 @@ function buildTerrain(map) {
   text('GN', gn.x - 10, gn.y - 4, 20, { weight: 700, align: 'right' });
   ctx.beginPath(); ctx.moveTo(mn.x, mn.y); ctx.lineTo(mn.x + 9, mn.y + 20); ctx.lineTo(mn.x, mn.y + 17); ctx.fill();
   text('MN', mn.x + 12, mn.y + 6, 20, { weight: 700 });
-  text(Math.abs(gm).toFixed(1) + '° G-M ANGLE ' + (gm >= 0 ? 'EAST' : 'WEST'), nx, MAP_H + 330, 19, { weight: 500 });
-  text('GRID BEARINGS USED IN REPORTS', nx, MAP_H + 358, 19, { weight: 500 });
+  text(Math.abs(gm).toFixed(1) + '° G-M ANGLE ' + (gm >= 0 ? 'EAST' : 'WEST'), nx, VH + 330, 19, { weight: 500 });
+  text('GRID BEARINGS USED IN REPORTS', nx, VH + 358, 19, { weight: 500 });
   ctx.restore();
   R.sheet = c;
 }
@@ -696,14 +720,16 @@ function drawPaper(ctx) {
 }
 
 // When the margin is scrolled off screen, repeat the grid values along the screen edge.
+// On a one-square sheet the 100 m lines carry the kilometer and hundreds digits (473).
 function drawEdgeLabels(ctx) {
   ctx.font = '600 12px "IBM Plex Mono", ui-monospace, monospace';
   ctx.lineWidth = 3; ctx.strokeStyle = 'rgba(247,245,236,0.95)'; ctx.fillStyle = OVL.black;
-  const top = 56;
+  const top = 56, gs = gridStep();
+  const label = (base, m) => gs < 1000 ? String(base * 10 + m / 100).padStart(3, '0') : String(base + m / 1000).padStart(2, '0');
   if (toScreen(0, 0).y < top) {
     ctx.textAlign = 'left'; ctx.textBaseline = 'top';
-    for (let x = 1000; x < MAP_W; x += 1000) {
-      const p = toScreen(x, 0), t = String(G.grid.e + x / 1000).padStart(2, '0');
+    for (let x = gs; x < MAP_W; x += gs) {
+      const p = toScreen(x, 0), t = label(G.grid.e, x);
       if (p.x < 4 || p.x > R.w - 30) continue;
       ctx.strokeText(t, p.x + 3, top); ctx.fillText(t, p.x + 3, top);
     }
@@ -711,8 +737,8 @@ function drawEdgeLabels(ctx) {
   const left = R.w > 760 && !document.body.classList.contains('roster-min') ? 306 : 4;
   if (toScreen(0, 0).x < left) {
     ctx.textAlign = 'left'; ctx.textBaseline = 'bottom';
-    for (let n = 1000; n < MAP_H; n += 1000) {
-      const p = toScreen(0, MAP_H - n), t = String(G.grid.n + n / 1000).padStart(2, '0');
+    for (let n = gs; n < MAP_H; n += gs) {
+      const p = toScreen(0, MAP_H - n), t = label(G.grid.n, n);
       if (p.y < top + 16 || p.y > R.h - 10) continue;
       ctx.strokeText(t, left, p.y - 2); ctx.fillText(t, left, p.y - 2);
     }

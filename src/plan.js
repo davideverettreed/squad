@@ -58,7 +58,7 @@ const Plan = {
     const sep = dist(centroid(G.squads.blue.all).x, centroid(G.squads.blue.all).y, this.reported.x, this.reported.y);
     // Time available: in a meeting engagement, until the enemy could reach you; in an
     // attack, until the enemy finishes digging in.
-    this.timeAvail = G.mode === 'meeting' ? Math.round(sep / 1.25 / 60) * 60 : 45 * 60;
+    this.timeAvail = G.mode === 'meeting' ? Math.round(sep / 1.25 / 60) * 60 : G.echelon.attackTime * 60;
     this.intel = this.makeIntel();
     this.terrain = this.keyTerrain();
     this.ao = this.aoFacts();
@@ -591,7 +591,7 @@ const Plan = {
     const atk = G.mode === 'attack';
     return [
       ['Defend', atk ? 'Most likely. Will defend from its present positions, improving them while you plan.' : 'Can go to ground and defend if it is fired on first.', atk],
-      ['Reinforce', 'No other enemy is known within 3 km. Reinforcement is unlikely.', false],
+      ['Reinforce', 'No other enemy is known in the AO. Reinforcement is unlikely.', false],
       ['Attack', atk ? 'Could counterattack your flank with one group if your assault stalls.' : 'Most likely. Will keep moving and attack on contact.', !atk],
       ['Withdraw', 'Likely to break contact once it loses about half its men.', false],
       ['Delay', 'Could delay from the next covered position if pressed.', false],

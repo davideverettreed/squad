@@ -4,8 +4,19 @@
 // published effective ranges and rates of fire; they are not ballistic tables.
 
 const CELL = 4;                    // meters per terrain cell
-const MAP_W = 3000, MAP_H = 3000;  // meters: nine 1 km grid squares
-const GW = MAP_W / CELL, GH = MAP_H / CELL;
+// The map's size goes with the echelon: a squad fights on one 1 km grid square, a
+// platoon on 3 x 3 km, larger units on larger sheets. Set before each map is made.
+const ECHELONS = {
+  squad:   { label: 'Squad',   size: 1000, sep: [500, 700],   margin: 120, attackTime: 30 },
+  platoon: { label: 'Platoon', size: 3000, sep: [1500, 2500], margin: 250, attackTime: 45 },
+};
+let MAP_W = 1000, MAP_H = 1000;    // meters
+let GW = MAP_W / CELL, GH = MAP_H / CELL;
+// Scale of the sheet against the 3 km sheet that the map styles were first drawn for.
+let MAP_K = MAP_W / 3000;
+function setMapSize(m) {
+  MAP_W = MAP_H = m; GW = GH = m / CELL; MAP_K = m / 3000;
+}
 
 const TER = {
   OPEN: 0, GRASS: 1, WOODS: 2, ROAD: 3, BUILDING: 4, WALL: 5, PLOWED: 6,

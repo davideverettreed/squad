@@ -447,7 +447,7 @@ details.cheat dd { margin: 0; opacity: .9; }
         <h3>Overlay</h3>
         <p>Orders are drawn as on an acetate overlay: blue for friendly, red for enemy, black for targets. Blue lines with arrowheads are routes (long dashes for a rush, dots for a crawl); a heavy arrow with a solid head is an assault. OBJ marks the objective of a bounding drill. Dashed blue lines run from the shooters to a suppression target, a black cross in a circle. 40MM marks a grenade launcher target.</p>
         <h3>Map key</h3>
-        <p>The sheet covers 3 by 3 kilometers in nine 1-kilometer grid squares, in standard US military map colors. White is open ground. Light green with tufts is tall grass, which hides a man lying prone. Green is woods and hedgerows; rows of small green circles are orchards, green row lines are vineyards. Blue lines are streams, which run in shallow gullies that give cover; blue areas are ponds and cannot be crossed. A broad blue band is a river: it can be crossed only at a bridge (two black lines across the road) or at a ford, marked FORD in a dashed blue circle, where men wade slowly in the open. Pale blue-green ground with small blue tufts is swamp: very slow going and no cover, but it hides a man. Red-brown lines are contours 5 meters apart, with a heavier, numbered index contour every 25 meters; numbers with a dot are hilltop heights. Black blocks are buildings. A black line with ticks is a stone wall, which gives hard cover to a kneeling or prone man. The red road is a paved road; the dashed double lines are dirt tracks. Each mission is set in one of six regions, chosen in the New mission dialog or at random: rolling farmland; the Southern California coast (Pacific Ocean on the west edge, sand beach, chaparral); South Texas brush country (mesquite thickets, pasture, stock tanks); North Carolina pine woods and blackwater swamp; the Arizona desert and mountains (open creosote flats, rock outcrops, dry washes shown as dashed blue lines); and the Montana mountains in winter (deep snow, lodgepole pine, frozen ponds). The ground changes the fight: snow, sand, chaparral and rock are slow; brush and grass hide a man lying down; rock gives cover; open desert gives long fields of fire. Point at the map to read the 8-digit grid reference. Measure (key M) lays a tape between two taps and marks the distance, grid bearing and mils on the map; tap a label to remove it. Point at a formation button to see the selected team or squad ghosted in that formation. Zoomed out, your men gather into one counter per fire team, then one for the squad, in the standard unit symbol: a rectangle with an infantry X for friendly, a diamond for enemy.</p>
+        <p>A squad fights on a sheet of one 1-kilometer grid square, with fainter lines every 100 meters; larger units will get larger sheets. The sheet is in standard US military map colors. White is open ground. Light green with tufts is tall grass, which hides a man lying prone. Green is woods and hedgerows; rows of small green circles are orchards, green row lines are vineyards. Blue lines are streams, which run in shallow gullies that give cover; blue areas are ponds and cannot be crossed. A broad blue band is a river: it can be crossed only at a bridge (two black lines across the road) or at a ford, marked FORD in a dashed blue circle, where men wade slowly in the open. Pale blue-green ground with small blue tufts is swamp: very slow going and no cover, but it hides a man. Red-brown lines are contours (5 or 10 meters apart, as the margin states), with a heavier, numbered index contour every fifth line; numbers with a dot are hilltop heights. Black blocks are buildings. A black line with ticks is a stone wall, which gives hard cover to a kneeling or prone man. The red road is a paved road; the dashed double lines are dirt tracks. Each mission is set in one of six regions, chosen in the New mission dialog or at random: rolling farmland; the Southern California coast (Pacific Ocean on the west edge, sand beach, chaparral); South Texas brush country (mesquite thickets, pasture, stock tanks); North Carolina pine woods and blackwater swamp; the Arizona desert and mountains (open creosote flats, rock outcrops, dry washes shown as dashed blue lines); and the Montana mountains in winter (deep snow, lodgepole pine, frozen ponds). The ground changes the fight: snow, sand, chaparral and rock are slow; brush and grass hide a man lying down; rock gives cover; open desert gives long fields of fire. Point at the map to read the 8-digit grid reference. Measure (key M) lays a tape between two taps and marks the distance, grid bearing and mils on the map; tap a label to remove it. Point at a formation button to see the selected team or squad ghosted in that formation. Zoomed out, your men gather into one counter per fire team, then one for the squad, in the standard unit symbol: a rectangle with an infantry X for friendly, a diamond for enemy.</p>
         <h3>Camera</h3>
         <p>Drag to pan. Use the wheel or pinch to zoom. <kbd>Space</kbd> pauses; you can give orders while paused.</p>
       </div>
@@ -537,8 +537,19 @@ function fmtClock(t) {
 // published effective ranges and rates of fire; they are not ballistic tables.
 
 const CELL = 4;                    // meters per terrain cell
-const MAP_W = 3000, MAP_H = 3000;  // meters: nine 1 km grid squares
-const GW = MAP_W / CELL, GH = MAP_H / CELL;
+// The map's size goes with the echelon: a squad fights on one 1 km grid square, a
+// platoon on 3 x 3 km, larger units on larger sheets. Set before each map is made.
+const ECHELONS = {
+  squad:   { label: 'Squad',   size: 1000, sep: [500, 700],   margin: 120, attackTime: 30 },
+  platoon: { label: 'Platoon', size: 3000, sep: [1500, 2500], margin: 250, attackTime: 45 },
+};
+let MAP_W = 1000, MAP_H = 1000;    // meters
+let GW = MAP_W / CELL, GH = MAP_H / CELL;
+// Scale of the sheet against the 3 km sheet that the map styles were first drawn for.
+let MAP_K = MAP_W / 3000;
+function setMapSize(m) {
+  MAP_W = MAP_H = m; GW = GH = m / CELL; MAP_K = m / 3000;
+}
 
 const TER = {
   OPEN: 0, GRASS: 1, WOODS: 2, ROAD: 3, BUILDING: 4, WALL: 5, PLOWED: 6,
@@ -797,7 +808,7 @@ const REGION_KEYS = Object.keys(REGIONS);
 
 // ---- src/map.js
 'use strict';
-// Terrain grid for a 3 x 3 km sheet: procedural generation (relief, streams and ponds,
+// Terrain grid for the sheet (1 x 1 km for a squad, 3 x 3 km for a platoon): procedural generation (relief, streams and ponds,
 // fields, woods, roads, villages, farms), line of sight, pathfinding and cover search.
 
 
@@ -857,12 +868,16 @@ class GameMap {
     this.findPeaks();
   }
 
+  // Value noise with nx by ny cells across a 3 km sheet; a smaller sheet takes its share
+  // of the cells, so hills, woods and fields keep their size on the ground.
   noise(nx, ny) {
-    const grid = new Float32Array((nx + 1) * (ny + 1));
+    nx *= MAP_K; ny *= MAP_K;
+    const cw = Math.ceil(nx) + 1, ch = Math.ceil(ny) + 1;
+    const grid = new Float32Array(cw * ch);
     for (let i = 0; i < grid.length; i++) grid[i] = rand();
     return (u, v) => {
-      const fx = u * nx, fy = v * ny, i = Math.min(nx - 1, Math.floor(fx)), j = Math.min(ny - 1, Math.floor(fy));
-      const tx = smooth(fx - i), ty = smooth(fy - j), w = nx + 1;
+      const fx = u * nx, fy = v * ny, i = Math.min(cw - 2, Math.floor(fx)), j = Math.min(ch - 2, Math.floor(fy));
+      const tx = smooth(fx - i), ty = smooth(fy - j), w = cw;
       const top = lerp(grid[j * w + i], grid[j * w + i + 1], tx), bot = lerp(grid[(j + 1) * w + i], grid[(j + 1) * w + i + 1], tx);
       return lerp(top, bot, ty);
     };
@@ -871,12 +886,17 @@ class GameMap {
   // Relief by region: rolling hills, flat brush country, or ridged mountains with steep
   // spurs and broad desert flats below them. On the coast the land rises from the sea.
   genElevation() {
-    const R = this.R, relief = randRange(R.relief[0], R.relief[1]);
+    // A smaller sheet takes in less of the country's relief.
+    const R = this.R, relief = randRange(R.relief[0], R.relief[1]) * (0.45 + 0.55 * MAP_K);
     // In high country the small folds stay small: the fine octaves are damped so the flats stay flat.
     const damp = Math.min(1, 150 / relief);
     const oct = [[3, 0.55], [7, 0.26], [15, 0.12 * damp], [38, 0.05 * damp], [90, 0.015 * damp]].map(([n, a]) => ({ f: this.noise(n, n), a }));
     const coastX = R.coast ? this.noise(1, 6) : null, range = R.ridged ? this.noise(2, 2) : null;
-    if (R.coast) this.coastAt = (v) => 220 + coastX(0.5, v) * 260;
+    // A small sheet sees only part of a range, so it is laid across a mountain front:
+    // high ground rising toward one side, the valley or basin floor on the other.
+    const fa = randRange(0, Math.PI * 2), fx = Math.cos(fa), fy = Math.sin(fa);
+    const front = (u, v) => clamp(0.5 + ((u - 0.5) * fx + (v - 0.5) * fy) * 1.3, 0, 1);
+    if (R.coast) this.coastAt = (v) => MAP_W * (0.07 + coastX(0.5, v) * 0.09);
     let lo = Infinity, hi = -Infinity;
     for (let cy = 0; cy < GH; cy++) for (let cx = 0; cx < GW; cx++) {
       const u = (cx + 0.5) / GW, v = (cy + 0.5) / GH;
@@ -895,11 +915,12 @@ class GameMap {
       if (R.ridged) {
         // Mountain ranges over part of the sheet, broad valley or basin floor over the rest.
         const u = (i % GW + 0.5) / GW, v = (Math.floor(i / GW) + 0.5) / GH;
-        t = Math.pow(t, 1.8) * (R.floor + (1 - R.floor) * smooth(clamp((range(u, v) - 0.3) / 0.4, 0, 1)));
+        const rv = MAP_K < 1 ? front(u, v) * 0.75 + range(u, v) * 0.35 - 0.05 : range(u, v);
+        t = Math.pow(t, 1.8) * (R.floor + (1 - R.floor) * smooth(clamp((rv - 0.3) / 0.4, 0, 1)));
       }
       if (R.coast) {
         const x = (i % GW + 0.5) * CELL, c = this.coastAt((Math.floor(i / GW) + 0.5) / GH);
-        t *= 0.12 + 0.88 * smooth(clamp((x - c) / 1500, 0, 1));
+        t *= 0.12 + 0.88 * smooth(clamp((x - c) / (MAP_W * 0.5), 0, 1));
       }
       this.elev[i] = t * relief;
     }
@@ -982,7 +1003,7 @@ class GameMap {
       if (region.length >= 40 && region.length <= 2500 && this.R.ponds !== 'dry') for (const c of region) this.ter[c] = this.R.ponds === 'ice' ? TER.ICE : TER.POND;
     }
 
-    const T = 7000; // cells (about 0.11 km² of catchment) before water runs as a stream
+    const T = Math.round(7000 * Math.max(0.4, MAP_K)); // cells of catchment before water runs as a stream
     const isStream = new Uint8Array(N);
     for (let i = 0; i < N; i++) if (acc[i] >= T) isStream[i] = 1;
 
@@ -1020,7 +1041,7 @@ class GameMap {
     }
     for (let i = 0; i < N; i++) this.elev[i] -= cut[i];
     // On most sheets the biggest watercourse, if long enough, is a river.
-    const main = this.streams.filter(s => s.len > 1200).sort((a, b) => b.flow - a.flow)[0];
+    const main = this.streams.filter(s => s.len > MAP_W * 0.4).sort((a, b) => b.flow - a.flow)[0];
     if (main && chance(this.R.riverChance)) this.makeRiver(main);
   }
 
@@ -1081,8 +1102,9 @@ class GameMap {
     for (const f of shuffle([0.25, 0.45, 0.65, 0.8])) {
       if (r.fords.length >= want) break;
       const p = pts[Math.floor(f * (pts.length - 1))];
-      if (p.x < 100 || p.y < 100 || p.x > MAP_W - 100 || p.y > MAP_H - 100) continue;
-      if (r.bridges.some(b => dist(b.x, b.y, p.x, p.y) < 350) || r.fords.some(b => dist(b.x, b.y, p.x, p.y) < 350)) continue;
+      if (p.x < 60 || p.y < 60 || p.x > MAP_W - 60 || p.y > MAP_H - 60) continue;
+      const gap = Math.max(200, 350 * MAP_K);
+      if (r.bridges.some(b => dist(b.x, b.y, p.x, p.y) < gap) || r.fords.some(b => dist(b.x, b.y, p.x, p.y) < gap)) continue;
       const c = this.cellOf(p.x, p.y), rr = Math.ceil((r.width / 2 + 6) / CELL);
       for (let j = -rr; j <= rr; j++) for (let i = -rr; i <= rr; i++) {
         const x = c.cx + i, y = c.cy + j;
@@ -1264,7 +1286,7 @@ class GameMap {
   genRoads() {
     if (this.R.coast) {
       // The coast highway runs north and south a little inland; a canyon road climbs east.
-      const off = (v) => Math.floor((this.coastAt(v) + randRange(250, 600)) / CELL);
+      const off = (v) => Math.floor((this.coastAt(v) + MAP_W * randRange(0.09, 0.2)) / CELL);
       const hw = this.routeRoad(off(0), 0, off(1), GH - 1);
       if (hw) this.layRoad(hw, 'paved');
       const y = randInt(Math.floor(GH * 0.25), Math.floor(GH * 0.75)), x0 = off((y + 0.5) / GH);
@@ -1330,13 +1352,15 @@ class GameMap {
   // Villages strung along the roads, houses facing the road with yards and walls.
   genVillages() {
     const along = this.roads.flatMap(r => r.cells.map(c => ({ c, kind: r.kind })));
-    const want = randInt(this.R.villages[0], this.R.villages[1]);
+    // About one village per 1 km square on a small sheet; the region's count on a 3 km sheet.
+    const want = Math.max(1, Math.round(randInt(this.R.villages[0], this.R.villages[1]) * Math.max(0.34, MAP_K)));
+    const edge = Math.max(120, 250 * MAP_K), apart = Math.max(350, 800 * MAP_K);
     for (let tries = 0; tries < 60 && this.places.length < want; tries++) {
       const pick0 = along[randInt(0, along.length - 1)];
       if (!pick0) break;
       const vx = (pick0.c % GW + 0.5) * CELL, vy = (Math.floor(pick0.c / GW) + 0.5) * CELL;
-      if (vx < 250 || vy < 250 || vx > MAP_W - 250 || vy > MAP_H - 250) continue;
-      if (this.places.some(p => dist(p.x, p.y, vx, vy) < 800)) continue;
+      if (vx < edge || vy < edge || vx > MAP_W - edge || vy > MAP_H - edge) continue;
+      if (this.places.some(p => dist(p.x, p.y, vx, vy) < apart)) continue;
       const near = along.filter(a => dist((a.c % GW + 0.5) * CELL, (Math.floor(a.c / GW) + 0.5) * CELL, vx, vy) < 160);
       let built = 0;
       for (let k = 0; k < 80 && built < randInt(9, 18); k++) {
@@ -1357,11 +1381,12 @@ class GameMap {
   // Outlying farms, each with a track to the nearest road.
   genFarms() {
     const roadCells = this.roads.flatMap(r => r.cells);
-    const want = randInt(this.R.farms[0], this.R.farms[1]);
+    const want = Math.max(1, Math.round(randInt(this.R.farms[0], this.R.farms[1]) * Math.max(0.3, MAP_K)));
+    const gv = Math.max(220, 450 * MAP_K), gf = Math.max(180, 350 * MAP_K), m0 = Math.max(80, 150 * MAP_K);
     let made = 0;
     for (let tries = 0; tries < 80 && made < want; tries++) {
-      const x = randRange(150, MAP_W - 150), y = randRange(150, MAP_H - 150);
-      if (this.places.some(p => dist(p.x, p.y, x, y) < (p.kind === 'village' ? 450 : 350))) continue;
+      const x = randRange(m0, MAP_W - m0), y = randRange(m0, MAP_H - m0);
+      if (this.places.some(p => dist(p.x, p.y, x, y) < (p.kind === 'village' ? gv : gf))) continue;
       const c = this.cellOf(x, y);
       if (TERRAIN[this.ter[c.cy * GW + c.cx]].speed === 0 || this.ter[c.cy * GW + c.cx] === TER.WOODS) continue;
       const b = this.placeBuilding(c.cx, c.cy, randInt(3, 5), randInt(2, 3));
@@ -1386,7 +1411,7 @@ class GameMap {
 
   // Hilltops for spot elevations and the sheet name; index contour label sites.
   findPeaks() {
-    const R = 50, peaks = [];
+    const R = Math.round(50 * Math.max(0.6, MAP_K)), peaks = [];
     for (let cy = R; cy < GH - R; cy += 5) for (let cx = R; cx < GW - R; cx += 5) {
       const e = this.elev[cy * GW + cx];
       let top = true;
@@ -1397,13 +1422,14 @@ class GameMap {
     }
     peaks.sort((a, b) => b.e - a.e);
     this.peaks = [];
-    for (const p of peaks) if (!this.peaks.some(q => dist(p.x, p.y, q.x, q.y) < 350)) this.peaks.push(p);
+    const pk = Math.max(180, 350 * MAP_K);
+    for (const p of peaks) if (!this.peaks.some(q => dist(p.x, p.y, q.x, q.y) < pk)) this.peaks.push(p);
     this.peak = this.peaks.length ? Math.round(this.elevBase + this.peaks[0].e) : this.elevBase;
     this.contourLabels = [];
     for (let y = 60; y < MAP_H - 60; y += 24) for (let x = 60; x < MAP_W - 60; x += 24) {
       const step = this.ci * this.index, e = this.elevAt(x, y), lv = Math.round(e / step) * step;
       if (lv <= 0 || Math.abs(e - lv) > 0.3) continue;
-      if (this.contourLabels.some(l => dist(l.x, l.y, x, y) < 380)) continue;
+      if (this.contourLabels.some(l => dist(l.x, l.y, x, y) < Math.max(200, 380 * MAP_K))) continue;
       const k = this.terAt(x, y);
       if (k === TER.BUILDING || k === TER.PAVED || k === TER.ROAD) continue;
       this.contourLabels.push({ x, y, v: lv });
@@ -2870,10 +2896,18 @@ const R = {
   canvas: null, ctx: null, w: 0, h: 0, dpr: 1, cam: { x: MAP_W / 2, y: MAP_H / 2, zoom: 1 },
   sheet: null, tiles: new Map(), queue: [], minZoom: 0.1, table: null, grain: null,
 };
-// Collar (margin) around the map body, in meters, holding the marginal information.
+// Collar (margin) around the map body, in meters, holding the marginal information. It
+// is laid out for a 3 km sheet and scaled with the sheet, so it prints the same size.
 const SHEET = { ml: 170, mr: 170, mt: 200, mb: 480 };
-const SHEET_W = MAP_W + SHEET.ml + SHEET.mr, SHEET_H = MAP_H + SHEET.mt + SHEET.mb;
-const SHEET_PPM = 0.55; // whole-sheet pixels per meter
+let SHEET_W = 0, SHEET_H = 0, SHEET_PPM = 0.55; // whole-sheet pixels per meter
+function sizeSheet() {
+  Object.assign(SHEET, { ml: 170 * MAP_K, mr: 170 * MAP_K, mt: 200 * MAP_K, mb: 480 * MAP_K });
+  SHEET_W = MAP_W + SHEET.ml + SHEET.mr; SHEET_H = MAP_H + SHEET.mt + SHEET.mb;
+  SHEET_PPM = Math.min(1.6, 0.55 / MAP_K);
+}
+sizeSheet();
+// Grid lines every kilometer; on a one-square sheet, fainter lines every 100 m inside it.
+const gridStep = () => MAP_W <= 1000 ? 100 : 1000;
 const LEVELS = [null, { ppm: 1.4, size: 600, label: 11 }, { ppm: 4, size: 200, label: 12 }];
 const TILE_CACHE = 28;
 
@@ -2883,6 +2917,8 @@ function initRender(canvas) {
   resizeView();
   window.addEventListener('resize', resizeView);
 }
+// A new sheet size: margins, the zoom that fits the sheet, and the camera.
+function resizeSheet() { sizeSheet(); if (R.canvas) resizeView(); }
 
 function resizeView() {
   const c = R.canvas;
@@ -3228,10 +3264,11 @@ function drawMapRegion(ctx, map, x0, y0, w, h, ppm, level) {
     ctx.fillRect(bd.x0 + m, bd.y0 + m, Math.max(bd.x1 - bd.x0 - 2 * m, 1.5 * pxm), Math.max(bd.y1 - bd.y0 - 2 * m, 1.5 * pxm));
   }
 
-  // Grid: 1 km squares.
-  ctx.strokeStyle = 'rgba(10,10,10,0.85)'; ctx.lineWidth = Math.max(1.2, 0.9 * pxm);
-  for (let x = 1000; x < MAP_W; x += 1000) { ctx.beginPath(); ctx.moveTo(x, 0); ctx.lineTo(x, MAP_H); ctx.stroke(); }
-  for (let n = 1000; n < MAP_H; n += 1000) { ctx.beginPath(); ctx.moveTo(0, MAP_H - n); ctx.lineTo(MAP_W, MAP_H - n); ctx.stroke(); }
+  // Grid: 1 km squares; on a one-square sheet, finer 100 m lines.
+  const gs = gridStep();
+  ctx.strokeStyle = gs < 1000 ? 'rgba(10,10,10,0.45)' : 'rgba(10,10,10,0.85)'; ctx.lineWidth = Math.max(gs < 1000 ? 0.8 : 1.2, 0.9 * pxm);
+  for (let x = gs; x < MAP_W; x += gs) { ctx.beginPath(); ctx.moveTo(x, 0); ctx.lineTo(x, MAP_H); ctx.stroke(); }
+  for (let n = gs; n < MAP_H; n += gs) { ctx.beginPath(); ctx.moveTo(0, MAP_H - n); ctx.lineTo(MAP_W, MAP_H - n); ctx.stroke(); }
 
   // Lettering: sized in screen pixels for each level, as each would be printed.
   const fs = (level === 0 ? 10 : LEVELS[level].label) * pxm;
@@ -3279,6 +3316,9 @@ function buildTerrain(map) {
   ctx.save();
   ctx.scale(P, P);
   ctx.translate(SHEET.ml, SHEET.mt);
+  // The collar is laid out on a 3 km sheet (VW x VH) and scaled to this one.
+  ctx.scale(MAP_K, MAP_K);
+  const VW = MAP_W / MAP_K, VH = MAP_H / MAP_K, vk = 1 / MAP_K;
   const text = (t, x, y, size, opts) => {
     opts = opts || {};
     ctx.font = (opts.weight || 600) + ' ' + size + 'px ' + (opts.serif ? '"Saira Condensed", "Arial Narrow", sans-serif' : '"IBM Plex Mono", ui-monospace, monospace');
@@ -3287,7 +3327,7 @@ function buildTerrain(map) {
     ctx.fillText(t, x, y);
   };
   ctx.strokeStyle = MAP_INK; ctx.lineWidth = 3;
-  ctx.strokeRect(0, 0, MAP_W, MAP_H);
+  ctx.strokeRect(0, 0, VW, VH);
 
   // Grid values: small 100 km digit, large principal digits; full values at the corners.
   const gridLabel = (lead, v, x, y, align) => {
@@ -3302,32 +3342,41 @@ function buildTerrain(map) {
   };
   for (let x = 0; x <= MAP_W; x += 1000) {
     const v = G.grid.e + x / 1000;
-    gridLabel(G.grid.le, v, x, -14, 'center');
-    gridLabel(G.grid.le, v, x, MAP_H + 50, 'center');
+    gridLabel(G.grid.le, v, x * vk, -14, 'center');
+    gridLabel(G.grid.le, v, x * vk, VH + 50, 'center');
   }
   for (let n = 0; n <= MAP_H; n += 1000) {
-    const y = MAP_H - n, v = G.grid.n + n / 1000;
+    const y = VH - n * vk, v = G.grid.n + n / 1000;
     gridLabel(G.grid.ln, v, -14, y + 14, 'right');
-    gridLabel(G.grid.ln, v, MAP_W + 14, y + 14, 'left');
+    gridLabel(G.grid.ln, v, VW + 14, y + 14, 'left');
+  }
+  // On a one-square sheet, the hundreds digit at each 100 m line.
+  if (gridStep() < 1000) {
+    for (let m = 100; m < MAP_W; m += 100) {
+      const d = String(m / 100);
+      text(d, m * vk, -18, 26, { align: 'center' }); text(d, m * vk, VH + 44, 26, { align: 'center' });
+      text(d, -18, VH - m * vk + 9, 26, { align: 'right' }); text(d, VW + 18, VH - m * vk + 9, 26, { align: 'left' });
+    }
   }
   text(G.grid.le + String(G.grid.e).padStart(2, '0') + '000mE.', 0, -64, 20, { weight: 600 });
-  text(G.grid.ln + String(G.grid.n).padStart(2, '0') + '000mN.', -14, MAP_H + 92, 20, { weight: 600, align: 'right' });
+  text(G.grid.ln + String(G.grid.n).padStart(2, '0') + '000mN.', -14, VH + 92, 20, { weight: 600, align: 'right' });
   // 100 m ticks along the neatline.
   ctx.lineWidth = 2;
-  for (let m = 100; m < MAP_W; m += 100) {
-    ctx.beginPath(); ctx.moveTo(m, 0); ctx.lineTo(m, -12); ctx.moveTo(m, MAP_H); ctx.lineTo(m, MAP_H + 12);
-    ctx.moveTo(0, m); ctx.lineTo(-12, m); ctx.moveTo(MAP_W, m); ctx.lineTo(MAP_W + 12, m); ctx.stroke();
+  for (let m0 = 100; m0 < MAP_W; m0 += 100) {
+    const m = m0 * vk;
+    ctx.beginPath(); ctx.moveTo(m, 0); ctx.lineTo(m, -12); ctx.moveTo(m, VH); ctx.lineTo(m, VH + 12);
+    ctx.moveTo(0, m); ctx.lineTo(-12, m); ctx.moveTo(VW, m); ctx.lineTo(VW + 12, m); ctx.stroke();
   }
 
   // Title block.
   text('STEX: RIFLE SQUAD', 0, -140, 34, { weight: 700 });
   text('SERIES T25 · EDITION 1 · ' + map.R.label.toUpperCase(), 0, -104, 22, { weight: 500 });
-  text(('HILL ' + map.peak).toUpperCase(), MAP_W / 2, -118, 76, { weight: 700, serif: true, align: 'center' });
-  text('SHEET ' + String(G.settings ? G.settings.seed : 0).padStart(5, '0'), MAP_W, -140, 34, { weight: 700, align: 'right' });
-  text('1:25 000 · 3 × 3 KM', MAP_W, -104, 22, { weight: 500, align: 'right' });
+  text(('HILL ' + map.peak).toUpperCase(), VW / 2, -118, 76, { weight: 700, serif: true, align: 'center' });
+  text('SHEET ' + String(G.settings ? G.settings.seed : 0).padStart(5, '0'), VW, -140, 34, { weight: 700, align: 'right' });
+  text('1:25 000 · ' + MAP_W / 1000 + ' × ' + MAP_H / 1000 + ' KM', VW, -104, 22, { weight: 500, align: 'right' });
 
   // Legend, bottom left.
-  const ly = MAP_H + 160;
+  const ly = VH + 160;
   text('LEGEND', 0, ly, 26, { weight: 700 });
   // Only what is on this sheet goes in the legend.
   const has = new Uint8Array(32);
@@ -3386,22 +3435,23 @@ function buildTerrain(map) {
   });
 
   // Graphic scale, bottom center.
-  const sx = MAP_W / 2 - 500, sy = MAP_H + 120;
-  text('GRAPHIC SCALE', MAP_W / 2, sy - 22, 24, { weight: 700, align: 'center' });
+  // A bar of real ground distance: 1000 m on a large sheet, 300 m on a one-square sheet.
+  const L = MAP_W >= 3000 ? 1000 : 300, Lv = L * vk, sx = VW / 2 - Lv / 2, sy = VH + 120;
+  text('GRAPHIC SCALE', VW / 2, sy - 22, 24, { weight: 700, align: 'center' });
   ctx.strokeStyle = MAP_INK; ctx.lineWidth = 2;
   for (let i = 0; i < 10; i++) {
     ctx.fillStyle = i % 2 ? 'rgb(' + MAPC.paper.join(',') + ')' : MAP_INK;
-    ctx.fillRect(sx + i * 100, sy, 100, 14); ctx.strokeRect(sx + i * 100, sy, 100, 14);
+    ctx.fillRect(sx + i * Lv / 10, sy, Lv / 10, 14); ctx.strokeRect(sx + i * Lv / 10, sy, Lv / 10, 14);
   }
-  for (let m = 0; m <= 1000; m += 200) text(String(m), sx + m, sy + 44, 22, { align: 'center' });
-  text('METERS', sx + 1030, sy + 14, 22, { weight: 700 });
+  for (let m = 0; m <= L; m += L / 5) text(String(m), sx + m * vk, sy + 44, 22, { align: 'center' });
+  text('METERS', sx + Lv + 30, sy + 14, 22, { weight: 700 });
   // The declination diagram and notes sit at the bottom right.
-  const nx = MAP_W - 520;
-  text('CONTOUR INTERVAL ' + map.ci + ' METERS', nx, MAP_H + 200, 24, { weight: 700 });
-  text('ELEVATIONS IN METERS ABOVE MEAN SEA LEVEL', nx, MAP_H + 234, 19, { weight: 500 });
-  text('GRID: 1000 METER SQUARES', nx, MAP_H + 262, 19, { weight: 500 });
-  text('TO GIVE A GRID REFERENCE: READ RIGHT, THEN UP', nx, MAP_H + 290, 19, { weight: 500 });
-  const dx = MAP_W - 70, dy = MAP_H + 440, gm = map.gmAngle;
+  const nx = VW - 520;
+  text('CONTOUR INTERVAL ' + map.ci + ' METERS', nx, VH + 200, 24, { weight: 700 });
+  text('ELEVATIONS IN METERS ABOVE MEAN SEA LEVEL', nx, VH + 234, 19, { weight: 500 });
+  text('GRID: 1000 METER SQUARES' + (gridStep() < 1000 ? ', 100 M LINES' : ''), nx, VH + 262, 19, { weight: 500 });
+  text('TO GIVE A GRID REFERENCE: READ RIGHT, THEN UP', nx, VH + 290, 19, { weight: 500 });
+  const dx = VW - 70, dy = VH + 440, gm = map.gmAngle;
   const ray = (deg, len) => ({ x: dx + Math.sin(deg * Math.PI / 180) * len, y: dy - Math.cos(deg * Math.PI / 180) * len });
   ctx.strokeStyle = MAP_INK; ctx.lineWidth = 3;
   const tn = ray(0, 120), gn = ray(-1.2, 120), mn = ray(gm, 108);
@@ -3413,8 +3463,8 @@ function buildTerrain(map) {
   text('GN', gn.x - 10, gn.y - 4, 20, { weight: 700, align: 'right' });
   ctx.beginPath(); ctx.moveTo(mn.x, mn.y); ctx.lineTo(mn.x + 9, mn.y + 20); ctx.lineTo(mn.x, mn.y + 17); ctx.fill();
   text('MN', mn.x + 12, mn.y + 6, 20, { weight: 700 });
-  text(Math.abs(gm).toFixed(1) + '° G-M ANGLE ' + (gm >= 0 ? 'EAST' : 'WEST'), nx, MAP_H + 330, 19, { weight: 500 });
-  text('GRID BEARINGS USED IN REPORTS', nx, MAP_H + 358, 19, { weight: 500 });
+  text(Math.abs(gm).toFixed(1) + '° G-M ANGLE ' + (gm >= 0 ? 'EAST' : 'WEST'), nx, VH + 330, 19, { weight: 500 });
+  text('GRID BEARINGS USED IN REPORTS', nx, VH + 358, 19, { weight: 500 });
   ctx.restore();
   R.sheet = c;
 }
@@ -3559,14 +3609,16 @@ function drawPaper(ctx) {
 }
 
 // When the margin is scrolled off screen, repeat the grid values along the screen edge.
+// On a one-square sheet the 100 m lines carry the kilometer and hundreds digits (473).
 function drawEdgeLabels(ctx) {
   ctx.font = '600 12px "IBM Plex Mono", ui-monospace, monospace';
   ctx.lineWidth = 3; ctx.strokeStyle = 'rgba(247,245,236,0.95)'; ctx.fillStyle = OVL.black;
-  const top = 56;
+  const top = 56, gs = gridStep();
+  const label = (base, m) => gs < 1000 ? String(base * 10 + m / 100).padStart(3, '0') : String(base + m / 1000).padStart(2, '0');
   if (toScreen(0, 0).y < top) {
     ctx.textAlign = 'left'; ctx.textBaseline = 'top';
-    for (let x = 1000; x < MAP_W; x += 1000) {
-      const p = toScreen(x, 0), t = String(G.grid.e + x / 1000).padStart(2, '0');
+    for (let x = gs; x < MAP_W; x += gs) {
+      const p = toScreen(x, 0), t = label(G.grid.e, x);
       if (p.x < 4 || p.x > R.w - 30) continue;
       ctx.strokeText(t, p.x + 3, top); ctx.fillText(t, p.x + 3, top);
     }
@@ -3574,8 +3626,8 @@ function drawEdgeLabels(ctx) {
   const left = R.w > 760 && !document.body.classList.contains('roster-min') ? 306 : 4;
   if (toScreen(0, 0).x < left) {
     ctx.textAlign = 'left'; ctx.textBaseline = 'bottom';
-    for (let n = 1000; n < MAP_H; n += 1000) {
-      const p = toScreen(0, MAP_H - n), t = String(G.grid.n + n / 1000).padStart(2, '0');
+    for (let n = gs; n < MAP_H; n += gs) {
+      const p = toScreen(0, MAP_H - n), t = label(G.grid.n, n);
       if (p.y < top + 16 || p.y > R.h - 10) continue;
       ctx.strokeText(t, left, p.y - 2); ctx.fillText(t, left, p.y - 2);
     }
@@ -4878,7 +4930,7 @@ const Plan = {
     const sep = dist(centroid(G.squads.blue.all).x, centroid(G.squads.blue.all).y, this.reported.x, this.reported.y);
     // Time available: in a meeting engagement, until the enemy could reach you; in an
     // attack, until the enemy finishes digging in.
-    this.timeAvail = G.mode === 'meeting' ? Math.round(sep / 1.25 / 60) * 60 : 45 * 60;
+    this.timeAvail = G.mode === 'meeting' ? Math.round(sep / 1.25 / 60) * 60 : G.echelon.attackTime * 60;
     this.intel = this.makeIntel();
     this.terrain = this.keyTerrain();
     this.ao = this.aoFacts();
@@ -5411,7 +5463,7 @@ const Plan = {
     const atk = G.mode === 'attack';
     return [
       ['Defend', atk ? 'Most likely. Will defend from its present positions, improving them while you plan.' : 'Can go to ground and defend if it is fired on first.', atk],
-      ['Reinforce', 'No other enemy is known within 3 km. Reinforcement is unlikely.', false],
+      ['Reinforce', 'No other enemy is known in the AO. Reinforcement is unlikely.', false],
       ['Attack', atk ? 'Could counterattack your flank with one group if your assault stalls.' : 'Most likely. Will keep moving and attack on contact.', !atk],
       ['Withdraw', 'Likely to break contact once it loses about half its men.', false],
       ['Delay', 'Could delay from the next covered position if pressed.', false],
@@ -5725,7 +5777,7 @@ const OPORD = {
   orientation(box) {
     const f = Plan.terrainFacts(), m = G.map;
     const ao = Plan.ao, two = (v) => String(v).padStart(2, '0');
-    this.para(box, 'Orientation', 'AO is 3 × 3 km, grid ' + two(ao.e0) + '–' + two(ao.e0 + 3) + ' E, ' + two(ao.n0) + '–' + two(ao.n0 + 3) + ' N. ' +
+    this.para(box, 'Orientation', 'AO is ' + MAP_W / 1000 + ' × ' + MAP_H / 1000 + ' km, grid ' + two(ao.e0) + '–' + two(ao.e0 + MAP_W / 1000) + ' E, ' + two(ao.n0) + '–' + two(ao.n0 + MAP_H / 1000) + ' N. ' +
       m.R.brief + ' Elevation ' + ao.lo + '–' + ao.hi + ' m. North up. CI ' + m.ci + ' m, index ' + m.ci * m.index + ' m.');
 
     box.appendChild(el('h4', null, 'Obstacles and restrictive terrain'));
@@ -6243,7 +6295,7 @@ const G = {
 function loadSettings() {
   let saved = null;
   try { saved = JSON.parse(localStorage.getItem('squad.settings') || 'null'); } catch (e) { saved = null; }
-  const s = { seed: Math.floor(Math.random() * 99999) + 1, mode: 'random', region: 'random', loadout: defaultLoadout() };
+  const s = { seed: Math.floor(Math.random() * 99999) + 1, mode: 'random', region: 'random', echelon: 'squad', loadout: defaultLoadout() };
   if (saved && saved.loadout) {
     for (const k of Object.keys(s.loadout)) {
       const l = saved.loadout[k];
@@ -6262,6 +6314,8 @@ function newMission() {
   const set = G.settings;
   saveSettings();
   NEXT_ID = 1;
+  G.echelon = ECHELONS[set.echelon] || ECHELONS.squad;
+  setMapSize(G.echelon.size); resizeSheet();
   G.map = new GameMap(set.seed, set.region);
   // Grid: a small 100 km digit and two principal digits for each kilometer line.
   G.grid = { e: randInt(10, 85), n: randInt(10, 85), le: randInt(1, 8), ln: randInt(1, 8) };
@@ -6271,12 +6325,13 @@ function newMission() {
   const mode = set.mode === 'random' ? (chance(0.5) ? 'attack' : 'meeting') : set.mode;
   G.mode = mode;
 
-  // The squads start 1.5 to 2.5 km apart, on a random axis, both well inside the sheet.
-  const M = 250, inside = (x, y) => x >= M && y >= M && x <= MAP_W - M && y <= MAP_H - M;
-  let axis = 0, sep = 1500, bx = M, by = M, rx = MAP_W - M, ry = MAP_H - M;
+  // The sides start apart by the echelon's distance (500-700 m for squads), on a random
+  // axis, both well inside the sheet.
+  const M = G.echelon.margin, inside = (x, y) => x >= M && y >= M && x <= MAP_W - M && y <= MAP_H - M;
+  let axis = 0, sep = G.echelon.sep[0], bx = M, by = M, rx = MAP_W - M, ry = MAP_H - M;
   // Choose the distance first, then find a placement that fits, so long distances are as
   // likely as short ones.
-  sep = randRange(1500, 2500);
+  sep = randRange(G.echelon.sep[0], G.echelon.sep[1]);
   for (let k = 0; k < 2000; k++) {
     axis = randRange(0, Math.PI * 2);
     bx = randRange(M, MAP_W - M); by = randRange(M, MAP_H - M);
@@ -6479,7 +6534,7 @@ function frame(now) {
   requestAnimationFrame(frame);
 }
 
-// Building a 3 km sheet takes a few seconds; show a notice and let it paint first.
+// Building a sheet can take a second or two; show a notice and let it paint first.
 function withLoading(text, fn) {
   $('loading').textContent = text;
   $('loading').hidden = false;
@@ -6505,6 +6560,7 @@ function boot() {
   requestAnimationFrame(frame);
   // Draw a map behind the briefing so the first view is the ground, not a blank table.
   withLoading('Drawing the map sheet…', () => {
+    setMapSize(ECHELONS[G.settings.echelon].size); resizeSheet();
     G.map = new GameMap(G.settings.seed, G.settings.region);
     buildTerrain(G.map);
     fitCamera(null, R.minZoom);

@@ -188,7 +188,7 @@ const OPORD = {
   orientation(box) {
     const f = Plan.terrainFacts(), m = G.map;
     const ao = Plan.ao, two = (v) => String(v).padStart(2, '0');
-    this.para(box, 'Orientation', 'AO is 3 × 3 km, grid ' + two(ao.e0) + '–' + two(ao.e0 + 3) + ' E, ' + two(ao.n0) + '–' + two(ao.n0 + 3) + ' N. ' +
+    this.para(box, 'Orientation', 'AO is ' + MAP_W / 1000 + ' × ' + MAP_H / 1000 + ' km, grid ' + two(ao.e0) + '–' + two(ao.e0 + MAP_W / 1000) + ' E, ' + two(ao.n0) + '–' + two(ao.n0 + MAP_H / 1000) + ' N. ' +
       m.R.brief + ' Elevation ' + ao.lo + '–' + ao.hi + ' m. North up. CI ' + m.ci + ' m, index ' + m.ci * m.index + ' m.');
 
     box.appendChild(el('h4', null, 'Obstacles and restrictive terrain'));
