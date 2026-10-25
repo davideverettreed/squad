@@ -9,7 +9,8 @@ const G = {
   spotT: 0, teamT: 0, endT: 0,
   stats: null, grid: { e: 34, n: 72 }, revealAll: false,
   settings: null,
-  ui: { cones: true, sel: null, pending: null, moveMode: 'walk', hover: null, hoverIsPointer: false, panelH: 0 },
+  ui: { cones: true, sel: null, pending: null, moveMode: 'walk', hover: null, hoverIsPointer: false, panelH: 0,
+    ghostForm: null, measuring: false, tapeStart: null, tapes: [] },
   log(msg, kind) { UI.log(msg, kind); },
   toast(msg) { UI.toast(msg); },
 };
@@ -82,7 +83,7 @@ function newMission() {
   G.over = false; G.running = true; G.paused = false;
   G.missionId = (G.missionId || 0) + 1;
   $('debrief').hidden = true;
-  G.ui.sel = null; G.ui.pending = null;
+  G.ui.sel = null; G.ui.pending = null; G.ui.tapes = []; G.ui.tapeStart = null;
   for (const t of [blue.hq, ...blue.teams, red.hq, ...red.teams]) { t.routing = false; t.morale = t.squad.morale; }
   initAI(mode === 'attack' ? 'defend' : 'advance', blueStart);
 

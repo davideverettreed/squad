@@ -30,21 +30,16 @@ function resizeView() {
   clampCam();
 }
 
-// Keep the sheet within the band between the header and the order panel: when it is
-// bigger than the band it must cover it (a little table may show at the edges);
-// when smaller, it sits centered in it.
+// Any edge of the map can be pulled in to about a quarter of the screen from the far side,
+// clear of the roster, the order panel and the orders bar. Zoomed far out, the whole
+// sheet with its margins stays reachable.
 function clampCam() {
   const c = R.cam;
   c.zoom = clamp(c.zoom, R.minZoom, 16);
-  const slack = 40 / c.zoom;
-  const axis = (lo0, hi0, bandLo, bandHi, size) => {
-    const lo = lo0 - slack - (bandLo - size / 2) / c.zoom;
-    const hi = hi0 + slack - (bandHi - size / 2) / c.zoom;
-    return lo <= hi ? [lo, hi] : [(lo + hi) / 2, (lo + hi) / 2];
-  };
-  const [x0, x1] = axis(-SHEET.ml, MAP_W + SHEET.mr, 0, R.w, R.w);
-  const [y0, y1] = axis(-SHEET.mt, MAP_H + SHEET.mb, 52, R.h - (G.ui.panelH || 150), R.h);
-  c.x = clamp(c.x, x0, x1); c.y = clamp(c.y, y0, y1);
+  const px = 0.22 * R.w / c.zoom, py = 0.22 * R.h / c.zoom;
+  // The sheet's collar (legend, scale) is reachable too: its outer edge can come to the center.
+  c.x = clamp(c.x, Math.min(-px, -SHEET.ml, MAP_W / 2 - R.w / 2 / c.zoom), Math.max(MAP_W + px, MAP_W + SHEET.mr, MAP_W / 2 + R.w / 2 / c.zoom));
+  c.y = clamp(c.y, Math.min(-py, -SHEET.mt, MAP_H / 2 - R.h / 2 / c.zoom), Math.max(MAP_H + py, MAP_H + SHEET.mb, MAP_H / 2 + R.h / 2 / c.zoom));
 }
 
 function fitCamera(focus, zoom) {
@@ -582,6 +577,8 @@ function render() {
   drawEffects(ctx);
   drawCones(ctx);
   drawUnits(ctx);
+  drawGhostFormation(ctx);
+  drawTapes(ctx);
   drawFloaters(ctx);
   drawScale(ctx);
 }
@@ -1282,6 +1279,87 @@ function drawEffects(ctx) {
       ctx.beginPath(); ctx.arc(p.x, p.y, rr, 0, Math.PI * 2); ctx.stroke();
     }
   }
+}
+
+// The selected team or squad redrawn in the formation under the pointer: a dashed circle
+// for each man's new station, a faint line from where he is now.
+function drawGhostFormation(ctx) {
+  const form = G.ui.ghostForm, sel = G.ui.sel;
+  if (!form || !sel || sel.level === 'soldier') return;
+  const slots = [];
+  if (sel.level === 'team') {
+    const act = sel.team.members.filter(commandable);
+    act.forEach((s, i) => slots.push({ s, o: teamSlot(form, i) }));
+  } else {
+    const sq = sel.squad, teams = sq.teams.filter(t => t.members.some(commandable));
+    teams.forEach((t, k) => {
+      const q = squadSlot(form, k, teams.length);
+      t.members.filter(commandable).forEach((s, i) => { const o = teamSlot(t.formation, i); slots.push({ s, o: { x: q.x + o.x, y: q.y + o.y } }); });
+    });
+    const sl = sq.hq.members[0];
+    if (sl && commandable(sl)) slots.push({ s: sl, o: squadLeaderSlot(form) });
+  }
+  if (!slots.length) return;
+  // Face the way the leader faces; center the ghost on the unit as it stands.
+  const lead = slots[0].s, hd = lead.facing != null ? lead.facing : 0;
+  const pts = slots.map(e => ({ s: e.s, w: rotateOffset(e.o.x, e.o.y, hd) }));
+  const c = centroid(pts.map(e => e.s)), gx = pts.reduce((n, e) => n + e.w.x, 0) / pts.length, gy = pts.reduce((n, e) => n + e.w.y, 0) / pts.length;
+  const r = Math.max(6, Math.min(14, 3 * R.cam.zoom));
+  ctx.save();
+  for (const e of pts) {
+    const p = toScreen(c.x + e.w.x - gx, c.y + e.w.y - gy), q = toScreen(e.s.x, e.s.y);
+    ctx.strokeStyle = 'rgba(31,79,191,0.35)'; ctx.lineWidth = 1; ctx.setLineDash([2, 3]);
+    ctx.beginPath(); ctx.moveTo(q.x, q.y); ctx.lineTo(p.x, p.y); ctx.stroke();
+    ctx.fillStyle = 'rgba(31,79,191,0.32)'; ctx.strokeStyle = 'rgba(31,79,191,0.95)'; ctx.lineWidth = 2; ctx.setLineDash([3, 2]);
+    ctx.beginPath(); ctx.arc(p.x, p.y, r, 0, Math.PI * 2); ctx.fill(); ctx.stroke();
+  }
+  ctx.setLineDash([]);
+  // An arrow for the direction of march, and the formation's name.
+  const f = toScreen(c.x, c.y), L = 40 + 30 * Math.min(2, R.cam.zoom);
+  const tx = f.x + Math.cos(hd) * L, ty = f.y + Math.sin(hd) * L;
+  ctx.strokeStyle = 'rgba(31,79,191,0.8)'; ctx.lineWidth = 2;
+  ctx.beginPath(); ctx.moveTo(f.x, f.y); ctx.lineTo(tx, ty);
+  ctx.moveTo(tx, ty); ctx.lineTo(tx - Math.cos(hd - 0.4) * 9, ty - Math.sin(hd - 0.4) * 9);
+  ctx.moveTo(tx, ty); ctx.lineTo(tx - Math.cos(hd + 0.4) * 9, ty - Math.sin(hd + 0.4) * 9); ctx.stroke();
+  ctx.font = '700 13px "Saira Condensed", sans-serif'; ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+  ctx.lineWidth = 3; ctx.strokeStyle = 'rgba(247,245,236,0.95)'; ctx.strokeText(FORMATIONS[form].label.toUpperCase(), tx, ty - 14);
+  ctx.fillStyle = OVL.blue; ctx.fillText(FORMATIONS[form].label.toUpperCase(), tx, ty - 14);
+  ctx.restore();
+}
+
+// Distance and bearing, as a map reader states them: meters, degrees grid and mils.
+function tapeLabel(a, b) {
+  const d = dist(a.x, a.y, b.x, b.y), brg = bearing(a.x, a.y, b.x, b.y);
+  return (d >= 1000 ? (d / 1000).toFixed(2) + ' km' : Math.round(d) + ' m') + ' · ' + pad3(Math.round(brg) % 360) + '° · ' + Math.round(brg * 6400 / 360) % 6400 + ' mils';
+}
+function drawTape(ctx, a, b, live) {
+  const p = toScreen(a.x, a.y), q = toScreen(b.x, b.y), ang = Math.atan2(q.y - p.y, q.x - p.x);
+  const nx = -Math.sin(ang) * 6, ny = Math.cos(ang) * 6;
+  ctx.strokeStyle = OVL.black; ctx.lineWidth = 1.6; ctx.setLineDash(live ? [6, 4] : []);
+  ctx.beginPath(); ctx.moveTo(p.x, p.y); ctx.lineTo(q.x, q.y); ctx.stroke(); ctx.setLineDash([]);
+  ctx.beginPath(); ctx.moveTo(p.x + nx, p.y + ny); ctx.lineTo(p.x - nx, p.y - ny); ctx.moveTo(q.x + nx, q.y + ny); ctx.lineTo(q.x - nx, q.y - ny); ctx.stroke();
+  // Tick every 100 m along the tape when they are far enough apart to read.
+  const d = dist(a.x, a.y, b.x, b.y), step = 100 * R.cam.zoom >= 14 ? 100 : 500 * R.cam.zoom >= 14 ? 500 : 0;
+  if (step) for (let m = step; m < d; m += step) {
+    const t = m / d, x = p.x + (q.x - p.x) * t, y = p.y + (q.y - p.y) * t;
+    ctx.beginPath(); ctx.moveTo(x + nx * 0.5, y + ny * 0.5); ctx.lineTo(x - nx * 0.5, y - ny * 0.5); ctx.stroke();
+  }
+  const text = tapeLabel(a, b), mx = (p.x + q.x) / 2, my = (p.y + q.y) / 2;
+  ctx.font = '700 12px "Saira Condensed", sans-serif'; ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+  const w = ctx.measureText(text).width + 12;
+  ctx.fillStyle = 'rgba(247,245,236,0.95)'; ctx.fillRect(mx - w / 2, my - 10, w, 20);
+  ctx.strokeStyle = OVL.black; ctx.lineWidth = 1; ctx.strokeRect(mx - w / 2, my - 10, w, 20);
+  ctx.fillStyle = OVL.black; ctx.fillText(text, mx, my + 1);
+}
+function drawTapes(ctx) {
+  ctx.save();
+  for (const t of G.ui.tapes) drawTape(ctx, t.a, t.b, false);
+  if (G.ui.measuring && G.ui.tapeStart) {
+    const s = toScreen(G.ui.tapeStart.x, G.ui.tapeStart.y);
+    ctx.fillStyle = OVL.black; ctx.beginPath(); ctx.arc(s.x, s.y, 3.5, 0, Math.PI * 2); ctx.fill();
+    if (G.ui.hover && G.ui.hoverIsPointer) drawTape(ctx, G.ui.tapeStart, G.ui.hover, true);
+  }
+  ctx.restore();
 }
 
 function drawFloaters(ctx) {

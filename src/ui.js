@@ -23,6 +23,7 @@ const UI = {
     OPORD.init();
     $('btnPause').addEventListener('click', () => togglePause());
     $('btnSpeed').addEventListener('click', () => { G.speed = G.speed >= 16 ? 1 : G.speed * 2; this.refreshBar(); });
+    $('btnMeasure').addEventListener('click', () => this.setMeasuring(!G.ui.measuring));
     $('btnCones').addEventListener('click', () => { G.ui.cones = !G.ui.cones; $('btnCones').classList.toggle('on', G.ui.cones); });
     $('btnRoster').addEventListener('click', () => document.body.classList.toggle('roster-open'));
     $('rosterTab').addEventListener('click', () => document.body.classList.remove('roster-min'));
@@ -52,6 +53,11 @@ const UI = {
         const b = el('button', 'obtn', text);
         b.dataset.kind = kind; b.dataset.val = val;
         b.addEventListener('click', () => this.onOrderButton(kind, val));
+        // Pointing at a formation shows the selected unit's ghost in that formation.
+        if (kind === 'formation') {
+          b.addEventListener('pointerenter', () => { G.ui.ghostForm = val; });
+          b.addEventListener('pointerleave', () => { if (G.ui.ghostForm === val) G.ui.ghostForm = null; });
+        }
         row.appendChild(b);
       }
       box.appendChild(row);
@@ -141,6 +147,7 @@ const UI = {
   handleTap(sx, sy, secondary) {
     if (!G.running || G.over) return;
     if ($('planMenu')) { this.closePlanMenu(); return; }
+    if (G.ui.measuring && !secondary) { this.tapeTap(sx, sy, toWorld(sx, sy)); return; }
     const w = toWorld(sx, sy);
     if (Plan.tool && !secondary) { Plan.place(w); return; }
     const piece = pieceAt(sx, sy);
@@ -182,6 +189,22 @@ const UI = {
     }
     if (enemy && sel) { issueOrder(sel, 'engage', enemy); return; }
     if (sel) issueOrder(sel, 'move', w);
+  },
+
+  // ------------------------------------------------------------ measuring tape
+  setMeasuring(on) {
+    G.ui.measuring = on; G.ui.tapeStart = null;
+    $('btnMeasure').classList.toggle('on', on);
+    this.toast(on ? 'Tap two points to measure. Tap a distance label to remove it. Measure or Esc to stop.' : 'Measuring off.');
+  },
+  tapeTap(sx, sy, w) {
+    // A tap on a label removes that measurement.
+    const hit = G.ui.tapes.findIndex(t => { const m = toScreen((t.a.x + t.b.x) / 2, (t.a.y + t.b.y) / 2); return Math.abs(m.x - sx) < 48 && Math.abs(m.y - sy) < 14; });
+    if (hit >= 0 && !G.ui.tapeStart) { G.ui.tapes.splice(hit, 1); return; }
+    if (!G.ui.tapeStart) { G.ui.tapeStart = { x: w.x, y: w.y }; this.toast('Tap the second point.'); return; }
+    const t = { a: G.ui.tapeStart, b: { x: w.x, y: w.y } };
+    G.ui.tapes.push(t); G.ui.tapeStart = null;
+    this.toast(tapeLabel(t.a, t.b) + ', grid ' + gridRef(t.a.x, t.a.y) + ' to ' + gridRef(t.b.x, t.b.y) + '.');
   },
 
   planMenu(sx, sy, w, sel) {

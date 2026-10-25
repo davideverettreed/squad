@@ -288,6 +288,8 @@ kbd { font: 600 12px/1 var(--mono); border: 1px solid var(--line); border-bottom
   .barbtns { gap: 4px; }
   #btnRoster { display: inline-block; }
   #btnCones { display: none; }
+  body #btnMeasure .lg { display: none; }
+  body #btnMeasure .sm { display: inline; }
   body.roster-min .edgetab.left { display: none; }
   #toolPalette { top: auto; bottom: calc(var(--orders-h, 150px) + 8px); right: 40px; left: 8px; width: auto; }
   body.palette-open #log { display: none; }
@@ -333,3 +335,4 @@ details.cheat h5 { margin: 8px 0 4px; font: 700 11px "Saira Condensed", sans-ser
 details.cheat dl { display: grid; grid-template-columns: minmax(110px, 38%) 1fr; gap: 4px 10px; margin: 0 0 8px; font-size: 13px; }
 details.cheat dt { font-weight: 700; }
 details.cheat dd { margin: 0; opacity: .9; }
+#btnMeasure .sm { display: none; }

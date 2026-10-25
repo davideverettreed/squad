@@ -83,10 +83,12 @@ const Input = {
       const k = e.key;
       if (k === ' ') { e.preventDefault(); togglePause(); }
       else if (k === 'v' || k === 'V') $('btnCones').click();
+      else if (k === 'm' || k === 'M') $('btnMeasure').click();
       else if (k === '1' || k === '2' || k === '3') UI.selectTeam(+k);
       else if (k === '0' || k === '`') UI.select({ level: 'squad', squad: G.squads.blue });
       else if (k === 'Escape') {
         if ($('planMenu')) UI.closePlanMenu();
+        else if (G.ui.measuring) UI.setMeasuring(false);
         else if (Plan.tool) { Plan.tool = null; Plan.plStart = null; Plan.routeDraft = null; Plan.routeUnit = null; OPORD.refresh(); }
         else if (G.ui.pending) { G.ui.pending = null; UI.refreshOrders(); }
         else UI.select(null);

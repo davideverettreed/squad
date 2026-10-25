@@ -300,6 +300,8 @@ kbd { font: 600 12px/1 var(--mono); border: 1px solid var(--line); border-bottom
   .barbtns { gap: 4px; }
   #btnRoster { display: inline-block; }
   #btnCones { display: none; }
+  body #btnMeasure .lg { display: none; }
+  body #btnMeasure .sm { display: inline; }
   body.roster-min .edgetab.left { display: none; }
   #toolPalette { top: auto; bottom: calc(var(--orders-h, 150px) + 8px); right: 40px; left: 8px; width: auto; }
   body.palette-open #log { display: none; }
@@ -345,6 +347,7 @@ details.cheat h5 { margin: 8px 0 4px; font: 700 11px "Saira Condensed", sans-ser
 details.cheat dl { display: grid; grid-template-columns: minmax(110px, 38%) 1fr; gap: 4px 10px; margin: 0 0 8px; font-size: 13px; }
 details.cheat dt { font-weight: 700; }
 details.cheat dd { margin: 0; opacity: .9; }
+#btnMeasure .sm { display: none; }
 </style>
 </head>
 <body>
@@ -357,6 +360,7 @@ details.cheat dd { margin: 0; opacity: .9; }
     <div class="barbtns">
       <button id="btnPause" class="obtn">Resume</button>
       <button id="btnSpeed" class="obtn" title="Game speed">1×</button>
+      <button id="btnMeasure" class="obtn" title="Measure distance and bearing between two points (M)"><span class="lg">Measure</span><span class="sm">Tape</span></button>
       <button id="btnCones" class="obtn on" title="Show where each man is looking (V)">Cones</button>
       <button id="btnOrder" class="obtn" title="Operation order and phase tracker">Order</button>
       <button id="btnRoster" class="obtn">Roster</button>
@@ -433,7 +437,7 @@ details.cheat dd { margin: 0; opacity: .9; }
         <h3>Overlay</h3>
         <p>Orders are drawn as on an acetate overlay: blue for friendly, red for enemy, black for targets. Blue lines with arrowheads are routes (long dashes for a rush, dots for a crawl); a heavy arrow with a solid head is an assault. OBJ marks the objective of a bounding drill. Dashed blue lines run from the shooters to a suppression target, a black cross in a circle. 40MM marks a grenade launcher target.</p>
         <h3>Map key</h3>
-        <p>The sheet covers 3 by 3 kilometers in nine 1-kilometer grid squares, in standard US military map colors. White is open ground. Light green with tufts is tall grass, which hides a man lying prone. Green is woods and hedgerows; rows of small green circles are orchards, green row lines are vineyards. Blue lines are streams, which run in shallow gullies that give cover; blue areas are ponds and cannot be crossed. A broad blue band is a river: it can be crossed only at a bridge (two black lines across the road) or at a ford, marked FORD in a dashed blue circle, where men wade slowly in the open. Pale blue-green ground with small blue tufts is swamp: very slow going and no cover, but it hides a man. Red-brown lines are contours 5 meters apart, with a heavier, numbered index contour every 25 meters; numbers with a dot are hilltop heights. Black blocks are buildings. A black line with ticks is a stone wall, which gives hard cover to a kneeling or prone man. The red road is a paved road; the dashed double lines are dirt tracks. Point at the map to read the 8-digit grid reference. Zoomed out, your men gather into one counter per fire team, then one for the squad, in the standard unit symbol: a rectangle with an infantry X for friendly, a diamond for enemy.</p>
+        <p>The sheet covers 3 by 3 kilometers in nine 1-kilometer grid squares, in standard US military map colors. White is open ground. Light green with tufts is tall grass, which hides a man lying prone. Green is woods and hedgerows; rows of small green circles are orchards, green row lines are vineyards. Blue lines are streams, which run in shallow gullies that give cover; blue areas are ponds and cannot be crossed. A broad blue band is a river: it can be crossed only at a bridge (two black lines across the road) or at a ford, marked FORD in a dashed blue circle, where men wade slowly in the open. Pale blue-green ground with small blue tufts is swamp: very slow going and no cover, but it hides a man. Red-brown lines are contours 5 meters apart, with a heavier, numbered index contour every 25 meters; numbers with a dot are hilltop heights. Black blocks are buildings. A black line with ticks is a stone wall, which gives hard cover to a kneeling or prone man. The red road is a paved road; the dashed double lines are dirt tracks. Point at the map to read the 8-digit grid reference. Measure (key M) lays a tape between two taps and marks the distance, grid bearing and mils on the map; tap a label to remove it. Point at a formation button to see the selected team or squad ghosted in that formation. Zoomed out, your men gather into one counter per fire team, then one for the squad, in the standard unit symbol: a rectangle with an infantry X for friendly, a diamond for enemy.</p>
         <h3>Camera</h3>
         <p>Drag to pan. Use the wheel or pinch to zoom. <kbd>Space</kbd> pauses; you can give orders while paused.</p>
       </div>
@@ -2660,21 +2664,16 @@ function resizeView() {
   clampCam();
 }
 
-// Keep the sheet within the band between the header and the order panel: when it is
-// bigger than the band it must cover it (a little table may show at the edges);
-// when smaller, it sits centered in it.
+// Any edge of the map can be pulled in to about a quarter of the screen from the far side,
+// clear of the roster, the order panel and the orders bar. Zoomed far out, the whole
+// sheet with its margins stays reachable.
 function clampCam() {
   const c = R.cam;
   c.zoom = clamp(c.zoom, R.minZoom, 16);
-  const slack = 40 / c.zoom;
-  const axis = (lo0, hi0, bandLo, bandHi, size) => {
-    const lo = lo0 - slack - (bandLo - size / 2) / c.zoom;
-    const hi = hi0 + slack - (bandHi - size / 2) / c.zoom;
-    return lo <= hi ? [lo, hi] : [(lo + hi) / 2, (lo + hi) / 2];
-  };
-  const [x0, x1] = axis(-SHEET.ml, MAP_W + SHEET.mr, 0, R.w, R.w);
-  const [y0, y1] = axis(-SHEET.mt, MAP_H + SHEET.mb, 52, R.h - (G.ui.panelH || 150), R.h);
-  c.x = clamp(c.x, x0, x1); c.y = clamp(c.y, y0, y1);
+  const px = 0.22 * R.w / c.zoom, py = 0.22 * R.h / c.zoom;
+  // The sheet's collar (legend, scale) is reachable too: its outer edge can come to the center.
+  c.x = clamp(c.x, Math.min(-px, -SHEET.ml, MAP_W / 2 - R.w / 2 / c.zoom), Math.max(MAP_W + px, MAP_W + SHEET.mr, MAP_W / 2 + R.w / 2 / c.zoom));
+  c.y = clamp(c.y, Math.min(-py, -SHEET.mt, MAP_H / 2 - R.h / 2 / c.zoom), Math.max(MAP_H + py, MAP_H + SHEET.mb, MAP_H / 2 + R.h / 2 / c.zoom));
 }
 
 function fitCamera(focus, zoom) {
@@ -3212,6 +3211,8 @@ function render() {
   drawEffects(ctx);
   drawCones(ctx);
   drawUnits(ctx);
+  drawGhostFormation(ctx);
+  drawTapes(ctx);
   drawFloaters(ctx);
   drawScale(ctx);
 }
@@ -3914,6 +3915,87 @@ function drawEffects(ctx) {
   }
 }
 
+// The selected team or squad redrawn in the formation under the pointer: a dashed circle
+// for each man's new station, a faint line from where he is now.
+function drawGhostFormation(ctx) {
+  const form = G.ui.ghostForm, sel = G.ui.sel;
+  if (!form || !sel || sel.level === 'soldier') return;
+  const slots = [];
+  if (sel.level === 'team') {
+    const act = sel.team.members.filter(commandable);
+    act.forEach((s, i) => slots.push({ s, o: teamSlot(form, i) }));
+  } else {
+    const sq = sel.squad, teams = sq.teams.filter(t => t.members.some(commandable));
+    teams.forEach((t, k) => {
+      const q = squadSlot(form, k, teams.length);
+      t.members.filter(commandable).forEach((s, i) => { const o = teamSlot(t.formation, i); slots.push({ s, o: { x: q.x + o.x, y: q.y + o.y } }); });
+    });
+    const sl = sq.hq.members[0];
+    if (sl && commandable(sl)) slots.push({ s: sl, o: squadLeaderSlot(form) });
+  }
+  if (!slots.length) return;
+  // Face the way the leader faces; center the ghost on the unit as it stands.
+  const lead = slots[0].s, hd = lead.facing != null ? lead.facing : 0;
+  const pts = slots.map(e => ({ s: e.s, w: rotateOffset(e.o.x, e.o.y, hd) }));
+  const c = centroid(pts.map(e => e.s)), gx = pts.reduce((n, e) => n + e.w.x, 0) / pts.length, gy = pts.reduce((n, e) => n + e.w.y, 0) / pts.length;
+  const r = Math.max(6, Math.min(14, 3 * R.cam.zoom));
+  ctx.save();
+  for (const e of pts) {
+    const p = toScreen(c.x + e.w.x - gx, c.y + e.w.y - gy), q = toScreen(e.s.x, e.s.y);
+    ctx.strokeStyle = 'rgba(31,79,191,0.35)'; ctx.lineWidth = 1; ctx.setLineDash([2, 3]);
+    ctx.beginPath(); ctx.moveTo(q.x, q.y); ctx.lineTo(p.x, p.y); ctx.stroke();
+    ctx.fillStyle = 'rgba(31,79,191,0.32)'; ctx.strokeStyle = 'rgba(31,79,191,0.95)'; ctx.lineWidth = 2; ctx.setLineDash([3, 2]);
+    ctx.beginPath(); ctx.arc(p.x, p.y, r, 0, Math.PI * 2); ctx.fill(); ctx.stroke();
+  }
+  ctx.setLineDash([]);
+  // An arrow for the direction of march, and the formation's name.
+  const f = toScreen(c.x, c.y), L = 40 + 30 * Math.min(2, R.cam.zoom);
+  const tx = f.x + Math.cos(hd) * L, ty = f.y + Math.sin(hd) * L;
+  ctx.strokeStyle = 'rgba(31,79,191,0.8)'; ctx.lineWidth = 2;
+  ctx.beginPath(); ctx.moveTo(f.x, f.y); ctx.lineTo(tx, ty);
+  ctx.moveTo(tx, ty); ctx.lineTo(tx - Math.cos(hd - 0.4) * 9, ty - Math.sin(hd - 0.4) * 9);
+  ctx.moveTo(tx, ty); ctx.lineTo(tx - Math.cos(hd + 0.4) * 9, ty - Math.sin(hd + 0.4) * 9); ctx.stroke();
+  ctx.font = '700 13px "Saira Condensed", sans-serif'; ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+  ctx.lineWidth = 3; ctx.strokeStyle = 'rgba(247,245,236,0.95)'; ctx.strokeText(FORMATIONS[form].label.toUpperCase(), tx, ty - 14);
+  ctx.fillStyle = OVL.blue; ctx.fillText(FORMATIONS[form].label.toUpperCase(), tx, ty - 14);
+  ctx.restore();
+}
+
+// Distance and bearing, as a map reader states them: meters, degrees grid and mils.
+function tapeLabel(a, b) {
+  const d = dist(a.x, a.y, b.x, b.y), brg = bearing(a.x, a.y, b.x, b.y);
+  return (d >= 1000 ? (d / 1000).toFixed(2) + ' km' : Math.round(d) + ' m') + ' · ' + pad3(Math.round(brg) % 360) + '° · ' + Math.round(brg * 6400 / 360) % 6400 + ' mils';
+}
+function drawTape(ctx, a, b, live) {
+  const p = toScreen(a.x, a.y), q = toScreen(b.x, b.y), ang = Math.atan2(q.y - p.y, q.x - p.x);
+  const nx = -Math.sin(ang) * 6, ny = Math.cos(ang) * 6;
+  ctx.strokeStyle = OVL.black; ctx.lineWidth = 1.6; ctx.setLineDash(live ? [6, 4] : []);
+  ctx.beginPath(); ctx.moveTo(p.x, p.y); ctx.lineTo(q.x, q.y); ctx.stroke(); ctx.setLineDash([]);
+  ctx.beginPath(); ctx.moveTo(p.x + nx, p.y + ny); ctx.lineTo(p.x - nx, p.y - ny); ctx.moveTo(q.x + nx, q.y + ny); ctx.lineTo(q.x - nx, q.y - ny); ctx.stroke();
+  // Tick every 100 m along the tape when they are far enough apart to read.
+  const d = dist(a.x, a.y, b.x, b.y), step = 100 * R.cam.zoom >= 14 ? 100 : 500 * R.cam.zoom >= 14 ? 500 : 0;
+  if (step) for (let m = step; m < d; m += step) {
+    const t = m / d, x = p.x + (q.x - p.x) * t, y = p.y + (q.y - p.y) * t;
+    ctx.beginPath(); ctx.moveTo(x + nx * 0.5, y + ny * 0.5); ctx.lineTo(x - nx * 0.5, y - ny * 0.5); ctx.stroke();
+  }
+  const text = tapeLabel(a, b), mx = (p.x + q.x) / 2, my = (p.y + q.y) / 2;
+  ctx.font = '700 12px "Saira Condensed", sans-serif'; ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+  const w = ctx.measureText(text).width + 12;
+  ctx.fillStyle = 'rgba(247,245,236,0.95)'; ctx.fillRect(mx - w / 2, my - 10, w, 20);
+  ctx.strokeStyle = OVL.black; ctx.lineWidth = 1; ctx.strokeRect(mx - w / 2, my - 10, w, 20);
+  ctx.fillStyle = OVL.black; ctx.fillText(text, mx, my + 1);
+}
+function drawTapes(ctx) {
+  ctx.save();
+  for (const t of G.ui.tapes) drawTape(ctx, t.a, t.b, false);
+  if (G.ui.measuring && G.ui.tapeStart) {
+    const s = toScreen(G.ui.tapeStart.x, G.ui.tapeStart.y);
+    ctx.fillStyle = OVL.black; ctx.beginPath(); ctx.arc(s.x, s.y, 3.5, 0, Math.PI * 2); ctx.fill();
+    if (G.ui.hover && G.ui.hoverIsPointer) drawTape(ctx, G.ui.tapeStart, G.ui.hover, true);
+  }
+  ctx.restore();
+}
+
 function drawFloaters(ctx) {
   ctx.font = '700 12px "IBM Plex Mono", ui-monospace, monospace';
   ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
@@ -3953,6 +4035,7 @@ const UI = {
     OPORD.init();
     $('btnPause').addEventListener('click', () => togglePause());
     $('btnSpeed').addEventListener('click', () => { G.speed = G.speed >= 16 ? 1 : G.speed * 2; this.refreshBar(); });
+    $('btnMeasure').addEventListener('click', () => this.setMeasuring(!G.ui.measuring));
     $('btnCones').addEventListener('click', () => { G.ui.cones = !G.ui.cones; $('btnCones').classList.toggle('on', G.ui.cones); });
     $('btnRoster').addEventListener('click', () => document.body.classList.toggle('roster-open'));
     $('rosterTab').addEventListener('click', () => document.body.classList.remove('roster-min'));
@@ -3982,6 +4065,11 @@ const UI = {
         const b = el('button', 'obtn', text);
         b.dataset.kind = kind; b.dataset.val = val;
         b.addEventListener('click', () => this.onOrderButton(kind, val));
+        // Pointing at a formation shows the selected unit's ghost in that formation.
+        if (kind === 'formation') {
+          b.addEventListener('pointerenter', () => { G.ui.ghostForm = val; });
+          b.addEventListener('pointerleave', () => { if (G.ui.ghostForm === val) G.ui.ghostForm = null; });
+        }
         row.appendChild(b);
       }
       box.appendChild(row);
@@ -4071,6 +4159,7 @@ const UI = {
   handleTap(sx, sy, secondary) {
     if (!G.running || G.over) return;
     if ($('planMenu')) { this.closePlanMenu(); return; }
+    if (G.ui.measuring && !secondary) { this.tapeTap(sx, sy, toWorld(sx, sy)); return; }
     const w = toWorld(sx, sy);
     if (Plan.tool && !secondary) { Plan.place(w); return; }
     const piece = pieceAt(sx, sy);
@@ -4112,6 +4201,22 @@ const UI = {
     }
     if (enemy && sel) { issueOrder(sel, 'engage', enemy); return; }
     if (sel) issueOrder(sel, 'move', w);
+  },
+
+  // ------------------------------------------------------------ measuring tape
+  setMeasuring(on) {
+    G.ui.measuring = on; G.ui.tapeStart = null;
+    $('btnMeasure').classList.toggle('on', on);
+    this.toast(on ? 'Tap two points to measure. Tap a distance label to remove it. Measure or Esc to stop.' : 'Measuring off.');
+  },
+  tapeTap(sx, sy, w) {
+    // A tap on a label removes that measurement.
+    const hit = G.ui.tapes.findIndex(t => { const m = toScreen((t.a.x + t.b.x) / 2, (t.a.y + t.b.y) / 2); return Math.abs(m.x - sx) < 48 && Math.abs(m.y - sy) < 14; });
+    if (hit >= 0 && !G.ui.tapeStart) { G.ui.tapes.splice(hit, 1); return; }
+    if (!G.ui.tapeStart) { G.ui.tapeStart = { x: w.x, y: w.y }; this.toast('Tap the second point.'); return; }
+    const t = { a: G.ui.tapeStart, b: { x: w.x, y: w.y } };
+    G.ui.tapes.push(t); G.ui.tapeStart = null;
+    this.toast(tapeLabel(t.a, t.b) + ', grid ' + gridRef(t.a.x, t.a.y) + ' to ' + gridRef(t.b.x, t.b.y) + '.');
   },
 
   planMenu(sx, sy, w, sel) {
@@ -5783,10 +5888,12 @@ const Input = {
       const k = e.key;
       if (k === ' ') { e.preventDefault(); togglePause(); }
       else if (k === 'v' || k === 'V') $('btnCones').click();
+      else if (k === 'm' || k === 'M') $('btnMeasure').click();
       else if (k === '1' || k === '2' || k === '3') UI.selectTeam(+k);
       else if (k === '0' || k === '`') UI.select({ level: 'squad', squad: G.squads.blue });
       else if (k === 'Escape') {
         if ($('planMenu')) UI.closePlanMenu();
+        else if (G.ui.measuring) UI.setMeasuring(false);
         else if (Plan.tool) { Plan.tool = null; Plan.plStart = null; Plan.routeDraft = null; Plan.routeUnit = null; OPORD.refresh(); }
         else if (G.ui.pending) { G.ui.pending = null; UI.refreshOrders(); }
         else UI.select(null);
@@ -5807,7 +5914,8 @@ const G = {
   spotT: 0, teamT: 0, endT: 0,
   stats: null, grid: { e: 34, n: 72 }, revealAll: false,
   settings: null,
-  ui: { cones: true, sel: null, pending: null, moveMode: 'walk', hover: null, hoverIsPointer: false, panelH: 0 },
+  ui: { cones: true, sel: null, pending: null, moveMode: 'walk', hover: null, hoverIsPointer: false, panelH: 0,
+    ghostForm: null, measuring: false, tapeStart: null, tapes: [] },
   log(msg, kind) { UI.log(msg, kind); },
   toast(msg) { UI.toast(msg); },
 };
@@ -5880,7 +5988,7 @@ function newMission() {
   G.over = false; G.running = true; G.paused = false;
   G.missionId = (G.missionId || 0) + 1;
   $('debrief').hidden = true;
-  G.ui.sel = null; G.ui.pending = null;
+  G.ui.sel = null; G.ui.pending = null; G.ui.tapes = []; G.ui.tapeStart = null;
   for (const t of [blue.hq, ...blue.teams, red.hq, ...red.teams]) { t.routing = false; t.morale = t.squad.morale; }
   initAI(mode === 'attack' ? 'defend' : 'advance', blueStart);
 
