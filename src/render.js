@@ -501,6 +501,7 @@ function render() {
     drawPaper(ctx);
   }
   drawEdgeLabels(ctx);
+  drawPlan(ctx);
   drawOrdersOverlay(ctx);
   drawProjectiles(ctx);
   drawEffects(ctx);
@@ -872,6 +873,77 @@ function drawCones(ctx) {
   }
 }
 
+// ---------------------------------------------------------------- the plan's control measures
+// Friendly control measures in blue, as drawn on an acetate overlay (ADP 1-02 forms):
+// checkpoint, objective, support-by-fire position, assault position, phase line, CCP.
+function drawPlan(ctx) {
+  if (!G.squads.blue || !Plan.graphics) return;
+  const z = R.cam.zoom;
+  const label = (t, x, y, size, align) => {
+    ctx.font = '700 ' + size + 'px "Saira Condensed", "Arial Narrow", sans-serif';
+    ctx.textAlign = align || 'center'; ctx.textBaseline = 'middle';
+    ctx.lineWidth = 3; ctx.strokeStyle = 'rgba(247,245,236,0.9)'; ctx.strokeText(t, x, y);
+    ctx.fillStyle = OVL.blue; ctx.fillText(t, x, y);
+  };
+  ctx.lineCap = 'round'; ctx.lineJoin = 'round';
+  for (const g of Plan.graphics) {
+    const sel = Plan.selected === g.id && Plan.planning;
+    ctx.strokeStyle = OVL.blue; ctx.fillStyle = OVL.blue; ctx.lineWidth = sel ? 3.2 : 2.2;
+    if (sel) { ctx.shadowColor = 'rgba(255,214,10,0.9)'; ctx.shadowBlur = 8; }
+    const p = toScreen(g.pts[0].x, g.pts[0].y);
+    if (g.kind === 'cp') {
+      ctx.fillStyle = 'rgba(247,245,236,0.85)';
+      ctx.beginPath(); ctx.arc(p.x, p.y, 13, 0, Math.PI * 2); ctx.fill(); ctx.stroke();
+      ctx.shadowBlur = 0;
+      label(g.name.replace(/^CP\s*/, ''), p.x, p.y + 1, 14);
+      label('CP', p.x + 22, p.y - 12, 11);
+    } else if (g.kind === 'obj' || g.kind === 'aslt') {
+      const rr = Math.max(g.kind === 'obj' ? 26 : 18, g.r * z);
+      ctx.beginPath();
+      for (let i = 0; i <= 36; i++) {
+        const a = i / 36 * Math.PI * 2, w = 1 + 0.1 * Math.sin(a * 3 + g.id) + 0.05 * Math.sin(a * 7);
+        const x = p.x + Math.cos(a) * rr * w, y = p.y + Math.sin(a) * rr * 0.8 * w;
+        i ? ctx.lineTo(x, y) : ctx.moveTo(x, y);
+      }
+      ctx.closePath(); ctx.stroke();
+      ctx.shadowBlur = 0;
+      label(g.name, p.x, p.y, g.kind === 'obj' ? 15 : 12);
+    } else if (g.kind === 'sbf') {
+      // A base line facing the target, with an arrow from each end toward it.
+      const ref = Plan.lines.find(l => l.task === 'sbf' && l.where === g.id && Plan.graphic(l.target));
+      const tp = ref ? Plan.anchor(Plan.graphic(ref.target)) : Plan.reported;
+      const a = angleTo(g.pts[0].x, g.pts[0].y, tp.x, tp.y), L = Math.max(22, 22 * z);
+      const nx = -Math.sin(a), ny = Math.cos(a);
+      const e1 = { x: p.x + nx * L, y: p.y + ny * L }, e2 = { x: p.x - nx * L, y: p.y - ny * L };
+      ctx.beginPath(); ctx.moveTo(e1.x, e1.y); ctx.lineTo(e2.x, e2.y); ctx.stroke();
+      for (const e of [e1, e2]) {
+        const t = { x: e.x + Math.cos(a) * L * 0.9, y: e.y + Math.sin(a) * L * 0.9 };
+        ctx.beginPath(); ctx.moveTo(e.x, e.y); ctx.lineTo(t.x, t.y); ctx.stroke();
+        arrowHead(ctx, e, t, 8, true);
+      }
+      ctx.shadowBlur = 0;
+      label(g.name, p.x - Math.cos(a) * 14, p.y - Math.sin(a) * 14, 12);
+    } else if (g.kind === 'pl') {
+      const q = g.pts.map(pt => toScreen(pt.x, pt.y));
+      ctx.beginPath(); q.forEach((pt, i) => i ? ctx.lineTo(pt.x, pt.y) : ctx.moveTo(pt.x, pt.y)); ctx.stroke();
+      ctx.shadowBlur = 0;
+      label(g.name, q[0].x, q[0].y - 12, 13);
+      label(g.name, q[q.length - 1].x, q[q.length - 1].y - 12, 13);
+    } else if (g.kind === 'ccp') {
+      ctx.fillStyle = 'rgba(247,245,236,0.9)';
+      ctx.fillRect(p.x - 18, p.y - 10, 36, 20); ctx.strokeRect(p.x - 18, p.y - 10, 36, 20);
+      ctx.shadowBlur = 0;
+      label(g.name.replace(/\s*1$/, ''), p.x, p.y + 1, 12);
+    }
+    ctx.shadowBlur = 0;
+  }
+  // First end of a phase line being drawn.
+  if (Plan.plStart) {
+    const p = toScreen(Plan.plStart.x, Plan.plStart.y);
+    ctx.fillStyle = OVL.blue; ctx.beginPath(); ctx.arc(p.x, p.y, 5, 0, Math.PI * 2); ctx.fill();
+  }
+}
+
 // ---------------------------------------------------------------- overlay graphics
 function arrowHead(ctx, from, to, size, filled) {
   const a = Math.atan2(to.y - from.y, to.x - from.x);
@@ -1018,6 +1090,18 @@ function drawEffects(ctx) {
       ctx.strokeStyle = e.side === 'blue' ? 'rgba(31,79,191,0.85)' : 'rgba(198,40,40,0.85)';
       ctx.lineWidth = 1.5;
       ctx.beginPath(); ctx.moveTo(a.x, a.y); ctx.lineTo(b.x, b.y); ctx.stroke();
+    } else if (e.type === 'star') {
+      // A star cluster: climbs, bursts into five stars, drifts down and fades.
+      const p = toScreen(e.x, e.y), rise = Math.min(1, f * 3), h = 70 * rise - 20 * Math.max(0, f - 0.33);
+      const burst = Math.max(0, f - 0.3) * 1.4;
+      ctx.globalAlpha = clamp(1.3 - f, 0, 1);
+      ctx.fillStyle = e.color;
+      if (burst <= 0) { ctx.beginPath(); ctx.arc(p.x, p.y - h, 3, 0, Math.PI * 2); ctx.fill(); }
+      else for (let k = 0; k < 5; k++) {
+        const a = -Math.PI / 2 + (k - 2) * 0.5;
+        ctx.beginPath(); ctx.arc(p.x + Math.cos(a) * 22 * burst, p.y - h + Math.sin(a) * 14 * burst, 4, 0, Math.PI * 2); ctx.fill();
+      }
+      ctx.globalAlpha = 1;
     } else if (e.type === 'flash') {
       const p = toScreen(e.x, e.y);
       ctx.fillStyle = 'rgba(232,135,30,' + (1 - f) + ')';

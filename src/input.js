@@ -12,6 +12,8 @@ const Input = {
       if (this.pointers.size === 1) {
         this.moved = false;
         this.camStart = { x: R.cam.x, y: R.cam.y };
+        // While planning, a control measure under the finger is dragged instead of the map.
+        this.dragG = G.running && Plan.planning && !Plan.tool && e.button !== 2 ? Plan.hitGraphic(e.offsetX, e.offsetY) : null;
       } else if (this.pointers.size === 2) {
         this.moved = true;
         const [a, b] = [...this.pointers.values()];
@@ -27,7 +29,10 @@ const Input = {
       p.x = e.offsetX; p.y = e.offsetY;
       if (this.pointers.size === 1) {
         if (Math.hypot(p.x - p.sx, p.y - p.sy) > 8) this.moved = true;
-        if (this.moved) {
+        if (this.moved && this.dragG) {
+          const w = toWorld(p.x, p.y), pt = this.dragG.g.pts[this.dragG.idx];
+          pt.x = clamp(w.x, 0, MAP_W); pt.y = clamp(w.y, 0, MAP_H);
+        } else if (this.moved) {
           R.cam.x = this.camStart.x - (p.x - p.sx) / R.cam.zoom;
           R.cam.y = this.camStart.y - (p.y - p.sy) / R.cam.zoom;
           clampCam();
@@ -45,6 +50,12 @@ const Input = {
       const p = this.pointers.get(e.pointerId);
       if (!p) return;
       this.pointers.delete(e.pointerId);
+      if (e.type === 'pointerup' && this.dragG && this.pointers.size === 0) {
+        Plan.selected = this.dragG.g.id;
+        this.dragG = null;
+        OPORD.show('E');
+        return;
+      }
       if (e.type === 'pointerup' && !this.moved && this.pointers.size === 0) UI.handleTap(p.x, p.y, p.button === 2);
       if (this.pointers.size < 2) this.pinch = null;
       if (this.pointers.size === 1) {

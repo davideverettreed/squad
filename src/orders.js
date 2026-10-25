@@ -89,6 +89,7 @@ function squadMove(sq, x, y, mode) {
 
 function groupMove(sel, x, y, mode) {
   const members = selMembers(sel);
+  Plan.override(members);
   releaseControllers(members);
   for (const s of members) { s.assault = false; s.launchQueue = null; }
   if (sel.level === 'soldier') orderMove(sel.soldier, x, y, mode);
@@ -206,6 +207,7 @@ function boundElements(sel) {
 function issueOrder(sel, type, arg) {
   const members = selMembers(sel).filter(commandable);
   const who = selName(sel);
+  Plan.override(members);
   if (!members.length) { G.toast(who + ' cannot take orders.'); return; }
   const team = sel.level === 'soldier' ? sel.soldier.team : sel.team;
 

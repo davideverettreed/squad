@@ -20,6 +20,7 @@ const UI = {
 
   init() {
     this.buildOrders();
+    OPORD.init();
     $('btnPause').addEventListener('click', () => togglePause());
     $('btnSpeed').addEventListener('click', () => { G.speed = G.speed >= 16 ? 1 : G.speed * 2; this.refreshBar(); });
     $('btnCones').addEventListener('click', () => { G.ui.cones = !G.ui.cones; $('btnCones').classList.toggle('on', G.ui.cones); });
@@ -139,6 +140,7 @@ const UI = {
   handleTap(sx, sy, secondary) {
     if (!G.running || G.over) return;
     const w = toWorld(sx, sy);
+    if (Plan.tool && !secondary) { Plan.place(w); return; }
     const piece = pieceAt(sx, sy);
     const sel = G.ui.sel;
     // An enemy piece stands for its nearest visible, effective man.
@@ -245,10 +247,14 @@ const UI = {
   },
 
   refreshBar() {
-    $('clock').textContent = fmtClock(G.time);
+    const planning = G.running && Plan.planning;
+    $('clock').textContent = !G.running || !Plan.timeAvail ? fmtClock(G.time)
+      : planning ? 'PLAN ' + fmtClock(G.time - Plan.planStart) : 'H+' + fmtClock(G.time - Plan.stepOff);
+    $('btnSpeed').disabled = planning;
+    OPORD.refreshClock();
     $('btnPause').textContent = G.paused ? 'Resume' : 'Pause';
     $('btnPause').classList.toggle('on', G.paused);
-    $('btnSpeed').textContent = G.speed + '×';
+    $('btnSpeed').textContent = (planning ? PLAN_RATE : G.speed) + '×';
   },
 
   tick(dt) {
@@ -265,21 +271,17 @@ const UI = {
   showModal(id) { $(id).hidden = false; if (G.running && !G.paused) togglePause(); },
   hideModal(id) { $(id).hidden = true; },
 
+  // New mission: choose the kind of mission and the map. The order itself follows on the map.
   showBriefing() {
     const set = G.settings;
     const box = $('briefBody');
     box.innerHTML = '';
-
-    const situation = el('div', 'bsit');
-    situation.appendChild(el('h3', null, 'Situation'));
-    situation.appendChild(el('p', null, 'An enemy squad-sized element is operating in the vicinity. Its organization and weapons are unknown; expect automatic weapons and grenade launchers. Your squad is the only friendly force in the area. There is no supporting fire.'));
-    box.appendChild(situation);
     const sit = el('div', 'bsit');
-    sit.appendChild(el('h3', null, 'Mission'));
+    sit.appendChild(el('h3', null, 'Mission type'));
     const mp = el('p');
-    const modes = { attack: 'Attack. The enemy holds a position to your front. Close with and destroy him.',
-      meeting: 'Meeting engagement. The enemy is moving toward you. Find him, fix him and destroy him.',
-      random: 'Unknown. Either the enemy holds a position, or he is moving toward you.' };
+    const modes = { attack: 'Attack. The enemy holds a position and digs in while you plan.',
+      meeting: 'Meeting engagement. The enemy is moving toward you while you plan.',
+      random: 'Either one, chosen at random.' };
     const modeSel = el('select'); modeSel.id = 'missionMode';
     for (const [k, t] of [['random', 'Random'], ['attack', 'Attack a position'], ['meeting', 'Meeting engagement']]) {
       const o = el('option', null, t); o.value = k; if (set.mode === k) o.selected = true; modeSel.appendChild(o);
@@ -297,11 +299,19 @@ const UI = {
     seedRow.appendChild(seedIn); seedRow.appendChild(reroll);
     sit.appendChild(seedRow);
     box.appendChild(sit);
+    const how = el('div', 'bsit');
+    how.appendChild(el('h3', null, 'Troop leading'));
+    how.appendChild(el('p', null, 'You receive a five-paragraph order beside the map: Orientation, Situation, Mission, Execution, Admin & Logistics, Command & Signal. Plan on the map, then step off.'));
+    how.appendChild(el('p', null, 'The clock runs while you plan, at ' + PLAN_RATE + '× speed. Use no more than a third of the time available; the enemy uses the rest.'));
+    box.appendChild(how);
+    this.showModal('briefing');
+  },
 
-    // Loadout by billet.
-    const lo = set.loadout;
+  // Loadout by billet, editable while planning.
+  renderLoadout(box, onChange) {
+    const set = G.settings, lo = set.loadout;
     const wrap = el('div', 'bload');
-    wrap.appendChild(el('h3', null, 'Loadout'));
+    wrap.appendChild(el('h4', null, 'Loadout'));
     const tableWrap = el('div', 'tablewrap');
     const tbl = el('table', 'ltable');
     const head = el('tr');
@@ -316,10 +326,11 @@ const UI = {
         kgCells[k].textContent = kg.toFixed(1) + ' kg';
       }
     };
+    const changed = () => { recalc(); saveSettings(); if (onChange) onChange(); };
     const num = (k, field, min, max) => {
       const i = el('input'); i.type = 'number'; i.min = min; i.max = max; i.value = lo[k][field];
       i.id = 'lo-' + k + '-' + field;
-      i.addEventListener('change', () => { lo[k][field] = clamp(parseInt(i.value, 10) || 0, min, max); i.value = lo[k][field]; recalc(); });
+      i.addEventListener('change', () => { lo[k][field] = clamp(parseInt(i.value, 10) || 0, min, max); i.value = lo[k][field]; changed(); });
       return i;
     };
     for (const k of Object.keys(USMC_BILLETS)) {
@@ -331,13 +342,13 @@ const UI = {
       wtd.appendChild(ws); tr.appendChild(wtd);
       const mtd = el('td'), mags = num(k, 'mags', 1, 30); mtd.appendChild(mags); tr.appendChild(mtd);
       ws.addEventListener('change', () => {
-        lo[k].weapon = ws.value; lo[k].mags = WEAPONS[ws.value].mags - 1; mags.value = lo[k].mags; recalc();
+        lo[k].weapon = ws.value; lo[k].mags = WEAPONS[ws.value].mags - 1; mags.value = lo[k].mags; changed();
       });
       const gtd = el('td');
       if (b.launchers) {
         const ls = el('select'); ls.id = 'lo-G-launcher';
         for (const lk of b.launchers) { const o = el('option', null, lk); o.value = lk; if (lo[k].launcher === lk) o.selected = true; ls.appendChild(o); }
-        ls.addEventListener('change', () => { lo[k].launcher = ls.value; recalc(); });
+        ls.addEventListener('change', () => { lo[k].launcher = ls.value; changed(); });
         gtd.className = 'cellrow';
         gtd.appendChild(ls); gtd.appendChild(num(k, 'lRounds', 0, 24));
       } else gtd.textContent = '—';
@@ -350,11 +361,10 @@ const UI = {
     wrap.appendChild(tableWrap);
     wrap.appendChild(el('p', 'bnote', 'Load includes about 22 kg of helmet, plates, water and kit. Heavier loads slow movement and tire men faster.'));
     const reset = el('button', 'obtn', 'Standard loadout');
-    reset.addEventListener('click', () => { set.loadout = defaultLoadout(); this.showBriefing(); });
+    reset.addEventListener('click', () => { set.loadout = defaultLoadout(); saveSettings(); if (onChange) onChange(); OPORD.refresh(); });
     wrap.appendChild(reset);
     box.appendChild(wrap);
     recalc();
-    this.showModal('briefing');
   },
 
   showDebrief(result) {
@@ -384,6 +394,12 @@ const UI = {
     const line = (a, x, y) => a.padEnd(19) + String(x).padStart(8) + String(y).padStart(7);
     pre.textContent = line('', 'Marines', 'Enemy') + '\n' + rows.map(rw => line(rw[0], rw[1], rw[2])).join('\n');
     box.appendChild(pre);
+    if (Plan.timeAvail) {
+      const done = Plan.lines.filter(l => l.status === 'done').length;
+      const used = Plan.planning ? G.time - Plan.planStart : Plan.planUsed;
+      box.appendChild(el('p', 'dsub', 'Planning took ' + fmtClock(used) + ' of ' + fmtClock(Plan.timeAvail) + ' available (one third is ' +
+        fmtClock(Plan.timeAvail / 3) + '). ' + done + ' of ' + Plan.lines.length + ' plan lines completed.'));
+    }
     $('debrief').hidden = false;
   },
 };

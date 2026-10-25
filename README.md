@@ -61,6 +61,29 @@ How it was set up, for reference:
 To install on Android, open https://stex-riflesquad.com in Chrome and choose
 **Install app** (or **Add to Home screen**) from the menu.
 
+## Troop leading: the order and the plan
+
+Each mission opens with a five-paragraph order beside the map:
+
+- **Orientation**: your position, the reported enemy, the ground between, key terrain.
+- **Situation**: the enemy in a SALUTE report (deliberately incomplete) and its
+  capabilities as DRAW-D, with the most likely course marked; friendly forces; time available.
+- **Mission**: one generated mission statement with task, place and purpose.
+- **Execution**: the planning board. Place control measures on the map (checkpoint,
+  objective, support-by-fire position, assault position, phase line, CCP) and write
+  the scheme of maneuver as lines: trigger, unit, task, place. Triggers: at step-off,
+  after or with the line above, on a red, green or white star cluster, at H+ minutes,
+  on contact. **Draft a plan** gives a hasty attack (or, in a meeting engagement, a
+  hasty defense) to start from.
+- **Admin & Logistics**: the loadout, the CCP.
+- **Command & Signal**: the signals and the succession of command.
+
+The clock runs while you plan, at 4× speed: the one-third, two-thirds rule. In an
+attack the enemy digs in over the time available; in a meeting engagement he keeps
+coming. Planning past your third leaves the fire teams less ready. **Step off** to
+execute; the Tracker shows each line, fires signals, and lets you start a line now
+or resume one halted short by contact. Any direct order takes a unit off its line.
+
 ## What is modeled
 
 - Selection at three levels: one Marine, a fire team, or the squad.

@@ -204,6 +204,7 @@ function hitChance(s, e, exp, d) {
   let p = W.acc * (d <= 100 ? 1 : Math.pow(100 / d, 1.1));
   if (d > W.range) p *= 0.4;
   p *= POSTURE[e.posture].size;
+  p *= 1 - 0.35 * Plan.digIn(e); // dug-in defenders are harder to hit
   if (e.moving && e.moveMode === 'rush') p *= 0.6;
   p *= exp;
   p *= POSTURE[s.posture].acc;
@@ -271,7 +272,7 @@ function startReload(s) {
 
 function addSupp(t, amount) {
   if (!t.active) return;
-  t.supp = Math.min(100, t.supp + amount * t.squad.training * (t.team.shaken ? 1.3 : 1));
+  t.supp = Math.min(100, t.supp + amount * t.squad.training * (t.team.shaken ? 1.3 : 1) * (1 - 0.3 * Plan.digIn(t)));
 }
 
 function noteFiredUpon(team, shooter) {

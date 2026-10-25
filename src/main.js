@@ -71,7 +71,7 @@ function newMission() {
   G.effects = []; G.projectiles = []; G.floaters = []; G.controllers = [];
   G.stats = { blue: { light: 0, serious: 0, kia: 0 }, red: { light: 0, serious: 0, kia: 0 } };
   G.time = 0; G.spotT = 0; G.teamT = 0; G.endT = 0;
-  G.over = false; G.running = true; G.paused = true;
+  G.over = false; G.running = true; G.paused = false;
   G.missionId = (G.missionId || 0) + 1;
   $('debrief').hidden = true;
   G.ui.sel = null; G.ui.pending = null;
@@ -87,7 +87,9 @@ function newMission() {
   const gr = gridRef(G.enemyArea.x, G.enemyArea.y);
   G.log(mode === 'attack' ? 'Mission: attack. Enemy squad reported holding near grid ' + gr + ', bearing ' + pad3(G.axisBearing) + '.'
     : 'Mission: meeting engagement. Enemy squad reported near grid ' + gr + ', bearing ' + pad3(G.axisBearing) + ', moving toward you.', 'info');
-  G.log('Paused. Give your orders, then press Resume.', 'info');
+  Plan.reset();
+  G.log('Order received. The planning clock is running: ' + fmtClock(Plan.timeAvail) + ' available, use about a third.', 'plan');
+  OPORD.show('O');
   UI.refreshBar();
 }
 
@@ -124,17 +126,29 @@ function rally(team) {
 // and bounding teams carry on; those orders mean to move under fire.
 function reactToContact(t) {
   if (t.routing) return;
-  const walking = t.members.filter(s => commandable(s) && s.moving && s.moveMode === 'walk' && !s.assault);
+  // Teams occupying a support-by-fire position, bounding or assaulting press on, rushing if fired on.
+  const walk = (s) => commandable(s) && s.moving && s.moveMode === 'walk' && !s.assault;
+  const pressing = t.members.filter(s => walk(s) && Plan.onLine(s, ['sbf', 'bound', 'assault']));
+  const firedOn = G.time - t.lastFiredUpon < 1.5;
+  if (pressing.length && firedOn && G.time - (t.rushedAt || -99) > 10) {
+    t.rushedAt = G.time;
+    for (const s of pressing) s.moveMode = 'rush';
+    G.log(t.short + ': Taking fire! Rushing to position.', 'contact');
+  }
+  // A team on a planned move ignores a sighting, but goes to ground when fired on.
+  const walking = t.members.filter(s => walk(s) && !pressing.includes(s));
   if (!walking.length) return;
   t.reacted = t.reacted || new Set();
-  const underFire = G.time - t.lastFiredUpon < 1.5 && G.time - (t.reactedAt || -99) > 20;
+  const underFire = firedOn && G.time - (t.reactedAt || -99) > 20;
+  const unplanned = walking.filter(s => !Plan.onLine(s, ['move']));
   const fresh = [...G.known.blue.values()].filter(k => k.visible && !t.reacted.has(k.id) && G.byId.get(k.id)?.active
-    && walking.some(s => dist(s.x, s.y, k.x, k.y) < 250));
+    && unplanned.some(s => dist(s.x, s.y, k.x, k.y) < 250));
   if (!underFire && !fresh.length) return;
   for (const k of fresh) t.reacted.add(k.id);
+  const halt = underFire ? walking : unplanned;
   t.reactedAt = G.time;
-  releaseControllers(walking);
-  for (const s of walking) { s.path = []; s.homePosture = 'prone'; }
+  releaseControllers(halt);
+  for (const s of halt) { s.path = []; s.homePosture = 'prone'; }
   G.log(t.short + ': ' + (underFire ? 'Taking fire!' : 'Enemy close!') + ' Get down, return fire.', 'contact');
 }
 
@@ -185,6 +199,7 @@ function update(dt) {
   for (const c of G.controllers) c.update(dt);
   G.controllers = G.controllers.filter(c => !c.done);
   updateAI(dt);
+  Plan.update(dt);
   for (const s of G.soldiers) {
     if (!s.alive || s.routed) continue;
     updateSuppression(s, dt);
@@ -221,7 +236,8 @@ function frame(now) {
   const dt = Math.min(0.1, (now - lastFrame) / 1000);
   lastFrame = now;
   if (G.running && !G.paused && !G.over) {
-    let sim = dt * G.speed;
+    // While planning the clock runs at a fixed rate; after step-off at the chosen speed.
+    let sim = dt * (Plan.planning ? PLAN_RATE : G.speed);
     while (sim > 1e-6) { const step = Math.min(0.05, sim); update(step); sim -= step; }
   }
   render();

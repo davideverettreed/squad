@@ -112,6 +112,19 @@ function defaultLoadout() {
   return lo;
 }
 
+// Re-equip a squad that is already on the map (loadout changes while planning).
+function applyLoadout(sq, lo) {
+  for (const s of sq.all) {
+    const l = lo[s.billet];
+    if (!l) continue;
+    s.weaponKey = l.weapon; s.weapon = WEAPONS[l.weapon];
+    s.inMag = s.weapon.mag; s.mags = l.mags; s.frags = l.frags;
+    s.launcherKey = l.launcher || null; s.launcher = l.launcher ? LAUNCHERS[l.launcher] : null;
+    s.lRounds = s.launcher ? l.lRounds : 0;
+    s.loadKg = s.computeLoad();
+  }
+}
+
 function buildUSMCSquad(loadout) {
   const sq = new Squad('blue', '1st Squad', 82);
   sq.training = 0.85;
