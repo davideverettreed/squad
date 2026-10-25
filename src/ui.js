@@ -24,6 +24,8 @@ const UI = {
     $('btnPause').addEventListener('click', () => togglePause());
     $('btnSpeed').addEventListener('click', () => { G.speed = G.speed >= 16 ? 1 : G.speed * 2; this.refreshBar(); });
     $('btnMeasure').addEventListener('click', () => this.setMeasuring(!G.ui.measuring));
+    $('btn3d').addEventListener('click', () => View3D.toggle());
+    document.querySelectorAll('#ctl3d button').forEach(b => b.addEventListener('click', () => View3D.nudge(b.dataset.n)));
     // Phones: the orders fold away under one button, leaving the unit chips.
     $('btnOrdersMore').addEventListener('click', () => this.setOrdersOpen(!document.body.classList.contains('orders-open')));
     $('btnCones').addEventListener('click', () => { G.ui.cones = !G.ui.cones; $('btnCones').classList.toggle('on', G.ui.cones); });
@@ -96,7 +98,7 @@ const UI = {
     const common = (fn) => { if (!m.length) return null; const v = fn(m[0]); return m.every(s => fn(s) === v) ? v : null; };
     const posture = common(s => s.homePosture), fire = common(s => s.fireControl);
     const form = sel ? (sel.level === 'squad' ? sel.squad.formation : sel.level === 'team' ? sel.team.formation : null) : null;
-    document.querySelectorAll('.obtn').forEach(b => {
+    document.querySelectorAll('#orderGrid .obtn').forEach(b => {
       const k = b.dataset.kind, v = b.dataset.val;
       let on = false, dis = !sel && k !== 'mode';
       if (k === 'mode') on = G.ui.moveMode === v;
@@ -146,13 +148,15 @@ const UI = {
   },
 
   // ------------------------------------------------------------ map taps
-  handleTap(sx, sy, secondary) {
+  // A tap on the map at screen point (sx, sy). The 3D view passes the ground point and the
+  // piece it found there in `at`; on the flat map both come from the screen point.
+  handleTap(sx, sy, secondary, at) {
     if (!G.running || G.over) return;
     if ($('planMenu')) { this.closePlanMenu(); return; }
-    if (G.ui.measuring && !secondary) { this.tapeTap(sx, sy, toWorld(sx, sy)); return; }
-    const w = toWorld(sx, sy);
+    const w = at ? at.w : toWorld(sx, sy);
+    if (G.ui.measuring && !secondary) { this.tapeTap(sx, sy, w); return; }
     if (Plan.tool && !secondary) { Plan.place(w); return; }
-    const piece = pieceAt(sx, sy);
+    const piece = at ? at.piece : pieceAt(sx, sy);
     const sel = G.ui.sel;
     // An enemy piece stands for its nearest visible, effective man.
     const enemy = piece && piece.side === 'red' ? (piece.kind === 'man' ? (piece.soldier.active ? piece.soldier : null)

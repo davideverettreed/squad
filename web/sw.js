@@ -9,7 +9,7 @@ self.addEventListener('install', (e) => {
 
 self.addEventListener('activate', (e) => {
   e.waitUntil(caches.keys()
-    .then((keys) => Promise.all(keys.filter((k) => k.startsWith('squad-') && k !== CACHE && k !== 'squad-fonts').map((k) => caches.delete(k))))
+    .then((keys) => Promise.all(keys.filter((k) => k.startsWith('squad-') && k !== CACHE && k !== 'squad-fonts' && k !== 'squad-lib').map((k) => caches.delete(k))))
     .then(() => self.clients.claim()));
 });
 
@@ -23,6 +23,12 @@ self.addEventListener('fetch', (e) => {
       const net = fetch(e.request).then((r) => { if (r.ok || r.type === 'opaque') c.put(e.request, r.clone()); return r; }).catch(() => hit);
       return hit || net;
     }));
+    return;
+  }
+  // The 3D library: a fixed version, so the cached copy never needs refreshing.
+  if (url.hostname === 'cdnjs.cloudflare.com') {
+    e.respondWith(caches.open('squad-lib').then(async (c) => (await c.match(e.request)) ||
+      fetch(e.request).then((r) => { if (r.ok || r.type === 'opaque') c.put(e.request, r.clone()); return r; })));
     return;
   }
   if (url.origin !== location.origin) return;

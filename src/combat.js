@@ -163,6 +163,9 @@ function updateCombat(s, dt) {
   const tgt = pickTarget(s);
   if (tgt) {
     const e = tgt.e, d = dist(s.x, s.y, e.x, e.y);
+    // While the order is being planned both sides keep out of the fight: they watch, and
+    // fire only at an enemy who comes within 150 m.
+    if (Plan.planning && d > 150) { s.fireCD = 1; return; }
     s.targetId = e.id;
     if (s.launcher && s.lRounds > 0 && s.launchCD <= 0 && !s.moving && d >= s.launcher.min && d <= s.launcher.range) {
       const clustered = G.soldiers.some(o => o !== e && o.side === e.side && o.active && dist(o.x, o.y, e.x, e.y) < 8);
