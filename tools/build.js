@@ -41,7 +41,7 @@ const appHead = [
   '<meta name="mobile-web-app-capable" content="yes">',
   '<meta name="apple-mobile-web-app-capable" content="yes">',
   '<meta name="apple-mobile-web-app-title" content="STEX">',
-  '<meta name="description" content="Real-time squad tactics on a military map: command a 13-man Marine rifle squad.">',
+  '<meta name="description" content="Sand Table Exercise: Rifle Squad (STEX). Real-time squad tactics on a military map: command a 13-man Marine rifle squad.">',
 ].join('\n');
 const register = "<script>\nif ('serviceWorker' in navigator && (location.protocol === 'https:' || location.hostname === 'localhost')) {\n" +
   "  window.addEventListener('load', () => navigator.serviceWorker.register('sw.js').catch(() => {}));\n}\n</script>\n";
