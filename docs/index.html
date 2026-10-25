@@ -1,0 +1,4153 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover, user-scalable=no">
+<title>Squad Fire and Maneuver</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<meta name="theme-color" content="#1d2119">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@500;600&family=Saira+Condensed:wght@500;600;700&display=swap">
+<style>
+/* Layout: full-screen map; header bar on top, roster at left, orders panel along the bottom.
+   One committed look: a field map board at night, paper-colored text, selection yellow. */
+:root {
+  --ground: #1d2119;
+  --panel: rgba(22, 26, 19, 0.93);
+  --panel-solid: #191d16;
+  --line: #3a4130;
+  --ink: #ece7d6;
+  --muted: #a6a894;
+  --accent: #ffe066;
+  --blue: #80e0ff;
+  --red: #ff8080;
+  --warn: #ffb347;
+  --bad: #ff5a4f;
+  --ok: #9fd68a;
+  --display: "Saira Condensed", "Arial Narrow", "Roboto Condensed", sans-serif;
+  --mono: "IBM Plex Mono", ui-monospace, "SFMono-Regular", Menlo, monospace;
+  color-scheme: dark;
+}
+
+* { box-sizing: border-box; }
+html, body { height: 100%; margin: 0; overflow: hidden; }
+body { background: var(--ground); color: var(--ink); font: 14px/1.4 var(--display); -webkit-tap-highlight-color: transparent; }
+
+#app {
+  position: fixed; inset: 0;
+  padding: env(safe-area-inset-top, 0px) env(safe-area-inset-right, 0px) env(safe-area-inset-bottom, 0px) env(safe-area-inset-left, 0px);
+}
+#view { position: absolute; inset: 0; width: 100%; height: 100%; display: block; touch-action: none; cursor: crosshair; }
+
+button { font: inherit; color: inherit; }
+.obtn {
+  background: #262b21; border: 1px solid var(--line); color: var(--ink);
+  font: 600 14px/1 var(--display); letter-spacing: 0.04em; text-transform: uppercase;
+  padding: 8px 11px; border-radius: 3px; cursor: pointer; white-space: nowrap; min-height: 34px;
+}
+.obtn:hover:not(:disabled) { border-color: #5b6449; background: #2d3327; }
+.obtn:focus-visible, .chip:focus-visible, .rrow:focus-visible, .rhead:focus-visible { outline: 2px solid var(--accent); outline-offset: 1px; }
+.obtn.on { background: var(--accent); color: #1b1a10; border-color: var(--accent); }
+.obtn:disabled { opacity: 0.35; cursor: default; }
+.obtn.primary { background: var(--accent); color: #1b1a10; border-color: var(--accent); }
+
+/* ---------------- header */
+#bar {
+  position: absolute; top: env(safe-area-inset-top, 0px); left: 0; right: 0; z-index: 5;
+  display: flex; align-items: center; gap: 12px;
+  padding: 6px max(12px, env(safe-area-inset-right, 0px)) 6px max(12px, env(safe-area-inset-left, 0px));
+  background: linear-gradient(var(--panel), rgba(22, 26, 19, 0.75));
+  border-bottom: 1px solid var(--line);
+}
+.brand { display: flex; align-items: baseline; gap: 8px; }
+.brand b { font: 700 20px/1 var(--display); letter-spacing: 0.18em; }
+.brand span { color: var(--muted); font-size: 13px; letter-spacing: 0.06em; text-transform: uppercase; }
+#clock { font: 600 16px/1 var(--mono); color: var(--accent); font-variant-numeric: tabular-nums; }
+.barbtns { margin-left: auto; display: flex; gap: 6px; }
+#btnRoster { display: none; }
+
+/* ---------------- roster */
+#roster {
+  position: absolute; z-index: 4; left: max(8px, env(safe-area-inset-left, 0px)); top: calc(env(safe-area-inset-top, 0px) + 56px);
+  width: 290px; max-height: calc(100% - 56px - var(--orders-h, 150px) - 16px); overflow-y: auto;
+  background: var(--panel); border: 1px solid var(--line); border-radius: 4px;
+}
+.rteam { border-bottom: 1px solid var(--line); }
+.rteam:last-child { border-bottom: 0; }
+.rhead {
+  width: 100%; display: flex; align-items: center; gap: 8px; padding: 6px 10px; background: rgba(255,255,255,0.03);
+  border: 0; cursor: pointer; text-align: left;
+}
+.rname { font: 700 13px/1 var(--display); letter-spacing: 0.08em; text-transform: uppercase; }
+.rmorale { margin-left: auto; width: 60px; height: 5px; background: #33392a; border-radius: 3px; overflow: hidden; }
+.rmorale i { display: block; height: 100%; background: var(--ok); }
+.rmorale i[data-state="warn"] { background: var(--warn); }
+.rmorale i[data-state="bad"] { background: var(--bad); }
+.rrow {
+  width: 100%; display: grid; grid-template-columns: 24px 1fr auto; grid-template-rows: auto auto; column-gap: 8px;
+  align-items: center; padding: 4px 10px; border: 0; background: none; cursor: pointer; text-align: left;
+}
+.rrow canvas { grid-row: span 2; }
+.rrow.sel { background: rgba(255, 224, 102, 0.12); box-shadow: inset 3px 0 0 var(--accent); }
+.rrow.dead { opacity: 0.45; }
+.rwho { min-width: 0; display: flex; flex-direction: column; grid-row: span 2; }
+.rwho b { font-weight: 600; font-size: 14px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.rwho small { color: var(--muted); font-size: 12px; }
+.rstat { font: 600 11px/1.2 var(--mono); text-align: right; color: var(--ok); }
+.rstat[data-state="warn"] { color: var(--warn); }
+.rstat[data-state="bad"] { color: var(--bad); }
+.rstat[data-state="down"] { color: var(--muted); }
+.rammo { font: 500 11px/1.2 var(--mono); color: var(--muted); text-align: right; font-variant-numeric: tabular-nums; }
+
+/* ---------------- radio log and toast */
+#log {
+  position: absolute; z-index: 3; right: max(8px, env(safe-area-inset-right, 0px)); top: calc(env(safe-area-inset-top, 0px) + 56px);
+  width: min(400px, calc(100% - 320px)); display: flex; flex-direction: column; gap: 3px; pointer-events: none;
+}
+.lline {
+  display: flex; gap: 8px; padding: 4px 8px; background: rgba(16, 19, 14, 0.82); border-left: 3px solid var(--muted);
+  font: 500 12px/1.35 var(--mono); border-radius: 2px;
+}
+.lline:nth-last-child(n+4) { opacity: 0.6; }
+.ltime { color: var(--muted); font-variant-numeric: tabular-nums; }
+.lline.contact { border-left-color: var(--red); }
+.lline.fire { border-left-color: var(--warn); }
+.lline.loss { border-left-color: var(--bad); color: #ffd2cc; }
+.lline.kill { border-left-color: var(--ok); }
+.lline.warn { border-left-color: var(--accent); }
+#toast {
+  position: absolute; z-index: 6; left: 50%; transform: translateX(-50%); bottom: calc(var(--orders-h, 150px) + 12px);
+  background: var(--accent); color: #1b1a10; font: 600 15px/1.2 var(--display); letter-spacing: 0.02em;
+  padding: 8px 14px; border-radius: 3px; max-width: calc(100% - 32px); text-align: center; pointer-events: none;
+}
+
+#loading {
+  position: absolute; z-index: 30; left: 50%; top: 45%; transform: translate(-50%, -50%);
+  background: #f8f5ea; color: #161616; border: 1px solid #161616; box-shadow: 0 6px 18px rgba(0, 0, 0, 0.45);
+  font: 600 14px/1.2 var(--mono); letter-spacing: 0.04em; padding: 12px 18px;
+}
+
+/* ---------------- orders */
+#orders {
+  position: absolute; z-index: 5; left: 0; right: 0; bottom: 0;
+  background: var(--panel); border-top: 1px solid var(--line);
+  padding: 8px max(12px, env(safe-area-inset-right, 0px)) calc(8px + env(safe-area-inset-bottom, 0px)) max(12px, env(safe-area-inset-left, 0px));
+}
+#selbar { display: flex; align-items: center; gap: 12px; margin-bottom: 8px; min-width: 0; }
+#selChips { display: flex; gap: 4px; flex: none; }
+.chip {
+  background: #262b21; border: 1px solid var(--line); border-radius: 14px; padding: 4px 11px; cursor: pointer;
+  font: 600 13px/1.2 var(--display); letter-spacing: 0.04em; text-transform: uppercase; color: var(--blue);
+}
+.chip.on { background: var(--blue); color: #0d1418; border-color: var(--blue); }
+.chip:disabled { opacity: 0.35; }
+#selText { color: var(--muted); font-size: 14px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; min-width: 0; }
+#orderGrid { display: flex; flex-wrap: wrap; gap: 8px 18px; }
+.ogroup { display: flex; flex-direction: column; gap: 4px; }
+.olabel { color: var(--muted); font: 600 11px/1 var(--display); letter-spacing: 0.14em; text-transform: uppercase; }
+.obuttons { display: flex; gap: 4px; }
+
+/* ---------------- modals */
+.modal {
+  position: fixed; inset: 0; z-index: 20; background: rgba(10, 12, 8, 0.72);
+  display: flex; align-items: flex-start; justify-content: center; overflow-y: auto;
+  padding: max(24px, env(safe-area-inset-top, 0px)) max(16px, env(safe-area-inset-right, 0px)) 24px max(16px, env(safe-area-inset-left, 0px));
+}
+.modal[hidden] { display: none !important; }
+.card {
+  width: min(880px, 100%); background: var(--panel-solid); border: 1px solid var(--line); border-radius: 4px;
+  box-shadow: 0 20px 60px rgba(0, 0, 0, 0.5);
+}
+.card.small { width: min(620px, 100%); }
+.cardhead { padding: 18px 22px 12px; border-bottom: 1px solid var(--line); display: flex; flex-direction: column; gap: 2px; }
+.cardhead h2 { margin: 0; font: 700 30px/1.05 var(--display); letter-spacing: 0.04em; text-transform: uppercase; text-wrap: balance; }
+.eyebrow { color: var(--muted); font: 600 12px/1.2 var(--display); letter-spacing: 0.14em; text-transform: uppercase; }
+.cardfoot { padding: 14px 22px; border-top: 1px solid var(--line); display: flex; gap: 10px; align-items: center; justify-content: flex-end; flex-wrap: wrap; }
+.cardfoot .bnote { margin-right: auto; }
+#briefBody { padding: 8px 22px 16px; display: grid; gap: 4px 28px; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); }
+#briefBody h3, .helpbody h3 { margin: 12px 0 4px; font: 700 14px/1.2 var(--display); letter-spacing: 0.14em; text-transform: uppercase; color: var(--accent); }
+#briefBody p, .helpbody p { margin: 0 0 6px; font: 400 15px/1.45 var(--display); max-width: 62ch; }
+.bdesc { display: block; margin-top: 6px; color: var(--muted); }
+.bnote { color: var(--muted); font-size: 13px; }
+.bseed { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+select, input[type="number"] {
+  background: #262b21; color: var(--ink); border: 1px solid var(--line); border-radius: 3px;
+  font: 500 13px/1.2 var(--mono); padding: 6px 6px; min-height: 32px;
+}
+input[type="number"] { width: 56px; }
+#missionSeed { width: 90px; }
+.tablewrap { overflow-x: auto; margin-bottom: 8px; }
+.ltable { border-collapse: collapse; width: 100%; font: 500 13px/1.2 var(--mono); }
+.ltable th { text-align: left; color: var(--muted); font: 600 11px/1 var(--display); letter-spacing: 0.12em; text-transform: uppercase; padding: 4px 6px; border-bottom: 1px solid var(--line); }
+.ltable td { padding: 5px 6px; border-bottom: 1px solid rgba(58, 65, 48, 0.5); vertical-align: middle; }
+.ltable td.bname { font: 600 14px/1.2 var(--display); white-space: nowrap; }
+.ltable td.kg { font-variant-numeric: tabular-nums; white-space: nowrap; text-align: right; }
+.ltable td.cellrow { display: flex; gap: 4px; align-items: center; border-bottom: 0; }
+.bload { grid-column: 1 / -1; }
+.helpbody { padding: 6px 22px 14px; }
+kbd { font: 600 12px/1 var(--mono); border: 1px solid var(--line); border-bottom-width: 2px; padding: 2px 5px; border-radius: 3px; background: #262b21; }
+#debriefBody { padding: 12px 22px; }
+.dsub { margin: 0 0 12px; font-size: 16px; }
+.dtable {
+  margin: 0; padding: 12px 14px; background: #f6f7f9; color: #1c2026; border-radius: 3px;
+  font: 500 13px/1.55 var(--mono); overflow-x: auto; font-variant-numeric: tabular-nums;
+}
+
+/* ---------------- narrow screens: phones */
+@media (max-width: 760px) {
+  .brand { display: none; }
+  .barbtns { gap: 4px; }
+  #btnRoster { display: inline-block; }
+  #btnHelp { display: none; }
+  .obtn { padding: 7px 9px; font-size: 13px; min-height: 36px; }
+  #bar { gap: 8px; }
+  #roster { display: none; width: min(320px, calc(100% - 16px)); }
+  body.roster-open #roster { display: block; }
+  #log { left: max(8px, env(safe-area-inset-left, 0px)); width: auto; top: calc(env(safe-area-inset-top, 0px) + 54px); }
+  .lline:nth-last-child(n+3) { display: none; }
+  #orderGrid { flex-wrap: nowrap; overflow-x: auto; padding-bottom: 4px; scrollbar-width: thin; }
+  .ogroup { flex: none; }
+  #selbar { flex-wrap: wrap; gap: 6px; }
+  #selText { width: 100%; font-size: 13px; }
+  #briefBody { grid-template-columns: minmax(0, 1fr); }
+  .cardhead h2 { font-size: 24px; }
+  .cardfoot .bnote { width: 100%; }
+  .dtable { font-size: 12px; padding: 10px; }
+}
+@media (prefers-reduced-motion: reduce) { * { scroll-behavior: auto !important; } }
+</style>
+<link rel="manifest" href="manifest.webmanifest">
+<link rel="icon" type="image/png" sizes="192x192" href="icons/icon-192.png">
+<link rel="apple-touch-icon" href="icons/apple-touch-icon.png">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-title" content="Squad">
+<meta name="description" content="Real-time squad tactics on a military map: command a 13-man Marine rifle squad.">
+</head>
+<body>
+<div id="app">
+  <canvas id="view" aria-label="Tactical map"></canvas>
+
+  <header id="bar">
+    <div class="brand"><b>SQUAD</b><span>Fire and maneuver</span></div>
+    <div id="clock" aria-label="Mission time">00:00</div>
+    <div class="barbtns">
+      <button id="btnPause" class="obtn">Resume</button>
+      <button id="btnSpeed" class="obtn" title="Game speed">1×</button>
+      <button id="btnCones" class="obtn on" title="Show where each man is looking (V)">Cones</button>
+      <button id="btnRoster" class="obtn">Roster</button>
+      <button id="btnHelp" class="obtn" title="Controls">Help</button>
+      <button id="btnMenu" class="obtn">Mission</button>
+    </div>
+  </header>
+
+  <aside id="roster" aria-label="Squad roster"></aside>
+  <div id="log" aria-live="polite"></div>
+  <div id="toast" hidden></div>
+  <div id="loading" role="status" hidden>Drawing the map sheet…</div>
+
+  <section id="orders" aria-label="Orders">
+    <div id="selbar">
+      <div id="selChips"></div>
+      <div id="selText"></div>
+    </div>
+    <div id="orderGrid"></div>
+  </section>
+
+  <div id="briefing" class="modal" hidden>
+    <div class="card">
+      <div class="cardhead">
+        <h2>Operation order</h2>
+        <span class="eyebrow">1st Squad · Marine rifle squad, 13 men</span>
+      </div>
+      <div id="briefBody"></div>
+      <div class="cardfoot">
+        <span class="bnote">The mission starts paused. Give your orders, then press Resume.</span>
+        <button id="btnBegin" class="obtn primary">Begin mission</button>
+      </div>
+    </div>
+  </div>
+
+  <div id="debrief" class="modal" hidden>
+    <div class="card small">
+      <div class="cardhead"><h2 id="debriefTitle">Debrief</h2><span class="eyebrow">After-action report</span></div>
+      <div id="debriefBody"></div>
+      <div class="cardfoot">
+        <button id="btnAgain" class="obtn">Same map again</button>
+        <button id="btnNext" class="obtn primary">New mission</button>
+      </div>
+    </div>
+  </div>
+
+  <div id="help" class="modal" hidden>
+    <div class="card small">
+      <div class="cardhead"><h2>Controls</h2><span class="eyebrow">Mouse, touch and keyboard</span></div>
+      <div class="helpbody">
+        <h3>Selecting</h3>
+        <p>Tap a Marine to select that Marine. Tap again to select the fire team, and again for the whole squad. The Squad and fire team buttons above the orders do the same. Keys: <kbd>1</kbd> <kbd>2</kbd> <kbd>3</kbd> fire teams, <kbd>0</kbd> squad, <kbd>Esc</kbd> cancel.</p>
+        <h3>Moving</h3>
+        <p>Pick Walk, Rush or Crawl, then tap the ground. Right-click also moves. Teams and the squad move in their formation. A walking team that takes fire, or sees a new enemy within 250 m, halts on its own, gets down and returns fire; rush, assault or bound to keep moving under fire. Rushing is fast but tiring and easy to spot. Crawling is slow but men can crawl while pinned.</p>
+        <h3>Fire and maneuver</h3>
+        <p><b>Suppress</b> puts fire on an area, seen enemy or not. <b>Bound</b> sends the squad forward one fire team at a time while the others cover it (a fire team bounds in buddy pairs). <b>Assault</b> walks forward firing and throwing grenades. Tap a visible enemy to make the selection engage that target.</p>
+        <h3>Reading the pieces</h3>
+        <p>Blue pieces are your Marines; red pieces are enemy you can see. A selected piece is lifted off the map and circled in blue. The shaded cone shows where a man is looking: he sweeps it left and right, wide and slow when calm, tighter and quicker when the enemy is near, fast and jerky under fire, and holds it on his target while firing. He is far more likely to spot an enemy inside his cone. The numeral beside him is his fire team. Cones toggles them (key V). Chits stacked on a piece show posture (STD, KNL, PRN), suppression (SUP, or PIN when pinned; a pinned man moves only by crawling), a wound (WIA) and no ammunition (AMO). A slash through a piece is a casualty; an X is killed. A red symbol in a dashed frame is where an enemy was last seen.</p>
+        <h3>Overlay</h3>
+        <p>Orders are drawn as on an acetate overlay: blue for friendly, red for enemy, black for targets. Blue lines with arrowheads are routes (long dashes for a rush, dots for a crawl); a heavy arrow with a solid head is an assault. OBJ marks the objective of a bounding drill. Dashed blue lines run from the shooters to a suppression target, a black cross in a circle. 40MM marks a grenade launcher target.</p>
+        <h3>Map key</h3>
+        <p>The sheet covers 3 by 3 kilometers in nine 1-kilometer grid squares, in standard US military map colors. White is open ground. Light green with tufts is tall grass, which hides a man lying prone. Green is woods and hedgerows; rows of small green circles are orchards, green row lines are vineyards. Blue lines are streams, which run in shallow gullies that give cover; blue areas are ponds and cannot be crossed. Red-brown lines are contours 5 meters apart, with a heavier, numbered index contour every 25 meters; numbers with a dot are hilltop heights. Black blocks are buildings. A black line with ticks is a stone wall, which gives hard cover to a kneeling or prone man. The red road is a paved road; the dashed double lines are dirt tracks. Point at the map to read the 8-digit grid reference. Zoomed out, your men gather into one counter per fire team, then one for the squad, in the standard unit symbol: a rectangle with an infantry X for friendly, a diamond for enemy.</p>
+        <h3>Camera</h3>
+        <p>Drag to pan. Use the wheel or pinch to zoom. <kbd>Space</kbd> pauses; you can give orders while paused.</p>
+      </div>
+      <div class="cardfoot"><button class="obtn primary" data-close="help">Close</button></div>
+    </div>
+  </div>
+</div>
+
+<script>
+// ---- src/util.js
+'use strict';
+// Shared helpers: seeded random numbers, math and geometry.
+// All game randomness goes through RNG so a mission seed reproduces the same map.
+
+function mulberry32(seed) {
+  let a = seed >>> 0;
+  return function () {
+    a = (a + 0x6D2B79F5) | 0;
+    let t = Math.imul(a ^ (a >>> 15), 1 | a);
+    t = (t + Math.imul(t ^ (t >>> 7), 61 | t)) ^ t;
+    return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
+  };
+}
+
+let RNG = Math.random;
+function setSeed(seed) { RNG = mulberry32(seed); }
+function rand() { return RNG(); }
+function randRange(a, b) { return a + (b - a) * RNG(); }
+function randInt(a, b) { return Math.floor(a + (b - a + 1) * RNG()); }
+function pick(arr) { return arr[Math.floor(RNG() * arr.length)]; }
+function chance(p) { return RNG() < p; }
+function gauss() {
+  const u = Math.max(1e-9, RNG()), v = RNG();
+  return Math.sqrt(-2 * Math.log(u)) * Math.cos(2 * Math.PI * v);
+}
+function shuffle(arr) {
+  for (let i = arr.length - 1; i > 0; i--) {
+    const j = Math.floor(RNG() * (i + 1));
+    [arr[i], arr[j]] = [arr[j], arr[i]];
+  }
+  return arr;
+}
+
+function clamp(v, lo, hi) { return v < lo ? lo : v > hi ? hi : v; }
+function lerp(a, b, t) { return a + (b - a) * t; }
+function smooth(t) { return t * t * (3 - 2 * t); }
+function dist(ax, ay, bx, by) { return Math.hypot(bx - ax, by - ay); }
+function angleTo(ax, ay, bx, by) { return Math.atan2(by - ay, bx - ax); }
+function angleDiff(a, b) {
+  let d = b - a;
+  while (d > Math.PI) d -= 2 * Math.PI;
+  while (d < -Math.PI) d += 2 * Math.PI;
+  return d;
+}
+
+// Rotate a formation offset (ox = right of travel, oy = ahead) to world space.
+// World y grows southward (down the screen); heading is the direction of travel.
+function rotateOffset(ox, oy, heading) {
+  const fx = Math.cos(heading), fy = Math.sin(heading);
+  const rx = -fy, ry = fx;
+  return { x: rx * ox + fx * oy, y: ry * ox + fy * oy };
+}
+
+function centroid(list) {
+  if (!list.length) return null;
+  let x = 0, y = 0;
+  for (const p of list) { x += p.x; y += p.y; }
+  return { x: x / list.length, y: y / list.length };
+}
+
+// Compass bearing in degrees (north up), as a Marine would call it.
+function bearing(ax, ay, bx, by) {
+  const deg = Math.atan2(bx - ax, -(by - ay)) * 180 / Math.PI;
+  return Math.round((deg + 360) % 360);
+}
+function pad3(n) { return String(n).padStart(3, '0'); }
+
+function fmtClock(t) {
+  const m = Math.floor(t / 60), s = Math.floor(t % 60);
+  return String(m).padStart(2, '0') + ':' + String(s).padStart(2, '0');
+}
+
+// ---- src/data.js
+'use strict';
+// Static game data: map scale, terrain, postures, weapons, billets, formations.
+// Weapon figures are game abstractions tuned for play, loosely scaled from
+// published effective ranges and rates of fire; they are not ballistic tables.
+
+const CELL = 4;                    // meters per terrain cell
+const MAP_W = 3000, MAP_H = 3000;  // meters: nine 1 km grid squares
+const GW = MAP_W / CELL, GH = MAP_H / CELL;
+
+const TER = {
+  OPEN: 0, GRASS: 1, WOODS: 2, ROAD: 3, BUILDING: 4, WALL: 5, PLOWED: 6,
+  ORCHARD: 7, VINEYARD: 8, STREAM: 9, POND: 10, PAVED: 11,
+};
+
+// losH: height above ground the feature blocks sight to.
+// density: share of sight blocked per meter of the feature crossed (vegetation).
+// cover: share of rounds stopped for a man inside or behind it.
+const TERRAIN = [
+  { name: 'Open field',   speed: 1.0,  losH: 0,   density: 0,     cover: 0,   conceal: 0 },
+  { name: 'Tall grass',   speed: 0.8,  losH: 0.9, density: 0.1,   cover: 0,   conceal: 0.5 },
+  { name: 'Woods',        speed: 0.6,  losH: 12,  density: 0.14,  cover: 0.3, conceal: 0.6 },
+  { name: 'Dirt road',    speed: 1.15, losH: 0,   density: 0,     cover: 0,   conceal: 0 },
+  { name: 'Building',     speed: 0,    losH: 6.5, solid: true,    cover: 1,   conceal: 1 },
+  { name: 'Stone wall',   speed: 0.3,  losH: 1.0, solid: true,    cover: 0.9, conceal: 0.3 },
+  { name: 'Plowed field', speed: 0.85, losH: 0,   density: 0,     cover: 0,   conceal: 0.1 },
+  { name: 'Orchard',      speed: 0.9,  losH: 4,   density: 0.035, cover: 0.1, conceal: 0.3 },
+  { name: 'Vineyard',     speed: 0.7,  losH: 1.6, density: 0.07,  cover: 0.05, conceal: 0.4 },
+  { name: 'Stream',       speed: 0.35, losH: 0,   density: 0,     cover: 0,   conceal: 0.2 },
+  { name: 'Pond',         speed: 0,    losH: 0,   density: 0,     cover: 0,   conceal: 0 },
+  { name: 'Paved road',   speed: 1.2,  losH: 0,   density: 0,     cover: 0,   conceal: 0 },
+];
+
+// eye: sight height. center: center of mass. size: relative target size.
+const POSTURE = {
+  stand: { label: 'Standing', short: 'STD', eye: 1.7,  center: 1.1,  size: 1.0,  acc: 0.85 },
+  kneel: { label: 'Kneeling', short: 'KNL', eye: 1.2,  center: 0.75, size: 0.6,  acc: 1.0 },
+  prone: { label: 'Prone',    short: 'PRN', eye: 0.35, center: 0.2,  size: 0.3,  acc: 1.2 },
+};
+// Seconds to change posture.
+const POSTURE_TIME = {
+  stand: { kneel: 0.5, prone: 1.2 },
+  kneel: { stand: 0.5, prone: 0.8 },
+  prone: { stand: 1.4, kneel: 0.9 },
+};
+
+// speed in m/s; fatigue gained per second.
+const MOVE = {
+  walk:  { label: 'Walk',  speed: 1.5, posture: 'stand', fatigue: 0.4 },
+  rush:  { label: 'Rush',  speed: 3.8, posture: 'stand', fatigue: 7 },
+  crawl: { label: 'Crawl', speed: 0.45, posture: 'prone', fatigue: 2.5 },
+};
+
+// rounds: rounds per trigger pull. cycle: seconds between pulls at a steady rate.
+// acc: chance per round to hit a standing, exposed man at 100 m or less.
+const WEAPONS = {
+  M27:    { name: 'M27 IAR (rifle)', rounds: 1, cycle: 1.7, acc: 0.42, range: 600, supp: 6,  mag: 30,  mags: 7,  reload: 3, kg: 3.6 },
+  M27IAR: { name: 'M27 IAR (auto)',  rounds: 3, cycle: 1.3, acc: 0.30, range: 600, supp: 8,  mag: 30,  mags: 21, reload: 3, kg: 3.6 },
+  M16A4:  { name: 'M16A4',           rounds: 1, cycle: 1.8, acc: 0.40, range: 550, supp: 6,  mag: 30,  mags: 7,  reload: 3, kg: 3.4 },
+  M4:     { name: 'M4 carbine',      rounds: 1, cycle: 1.7, acc: 0.37, range: 500, supp: 6,  mag: 30,  mags: 7,  reload: 3, kg: 3.0 },
+  M249:   { name: 'M249 SAW',        rounds: 6, cycle: 1.6, acc: 0.18, range: 800, supp: 11, mag: 200, mags: 3,  reload: 7, kg: 7.5 },
+  AK74:   { name: 'AK-74M',          rounds: 1, cycle: 1.9, acc: 0.34, range: 500, supp: 6,  mag: 30,  mags: 7,  reload: 3, kg: 3.4 },
+  AKM:    { name: 'AKM',             rounds: 1, cycle: 1.9, acc: 0.30, range: 400, supp: 7,  mag: 30,  mags: 6,  reload: 3, kg: 3.6 },
+  AKS74U: { name: 'AKS-74U',         rounds: 1, cycle: 1.8, acc: 0.28, range: 300, supp: 6,  mag: 30,  mags: 5,  reload: 3, kg: 2.7 },
+  RPK74:  { name: 'RPK-74',          rounds: 4, cycle: 1.6, acc: 0.24, range: 600, supp: 9,  mag: 45,  mags: 9,  reload: 4, kg: 5.0 },
+  PKM:    { name: 'PKM',             rounds: 6, cycle: 1.6, acc: 0.19, range: 1000, supp: 13, mag: 100, mags: 4,  reload: 8, kg: 7.5 },
+  SVD:    { name: 'SVD',             rounds: 1, cycle: 3.0, acc: 0.70, range: 800, supp: 7,  mag: 10,  mags: 8,  reload: 3, kg: 4.3 },
+};
+// Magazine weight (kg) for the loadout weight figure.
+const MAG_KG = { 30: 0.5, 200: 3.2, 45: 0.8, 100: 3.0, 10: 0.3 };
+
+// scatter: miss distance per meter of range. lethal/casualty: radii in meters.
+const LAUNCHERS = {
+  M203: { name: 'M203 40mm', range: 350, min: 31, cycle: 6, scatter: 0.035, lethal: 5, casualty: 12, rounds: 12, vel: 76,  kg: 0.23 },
+  M320: { name: 'M320 40mm', range: 350, min: 31, cycle: 6, scatter: 0.03,  lethal: 5, casualty: 12, rounds: 12, vel: 76,  kg: 0.23 },
+  GP25: { name: 'GP-25 40mm', range: 400, min: 40, cycle: 7, scatter: 0.04, lethal: 5, casualty: 11, rounds: 10, vel: 76,  kg: 0.25 },
+  RPG7: { name: 'RPG-7 (OG-7V)', range: 300, min: 25, cycle: 12, scatter: 0.03, lethal: 6, casualty: 14, rounds: 3, vel: 120, kg: 2.0 },
+};
+const GRENADES = {
+  M67:  { name: 'M67 frag', range: 32, lethal: 5, casualty: 15, fuse: 1.6, kg: 0.4 },
+  RGD5: { name: 'RGD-5 frag', range: 35, lethal: 4, casualty: 13, fuse: 1.6, kg: 0.31 },
+};
+
+// The 13-man Marine rifle squad: squad leader and three four-man fire teams.
+const USMC_BILLETS = {
+  SL: { title: 'Squad Leader',       rank: 'Sgt',  weapons: ['M4', 'M16A4', 'M27'],  weapon: 'M4' },
+  TL: { title: 'Fire Team Leader',   rank: 'Cpl',  weapons: ['M4', 'M16A4', 'M27'],  weapon: 'M4' },
+  AR: { title: 'Automatic Rifleman', rank: 'LCpl', weapons: ['M27IAR', 'M249'],      weapon: 'M27IAR' },
+  G:  { title: 'Grenadier',          rank: 'LCpl', weapons: ['M16A4', 'M4'],         weapon: 'M16A4', launchers: ['M203', 'M320'], launcher: 'M203' },
+  R:  { title: 'Rifleman',           rank: 'PFC',  weapons: ['M27', 'M16A4', 'M4'],  weapon: 'M27' },
+};
+const TEAM_ORDER = ['TL', 'AR', 'G', 'R'];
+
+// Opposing force billets. Organization is randomized for now; specific
+// foreign squad organizations come later.
+const OPFOR_BILLETS = {
+  SL:  { title: 'Squad Leader',       weapon: 'AK74' },
+  TL:  { title: 'Team Leader',        weapon: 'AK74' },
+  R:   { title: 'Rifleman',           weapon: 'AK74', alt: 'AKM' },
+  AR:  { title: 'Automatic Rifleman', weapon: 'RPK74' },
+  MG:  { title: 'Machine Gunner',     weapon: 'PKM' },
+  G:   { title: 'Grenadier',          weapon: 'AK74', launcher: 'GP25' },
+  RPG: { title: 'Antitank Grenadier', weapon: 'AKS74U', launcher: 'RPG7' },
+  MM:  { title: 'Marksman',           weapon: 'SVD' },
+};
+const OPFOR_POOL = ['R', 'R', 'R', 'R', 'AR', 'MG', 'G', 'RPG', 'MM'];
+
+const SURNAMES = ['Hayes', 'Ortiz', 'Brennan', 'Kowalski', 'Whitfield', 'Duarte', 'McAllister', 'Pruitt',
+  'Okafor', 'Lindqvist', 'Calloway', 'Reyes', 'Thibodeaux', 'Hargrove', 'Nakamura', 'Sutton', 'Boone',
+  'Castillo', 'Delaney', 'Ferris', 'Gaines', 'Holloway', 'Ingram', 'Jett', 'Keller', 'Lowery', 'Mercer',
+  'Novak', 'Overstreet', 'Pittman', 'Quarles', 'Rourke', 'Stroud', 'Tolliver', 'Vance', 'Wilder', 'Yates'];
+
+// Team formations: offsets in meters for member slot i (x = right, y = ahead),
+// before the interval multiplier. Slot 0 is the team leader.
+const FORMATIONS = {
+  wedge:  { label: 'Wedge' },
+  column: { label: 'Column' },
+  line:   { label: 'Line' },
+  echL:   { label: 'Echelon L' },
+  echR:   { label: 'Echelon R' },
+};
+const FORMATION_KEYS = Object.keys(FORMATIONS);
+
+function teamSlot(form, i) {
+  const side = i % 2 === 1 ? -1 : 1, rank = Math.ceil(i / 2);
+  switch (form) {
+    case 'column': return { x: 0, y: -6 * i };
+    case 'line':   return { x: side * 7 * rank, y: 0 };
+    case 'echL':   return { x: -6 * i, y: -6 * i };
+    case 'echR':   return { x: 6 * i, y: -6 * i };
+    default:       return { x: side * 7 * rank, y: -7 * rank };
+  }
+}
+
+// Squad formations: anchor for team k of n, and the squad leader's position.
+function squadSlot(form, k, n) {
+  switch (form) {
+    case 'column': return { x: 0, y: -30 * k };
+    case 'line':   return { x: (k - (n - 1) / 2) * 32, y: 0 };
+    case 'echL':   return { x: -24 * k, y: -24 * k };
+    case 'echR':   return { x: 24 * k, y: -24 * k };
+    default:
+      if (k === 0) return { x: 0, y: 0 };
+      return { x: (k % 2 === 1 ? -1 : 1) * 30 * Math.ceil(k / 2), y: -24 * Math.ceil(k / 2) };
+  }
+}
+function squadLeaderSlot(form) {
+  switch (form) {
+    case 'column': return { x: 4, y: -15 };
+    case 'line':   return { x: 0, y: -14 };
+    case 'echL':   return { x: -8, y: -20 };
+    case 'echR':   return { x: 8, y: -20 };
+    default:       return { x: 0, y: -16 };
+  }
+}
+
+// ---- src/map.js
+'use strict';
+// Terrain grid for a 3 x 3 km sheet: procedural generation (relief, streams and ponds,
+// fields, woods, roads, villages, farms), line of sight, pathfinding and cover search.
+
+const PLACE_A = ['Bran', 'Hol', 'Mer', 'Ash', 'Kel', 'Dun', 'Fair', 'Stan', 'Wex', 'Oak', 'Mill', 'Thorn', 'Rock', 'Hal', 'Elm', 'Bram', 'Cold', 'Red'];
+const PLACE_B = ['ford', 'by', 'ton', 'wick', 'ham', 'field', 'dale', 'stead', 'bury', 'well', 'moor', 'ridge', 'cote', 'leigh'];
+
+class GameMap {
+  constructor(seed) {
+    this.ter = new Uint8Array(GW * GH);
+    this.elev = new Float32Array(GW * GH);
+    this.buildings = [];
+    this.roads = [];     // { kind: 'paved' | 'track', pts }
+    this.streams = [];   // { pts, width }
+    this.places = [];    // { name, x, y }
+    setSeed(seed);
+    this.generate();
+  }
+
+  idx(cx, cy) { return cy * GW + cx; }
+  inGrid(cx, cy) { return cx >= 0 && cy >= 0 && cx < GW && cy < GH; }
+  cellOf(x, y) { return { cx: clamp(Math.floor(x / CELL), 0, GW - 1), cy: clamp(Math.floor(y / CELL), 0, GH - 1) }; }
+  terAt(x, y) {
+    const cx = Math.floor(x / CELL), cy = Math.floor(y / CELL);
+    if (!this.inGrid(cx, cy)) return TER.OPEN;
+    return this.ter[cy * GW + cx];
+  }
+  passableCell(cx, cy) { return this.inGrid(cx, cy) && TERRAIN[this.ter[cy * GW + cx]].speed > 0; }
+
+  // Ground elevation in meters above the sheet's lowest ground, between cell centers.
+  elevAt(x, y) {
+    const fx = clamp(x / CELL - 0.5, 0, GW - 1.001), fy = clamp(y / CELL - 0.5, 0, GH - 1.001);
+    const x0 = Math.floor(fx), y0 = Math.floor(fy), tx = fx - x0, ty = fy - y0;
+    const e = this.elev, i = y0 * GW + x0;
+    const a = e[i], b = e[i + 1], c = e[i + GW], d = e[i + GW + 1];
+    return (a * (1 - tx) + b * tx) * (1 - ty) + (c * (1 - tx) + d * tx) * ty;
+  }
+
+  // ---------------------------------------------------------------- generation
+  generate() {
+    this.genElevation();
+    this.genHydrology();
+    this.genFields();
+    this.genWoods();
+    this.genRoads();
+    this.genVillages();
+    this.genFarms();
+    this.elevBase = randInt(6, 40) * 10; // height above sea level of the lowest ground
+    this.gmAngle = randRange(-6, 6);     // grid-magnetic angle for the declination diagram
+    this.findPeaks();
+  }
+
+  noise(nx, ny) {
+    const grid = new Float32Array((nx + 1) * (ny + 1));
+    for (let i = 0; i < grid.length; i++) grid[i] = rand();
+    return (u, v) => {
+      const fx = u * nx, fy = v * ny, i = Math.min(nx - 1, Math.floor(fx)), j = Math.min(ny - 1, Math.floor(fy));
+      const tx = smooth(fx - i), ty = smooth(fy - j), w = nx + 1;
+      const top = lerp(grid[j * w + i], grid[j * w + i + 1], tx), bot = lerp(grid[(j + 1) * w + i], grid[(j + 1) * w + i + 1], tx);
+      return lerp(top, bot, ty);
+    };
+  }
+
+  // Rolling hill country: broad hills, spurs and small folds, 60 to 120 m of relief.
+  genElevation() {
+    const relief = randRange(60, 110);
+    const oct = [[3, 0.55], [7, 0.26], [15, 0.12], [38, 0.05], [90, 0.015]].map(([n, a]) => ({ f: this.noise(n, n), a }));
+    let lo = Infinity, hi = -Infinity;
+    for (let cy = 0; cy < GH; cy++) for (let cx = 0; cx < GW; cx++) {
+      const u = (cx + 0.5) / GW, v = (cy + 0.5) / GH;
+      let e = 0;
+      for (const o of oct) e += o.f(u, v) * o.a;
+      this.elev[cy * GW + cx] = e;
+      if (e < lo) lo = e; if (e > hi) hi = e;
+    }
+    for (let i = 0; i < this.elev.length; i++) this.elev[i] = (this.elev[i] - lo) / (hi - lo) * relief;
+  }
+
+  // Water runs downhill: each cell drains to its lowest neighbor. Cells draining a large
+  // enough area become streams; streams that end in a hollow fill it as a pond.
+  genHydrology() {
+    const N = GW * GH, e = this.elev;
+    // Priority flood from the map edge: fill each hollow up to its spill level, so water
+    // drained over the filled surface always finds its way off the sheet.
+    const fill = new Float32Array(N), seen = new Uint8Array(N), heap = new MinHeap();
+    for (let cx = 0; cx < GW; cx++) for (const cy of [0, GH - 1]) { const i = cy * GW + cx; if (!seen[i]) { seen[i] = 1; fill[i] = e[i]; heap.push(i, e[i]); } }
+    for (let cy = 1; cy < GH - 1; cy++) for (const cx of [0, GW - 1]) { const i = cy * GW + cx; seen[i] = 1; fill[i] = e[i]; heap.push(i, e[i]); }
+    const order = new Int32Array(N);
+    let on = 0;
+    while (heap.size) {
+      const c = heap.pop();
+      order[on++] = c;
+      const x = c % GW, y = Math.floor(c / GW);
+      for (let j = -1; j <= 1; j++) for (let k = -1; k <= 1; k++) {
+        if (!j && !k) continue;
+        const nx = x + k, ny = y + j;
+        if (!this.inGrid(nx, ny)) continue;
+        const n = ny * GW + nx;
+        if (seen[n]) continue;
+        seen[n] = 1;
+        fill[n] = Math.max(e[n], fill[c] + 0.0005);
+        heap.push(n, fill[n]);
+      }
+    }
+    // Each cell drains to its lowest neighbor on the filled surface; flow accumulates
+    // from the top of the flood order down.
+    const down = new Int32Array(N).fill(-1);
+    for (let cy = 0; cy < GH; cy++) for (let cx = 0; cx < GW; cx++) {
+      const i = cy * GW + cx;
+      if (cx === 0 || cy === 0 || cx === GW - 1 || cy === GH - 1) continue;
+      let best = fill[i], bi = -1;
+      for (let j = -1; j <= 1; j++) for (let k = -1; k <= 1; k++) {
+        if (!j && !k) continue;
+        const n = (cy + j) * GW + cx + k;
+        if (fill[n] < best) { best = fill[n]; bi = n; }
+      }
+      down[i] = bi;
+    }
+    const acc = new Float32Array(N).fill(1);
+    for (let n = N - 1; n >= 0; n--) { const i = order[n]; if (down[i] >= 0) acc[down[i]] += acc[i]; }
+
+    // Ponds: the deeper parts of small filled hollows.
+    const pondSeen = new Uint8Array(N);
+    for (let i = 0; i < N; i++) {
+      if (pondSeen[i] || fill[i] - e[i] < 1.2) continue;
+      const region = [i], q = [i];
+      pondSeen[i] = 1;
+      while (q.length) {
+        const c = q.pop(), x = c % GW, y = Math.floor(c / GW);
+        for (const [dx, dy] of [[1, 0], [-1, 0], [0, 1], [0, -1]]) {
+          if (!this.inGrid(x + dx, y + dy)) continue;
+          const n = (y + dy) * GW + x + dx;
+          if (!pondSeen[n] && fill[n] - e[n] >= 0.6) { pondSeen[n] = 1; region.push(n); q.push(n); }
+        }
+      }
+      if (region.length >= 40 && region.length <= 2500) for (const c of region) this.ter[c] = TER.POND;
+    }
+
+    const T = 7000; // cells (about 0.11 km² of catchment) before water runs as a stream
+    const isStream = new Uint8Array(N);
+    for (let i = 0; i < N; i++) if (acc[i] >= T) isStream[i] = 1;
+
+    // Trace streams into polylines, from each source downhill to a junction or the edge.
+    const feeds = new Uint8Array(N);
+    for (let i = 0; i < N; i++) if (isStream[i] && down[i] >= 0) feeds[down[i]] = 1;
+    const traced = new Uint8Array(N);
+    for (let i = 0; i < N; i++) {
+      if (!isStream[i] || feeds[i]) continue;
+      const pts = [];
+      let c = i, width = 1.5;
+      while (c >= 0) {
+        pts.push({ x: (c % GW + 0.5) * CELL, y: (Math.floor(c / GW) + 0.5) * CELL });
+        width = Math.max(width, 1.5 + 3 * clamp(Math.log(acc[c] / T) / Math.log(30), 0, 1));
+        if (traced[c]) break;
+        traced[c] = 1;
+        c = down[c];
+      }
+      if (pts.length > 3) this.streams.push({ pts: simplifyLine(pts, 3), width });
+    }
+    // Streams cut small gullies: a meter or so below the banks.
+    const cut = new Float32Array(N);
+    for (let i = 0; i < N; i++) {
+      if (!traced[i] || this.ter[i] === TER.POND) continue;
+      this.ter[i] = TER.STREAM;
+      const cx = i % GW, cy = Math.floor(i / GW);
+      for (let j = -1; j <= 1; j++) for (let k = -1; k <= 1; k++) {
+        if (!this.inGrid(cx + k, cy + j)) continue;
+        const n = (cy + j) * GW + cx + k;
+        cut[n] = Math.max(cut[n], j || k ? 0.5 : 1.3);
+      }
+    }
+    for (let i = 0; i < N; i++) this.elev[i] -= cut[i];
+  }
+
+  isWet(i) { return this.ter[i] === TER.STREAM || this.ter[i] === TER.POND; }
+
+  // Farm fields as Voronoi patches on a jittered lattice, bounded by hedgerows, stone walls or nothing.
+  genFields() {
+    const S = 200, nx = Math.ceil(MAP_W / S) + 1, ny = Math.ceil(MAP_H / S) + 1;
+    const kinds = [[TER.OPEN, 3], [TER.PLOWED, 2.2], [TER.GRASS, 2.4], [TER.ORCHARD, 0.6], [TER.VINEYARD, 0.5]];
+    const total = kinds.reduce((n, k) => n + k[1], 0);
+    const pickKind = () => { let r = rand() * total; for (const [k, w] of kinds) { if ((r -= w) <= 0) return k; } return TER.OPEN; };
+    const seeds = [];
+    for (let j = 0; j < ny; j++) for (let i = 0; i < nx; i++) seeds.push({ x: (i + randRange(0.1, 0.9)) * S, y: (j + randRange(0.1, 0.9)) * S, k: pickKind() });
+    const owner = new Int32Array(GW * GH);
+    for (let cy = 0; cy < GH; cy++) for (let cx = 0; cx < GW; cx++) {
+      const x = (cx + 0.5) * CELL, y = (cy + 0.5) * CELL, li = Math.floor(x / S), lj = Math.floor(y / S);
+      let best = 0, bd = Infinity;
+      for (let j = lj - 1; j <= lj + 1; j++) for (let i = li - 1; i <= li + 1; i++) {
+        if (i < 0 || j < 0 || i >= nx || j >= ny) continue;
+        const s = seeds[j * nx + i], d = (s.x - x) ** 2 + (s.y - y) ** 2;
+        if (d < bd) { bd = d; best = j * nx + i; }
+      }
+      const c = cy * GW + cx;
+      owner[c] = best;
+      if (!this.isWet(c)) this.ter[c] = seeds[best].k;
+    }
+    const edgeKind = new Map();
+    const edgeFor = (a, b) => {
+      const key = Math.min(a, b) * 100000 + Math.max(a, b);
+      if (!edgeKind.has(key)) { const r = rand(); edgeKind.set(key, { kind: r < 0.45 ? TER.WOODS : r < 0.65 ? TER.WALL : -1, phase: randInt(0, 30) }); }
+      return edgeKind.get(key);
+    };
+    for (let cy = 0; cy < GH - 1; cy++) for (let cx = 0; cx < GW - 1; cx++) {
+      const c = cy * GW + cx, a = owner[c];
+      const b = owner[c + 1] !== a ? owner[c + 1] : owner[c + GW] !== a ? owner[c + GW] : -1;
+      if (b < 0 || this.isWet(c)) continue;
+      const e = edgeFor(a, b);
+      if (e.kind < 0) continue;
+      // Gaps let men pass walls and hedgerows without climbing.
+      if (e.kind === TER.WALL && (cx + cy + e.phase) % 22 < 2) continue;
+      if (e.kind === TER.WOODS && (cx * 3 + cy + e.phase) % 31 < 2) continue;
+      this.ter[c] = e.kind;
+    }
+  }
+
+  // Woods: large stands, more of them on steep ground and high ground.
+  genWoods() {
+    const n1 = this.noise(6, 6), n2 = this.noise(17, 17);
+    let maxE = 0;
+    for (const v of this.elev) if (v > maxE) maxE = v;
+    for (let cy = 1; cy < GH - 1; cy++) for (let cx = 1; cx < GW - 1; cx++) {
+      const c = cy * GW + cx;
+      if (this.isWet(c)) continue;
+      const u = (cx + 0.5) / GW, v = (cy + 0.5) / GH;
+      const slope = Math.hypot(this.elev[c + 1] - this.elev[c - 1], this.elev[c + GW] - this.elev[c - GW]) / (2 * CELL);
+      const f = n1(u, v) * 0.7 + n2(u, v) * 0.3 + Math.min(0.18, slope * 1.5) + this.elev[c] / maxE * 0.08;
+      if (f > 0.74) this.ter[c] = TER.WOODS;
+    }
+  }
+
+  // Least-cost route for a road: avoids steep ground, woods and water.
+  routeRoad(sx, sy, tx, ty) {
+    const N = GW * GH, g = new Float32Array(N).fill(Infinity), came = new Int32Array(N).fill(-1), closed = new Uint8Array(N);
+    const heap = new MinHeap(), start = sy * GW + sx, end = ty * GW + tx;
+    const h = (i) => Math.hypot(i % GW - tx, Math.floor(i / GW) - ty) * 1.2;
+    g[start] = 0; heap.push(start, h(start));
+    while (heap.size) {
+      const cur = heap.pop();
+      if (cur === end) break;
+      if (closed[cur]) continue;
+      closed[cur] = 1;
+      const cx = cur % GW, cy = Math.floor(cur / GW);
+      for (let dy = -1; dy <= 1; dy++) for (let dx = -1; dx <= 1; dx++) {
+        if (!dx && !dy) continue;
+        const nx = cx + dx, ny = cy + dy;
+        if (!this.inGrid(nx, ny)) continue;
+        const ni = ny * GW + nx, k = this.ter[ni];
+        if (closed[ni] || k === TER.POND || k === TER.BUILDING) continue;
+        const grade = Math.abs(this.elev[ni] - this.elev[cur]) / CELL;
+        let cost = (dx && dy ? 1.414 : 1) * (1 + grade * grade * 400);
+        if (k === TER.WOODS) cost *= 2;
+        if (k === TER.STREAM) cost += 12;
+        if (k === TER.ROAD || k === TER.PAVED) cost *= 0.4;
+        const ng = g[cur] + cost;
+        if (ng < g[ni]) { g[ni] = ng; came[ni] = cur; heap.push(ni, ng + h(ni)); }
+      }
+    }
+    if (came[end] < 0) return null;
+    const cells = [];
+    for (let i = end; i !== -1; i = came[i]) cells.push(i);
+    return cells.reverse();
+  }
+
+  layRoad(cells, kind) {
+    const t = kind === 'paved' ? TER.PAVED : TER.ROAD;
+    for (const c of cells) if (this.ter[c] !== TER.PAVED) this.ter[c] = t;
+    const pts = cells.map(c => ({ x: (c % GW + 0.5) * CELL, y: (Math.floor(c / GW) + 0.5) * CELL }));
+    this.roads.push({ kind, pts: simplifyLine(pts, 2.5), cells });
+  }
+
+  edgePoint(side) {
+    const r = randInt(Math.floor(GW * 0.2), Math.floor(GW * 0.8));
+    return side === 'w' ? [0, r] : side === 'e' ? [GW - 1, r] : side === 'n' ? [r, 0] : [r, GH - 1];
+  }
+
+  genRoads() {
+    const ew = chance(0.5);
+    const [a, b] = ew ? [this.edgePoint('w'), this.edgePoint('e')] : [this.edgePoint('n'), this.edgePoint('s')];
+    const main = this.routeRoad(a[0], a[1], b[0], b[1]);
+    if (main) this.layRoad(main, 'paved');
+    const [c, d] = ew ? [this.edgePoint('n'), this.edgePoint('s')] : [this.edgePoint('w'), this.edgePoint('e')];
+    const track = this.routeRoad(c[0], c[1], d[0], d[1]);
+    if (track) this.layRoad(track, 'track');
+  }
+
+  footprintFree(cx, cy, w, h) {
+    for (let j = 0; j < h; j++) for (let i = 0; i < w; i++) {
+      if (!this.inGrid(cx + i, cy + j)) return false;
+      const t = this.ter[(cy + j) * GW + cx + i];
+      if (t === TER.BUILDING || t === TER.ROAD || t === TER.PAVED || t === TER.STREAM || t === TER.POND) return false;
+    }
+    return true;
+  }
+
+  placeBuilding(cx, cy, w, h) {
+    if (!this.footprintFree(cx - 1, cy - 1, w + 2, h + 2)) return null;
+    for (let j = -1; j <= h; j++) for (let i = -1; i <= w; i++) {
+      const c = (cy + j) * GW + cx + i;
+      const inside = i >= 0 && j >= 0 && i < w && j < h;
+      if (inside) this.ter[c] = TER.BUILDING;
+      else if (this.ter[c] !== TER.WALL) this.ter[c] = TER.OPEN; // a cleared yard around the house
+    }
+    const b = { cx, cy, w, h, x0: cx * CELL, y0: cy * CELL, x1: (cx + w) * CELL, y1: (cy + h) * CELL, height: randRange(4.5, 8) };
+    this.buildings.push(b);
+    return b;
+  }
+
+  yardWall(b) {
+    const m = 2, x0 = b.cx - m, y0 = b.cy - m, x1 = b.cx + b.w + m - 1, y1 = b.cy + b.h + m - 1;
+    const gate = randInt(0, 3);
+    for (let cy = y0; cy <= y1; cy++) for (let cx = x0; cx <= x1; cx++) {
+      if (!this.inGrid(cx, cy)) continue;
+      const edge = cx === x0 || cx === x1 || cy === y0 || cy === y1;
+      if (!edge) continue;
+      const gx = b.cx + Math.floor(b.w / 2), gy = b.cy + Math.floor(b.h / 2);
+      if ((gate === 0 && cy === y0 && Math.abs(cx - gx) <= 0) || (gate === 1 && cy === y1 && Math.abs(cx - gx) <= 0) ||
+          (gate === 2 && cx === x0 && Math.abs(cy - gy) <= 0) || (gate === 3 && cx === x1 && Math.abs(cy - gy) <= 0)) continue;
+      const i = cy * GW + cx, k = this.ter[i];
+      if (k !== TER.ROAD && k !== TER.PAVED && k !== TER.BUILDING && !this.isWet(i)) this.ter[i] = TER.WALL;
+    }
+  }
+
+  placeName() {
+    for (let i = 0; i < 20; i++) {
+      const n = pick(PLACE_A) + pick(PLACE_B);
+      if (!this.places.some(p => p.name === n)) return n;
+    }
+    return pick(PLACE_A) + pick(PLACE_B);
+  }
+
+  // Villages strung along the roads, houses facing the road with yards and walls.
+  genVillages() {
+    const along = this.roads.flatMap(r => r.cells.map(c => ({ c, kind: r.kind })));
+    const want = randInt(2, 4);
+    for (let tries = 0; tries < 60 && this.places.length < want; tries++) {
+      const pick0 = along[randInt(0, along.length - 1)];
+      if (!pick0) break;
+      const vx = (pick0.c % GW + 0.5) * CELL, vy = (Math.floor(pick0.c / GW) + 0.5) * CELL;
+      if (vx < 250 || vy < 250 || vx > MAP_W - 250 || vy > MAP_H - 250) continue;
+      if (this.places.some(p => dist(p.x, p.y, vx, vy) < 800)) continue;
+      const near = along.filter(a => dist((a.c % GW + 0.5) * CELL, (Math.floor(a.c / GW) + 0.5) * CELL, vx, vy) < 160);
+      let built = 0;
+      for (let k = 0; k < 80 && built < randInt(9, 18); k++) {
+        const a = pick(near), ax = a.c % GW, ay = Math.floor(a.c / GW);
+        const w = randInt(2, 4), h = randInt(2, 3), side = chance(0.5) ? 1 : -1, off = randInt(2, 4);
+        const horiz = chance(0.5);
+        const cx = horiz ? ax - Math.floor(w / 2) : ax + (side > 0 ? off : -off - w);
+        const cy = horiz ? ay + (side > 0 ? off : -off - h) : ay - Math.floor(h / 2);
+        const b = this.placeBuilding(cx, cy, w, h);
+        if (!b) continue;
+        built++;
+        if (chance(0.3)) this.yardWall(b);
+      }
+      if (built >= 5) this.places.push({ name: this.placeName(), x: vx, y: vy, kind: 'village' });
+    }
+  }
+
+  // Outlying farms, each with a track to the nearest road.
+  genFarms() {
+    const roadCells = this.roads.flatMap(r => r.cells);
+    const want = randInt(6, 10);
+    let made = 0;
+    for (let tries = 0; tries < 80 && made < want; tries++) {
+      const x = randRange(150, MAP_W - 150), y = randRange(150, MAP_H - 150);
+      if (this.places.some(p => dist(p.x, p.y, x, y) < (p.kind === 'village' ? 450 : 350))) continue;
+      const c = this.cellOf(x, y);
+      if (TERRAIN[this.ter[c.cy * GW + c.cx]].speed === 0 || this.ter[c.cy * GW + c.cx] === TER.WOODS) continue;
+      const b = this.placeBuilding(c.cx, c.cy, randInt(3, 5), randInt(2, 3));
+      if (!b) continue;
+      for (let k = 0; k < randInt(0, 2); k++) this.placeBuilding(c.cx + randInt(-6, 6), c.cy + randInt(4, 7) * (chance(0.5) ? 1 : -1), randInt(2, 3), 2);
+      if (chance(0.4)) this.yardWall(b);
+      made++;
+      this.places.push({ name: this.placeName() + ' Farm', x: b.x1 + 6, y: b.y0, kind: 'farm' });
+      // Track to the nearest road cell.
+      let best = -1, bd = Infinity;
+      for (let i = 0; i < roadCells.length; i += 3) {
+        const rc = roadCells[i], d = (rc % GW - c.cx) ** 2 + (Math.floor(rc / GW) - c.cy) ** 2;
+        if (d < bd) { bd = d; best = rc; }
+      }
+      const sx = c.cx + Math.floor(b.w / 2), sy = c.cy + b.h + 1;
+      if (best >= 0 && this.inGrid(sx, sy)) {
+        const path = this.routeRoad(sx, sy, best % GW, Math.floor(best / GW));
+        if (path && path.length > 2) this.layRoad(path, 'track');
+      }
+    }
+  }
+
+  // Hilltops for spot elevations and the sheet name; index contour label sites.
+  findPeaks() {
+    const R = 50, peaks = [];
+    for (let cy = R; cy < GH - R; cy += 5) for (let cx = R; cx < GW - R; cx += 5) {
+      const e = this.elev[cy * GW + cx];
+      let top = true;
+      for (let j = -R; j <= R && top; j += 5) for (let i = -R; i <= R; i += 5) {
+        if ((i || j) && this.elev[(cy + j) * GW + cx + i] > e) { top = false; break; }
+      }
+      if (top) peaks.push({ x: (cx + 0.5) * CELL, y: (cy + 0.5) * CELL, e });
+    }
+    peaks.sort((a, b) => b.e - a.e);
+    this.peaks = [];
+    for (const p of peaks) if (!this.peaks.some(q => dist(p.x, p.y, q.x, q.y) < 350)) this.peaks.push(p);
+    this.peak = this.peaks.length ? Math.round(this.elevBase + this.peaks[0].e) : this.elevBase;
+    this.contourLabels = [];
+    for (let y = 60; y < MAP_H - 60; y += 24) for (let x = 60; x < MAP_W - 60; x += 24) {
+      const e = this.elevAt(x, y), lv = Math.round(e / 25) * 25;
+      if (lv <= 0 || Math.abs(e - lv) > 0.3) continue;
+      if (this.contourLabels.some(l => dist(l.x, l.y, x, y) < 380)) continue;
+      const k = this.terAt(x, y);
+      if (k === TER.BUILDING || k === TER.PAVED || k === TER.ROAD) continue;
+      this.contourLabels.push({ x, y, v: lv });
+    }
+  }
+
+  // ---------------------------------------------------------------- line of sight
+  // Returns how much of the line is unobstructed, 0 (blocked) to 1 (clear).
+  // za and zb are heights above the ground at each end.
+  los(ax, ay, za, bx, by, zb) {
+    const d = dist(ax, ay, bx, by);
+    if (d < 0.75) return 1;
+    const ga = this.elevAt(ax, ay) + za, gb = this.elevAt(bx, by) + zb;
+    const n = Math.ceil(d / 1.6);
+    let dens = 0, last = -1;
+    for (let i = 1; i < n; i++) {
+      const t = i / n, x = ax + (bx - ax) * t, y = ay + (by - ay) * t;
+      const h = ga + (gb - ga) * t;
+      const ground = this.elevAt(x, y);
+      if (ground > h) return 0;
+      const cx = Math.floor(x / CELL), cy = Math.floor(y / CELL);
+      if (!this.inGrid(cx, cy)) continue;
+      const ci = cy * GW + cx;
+      if (ci === last) continue;
+      last = ci;
+      const T = TERRAIN[this.ter[ci]];
+      if (h >= ground + T.losH) continue;
+      const fromA = t * d, fromB = d - fromA;
+      if (T.solid) return 0;
+      if (T.density) {
+        // A man at the edge of cover can see out of it; his own cell counts less.
+        const w = fromA < CELL * 0.75 ? 0.25 : fromB < CELL * 0.75 ? 0.5 : 1;
+        dens += T.density * CELL * w;
+        if (dens >= 1) return 0;
+      }
+    }
+    return 1 - dens;
+  }
+
+  // ---------------------------------------------------------------- pathfinding
+  nearestPassable(cx, cy) {
+    cx = clamp(cx, 0, GW - 1); cy = clamp(cy, 0, GH - 1);
+    if (this.passableCell(cx, cy) && this.ter[cy * GW + cx] !== TER.WALL) return { cx, cy };
+    for (let r = 1; r < 16; r++) {
+      for (let j = -r; j <= r; j++) for (let i = -r; i <= r; i++) {
+        if (Math.max(Math.abs(i), Math.abs(j)) !== r) continue;
+        const x = cx + i, y = cy + j;
+        if (this.passableCell(x, y) && this.ter[y * GW + x] !== TER.WALL) return { cx: x, cy: y };
+      }
+    }
+    return { cx, cy };
+  }
+
+  straightWalkable(ax, ay, bx, by) {
+    const d = dist(ax, ay, bx, by), n = Math.ceil(d / 1.2);
+    for (let i = 0; i <= n; i++) {
+      const t = i / n, x = ax + (bx - ax) * t, y = ay + (by - ay) * t;
+      const k = this.terAt(x, y);
+      if (k === TER.BUILDING || k === TER.WALL || k === TER.POND) return false;
+      // Keep clear of building corners so men do not clip through them.
+      if (this.terAt(x + 1, y) === TER.BUILDING || this.terAt(x - 1, y) === TER.BUILDING ||
+          this.terAt(x, y + 1) === TER.BUILDING || this.terAt(x, y - 1) === TER.BUILDING) return false;
+    }
+    return true;
+  }
+
+  // A* over the grid; cost is travel time. Long routes use a weighted heuristic,
+  // which finds a good route much faster than the strictly shortest one.
+  findPath(sx, sy, tx, ty) {
+    tx = clamp(tx, 1, MAP_W - 1); ty = clamp(ty, 1, MAP_H - 1);
+    const s = this.cellOf(sx, sy), t0 = this.cellOf(tx, ty);
+    const t = this.nearestPassable(t0.cx, t0.cy);
+    const exact = t.cx === t0.cx && t.cy === t0.cy;
+    const goal = exact ? { x: tx, y: ty } : { x: (t.cx + 0.5) * CELL, y: (t.cy + 0.5) * CELL };
+    if (s.cx === t.cx && s.cy === t.cy) return [goal];
+    const straight = dist(sx, sy, goal.x, goal.y);
+    if (straight < 60 && this.straightWalkable(sx, sy, goal.x, goal.y)) return [goal];
+
+    const N = GW * GH, start = s.cy * GW + s.cx, end = t.cy * GW + t.cx;
+    const g = this._g || (this._g = new Float32Array(N));
+    const came = this._came || (this._came = new Int32Array(N));
+    const closed = this._closed || (this._closed = new Uint8Array(N));
+    g.fill(Infinity); came.fill(-1); closed.fill(0);
+    const heap = new MinHeap();
+    const wgt = straight > 150 ? 1.6 : 1;
+    const h = (i) => {
+      const dx = Math.abs((i % GW) - t.cx), dy = Math.abs(Math.floor(i / GW) - t.cy);
+      return (Math.max(dx, dy) + 0.414 * Math.min(dx, dy)) * CELL / 1.2 * wgt;
+    };
+    g[start] = 0;
+    heap.push(start, h(start));
+    let found = false, expanded = 0;
+    while (heap.size && expanded < 250000) {
+      const cur = heap.pop();
+      if (cur === end) { found = true; break; }
+      if (closed[cur]) continue;
+      closed[cur] = 1; expanded++;
+      const cx = cur % GW, cy = Math.floor(cur / GW);
+      for (let dy = -1; dy <= 1; dy++) for (let dx = -1; dx <= 1; dx++) {
+        if (!dx && !dy) continue;
+        const nx = cx + dx, ny = cy + dy;
+        if (!this.passableCell(nx, ny)) continue;
+        if (dx && dy && (!this.passableCell(cx + dx, cy) || !this.passableCell(cx, cy + dy))) continue;
+        const ni = ny * GW + nx;
+        if (closed[ni]) continue;
+        const sp = TERRAIN[this.ter[ni]].speed;
+        const cost = g[cur] + (dx && dy ? 1.414 : 1) * CELL / sp;
+        if (cost < g[ni]) { g[ni] = cost; came[ni] = cur; heap.push(ni, cost + h(ni)); }
+      }
+    }
+    if (!found) return null;
+    const cells = [];
+    for (let i = end; i !== -1; i = came[i]) cells.push({ x: (i % GW + 0.5) * CELL, y: (Math.floor(i / GW) + 0.5) * CELL });
+    cells.reverse();
+    cells[cells.length - 1] = goal;
+    // String-pull: skip waypoints wherever a straight walk is clear.
+    const out = [];
+    let ax = sx, ay = sy, i = 0;
+    while (i < cells.length - 1) {
+      let j = Math.min(cells.length - 1, i + 25);
+      while (j > i + 1 && !this.straightWalkable(ax, ay, cells[j].x, cells[j].y)) j--;
+      out.push(cells[j]);
+      ax = cells[j].x; ay = cells[j].y; i = j;
+    }
+    if (!out.length) out.push(goal);
+    return out;
+  }
+
+  // A route for a man keeping station on a leader's route: the leader's waypoints
+  // shifted by his formation offset, with short detours where the shifted line is blocked.
+  offsetPath(sx, sy, lead, ox, oy) {
+    const pts = [];
+    let px = sx, py = sy;
+    for (let k = 0; k < lead.length; k++) {
+      const prev = k ? lead[k - 1] : null, cur = lead[k];
+      const h = prev ? angleTo(prev.x, prev.y, cur.x, cur.y) : angleTo(sx - ox, sy - oy, cur.x, cur.y);
+      const w = rotateOffset(ox, oy, h);
+      const c = this.nearestPassable(Math.floor((cur.x + w.x) / CELL), Math.floor((cur.y + w.y) / CELL));
+      const q = k === lead.length - 1 && TERRAIN[this.terAt(cur.x + w.x, cur.y + w.y)].speed > 0 && this.terAt(cur.x + w.x, cur.y + w.y) !== TER.WALL
+        ? { x: cur.x + w.x, y: cur.y + w.y } : { x: (c.cx + 0.5) * CELL, y: (c.cy + 0.5) * CELL };
+      if (this.straightWalkable(px, py, q.x, q.y)) pts.push(q);
+      else { const d = this.findPath(px, py, q.x, q.y); if (d) pts.push(...d); else pts.push(q); }
+      px = q.x; py = q.y;
+    }
+    return pts;
+  }
+
+  // ---------------------------------------------------------------- cover
+  // Best nearby spot that puts something between a man and the threat.
+  findCover(x, y, tx, ty, radius, reserved) {
+    let best = { x, y, posture: 'prone', score: -Infinity };
+    const c = this.cellOf(x, y), r = Math.ceil(radius / CELL);
+    const dThreat = dist(x, y, tx, ty);
+    for (let j = -r; j <= r; j++) for (let i = -r; i <= r; i++) {
+      const cx = c.cx + i, cy = c.cy + j;
+      if (!this.passableCell(cx, cy)) continue;
+      const k = this.ter[cy * GW + cx];
+      if (k === TER.WALL) continue;
+      const px = (cx + 0.5) * CELL, py = (cy + 0.5) * CELL;
+      const d = dist(x, y, px, py);
+      if (d > radius) continue;
+      const a = angleTo(px, py, tx, ty), ca = Math.cos(a), sa = Math.sin(a);
+      const k1 = this.terAt(px + ca * CELL * 0.9, py + sa * CELL * 0.9), k2 = this.terAt(px + ca * CELL * 1.7, py + sa * CELL * 1.7);
+      let score = 0, posture = 'prone';
+      if (k1 === TER.WALL || k2 === TER.WALL) { score += 6; posture = 'kneel'; }
+      else if (k1 === TER.BUILDING || k2 === TER.BUILDING) { score += 3.5; posture = 'kneel'; }
+      if (k === TER.WOODS) score += 2.5;
+      else if (k === TER.GRASS || k === TER.VINEYARD) score += 1.2;
+      else if (k === TER.ORCHARD) score += 0.8;
+      else if (k === TER.STREAM) score += 1.6; // the gully
+      // Defilade: ground rising toward the threat.
+      if (this.elevAt(px + ca * 6, py + sa * 6) - this.elevAt(px, py) > 0.45) score += 1.5;
+      score -= d * 0.12;
+      score -= Math.max(0, dThreat - dist(px, py, tx, ty)) * 0.04;
+      if (reserved) for (const p of reserved) if (dist(p.x, p.y, px, py) < 3.5) score -= 4;
+      // Cover is worth less if the man cannot fire from it.
+      if (score > best.score && this.los(px, py, POSTURE[posture].eye, tx, ty, 1.0) <= 0) score -= 4;
+      if (score > best.score) best = { x: px, y: py, posture, score };
+    }
+    return best;
+  }
+}
+
+class MinHeap {
+  constructor() { this.k = []; this.p = []; }
+  get size() { return this.k.length; }
+  push(key, pri) {
+    const k = this.k, p = this.p;
+    k.push(key); p.push(pri);
+    let i = k.length - 1;
+    while (i > 0) {
+      const par = (i - 1) >> 1;
+      if (p[par] <= p[i]) break;
+      [k[par], k[i]] = [k[i], k[par]]; [p[par], p[i]] = [p[i], p[par]];
+      i = par;
+    }
+  }
+  pop() {
+    const k = this.k, p = this.p, top = k[0];
+    const lk = k.pop(), lp = p.pop();
+    if (k.length) {
+      k[0] = lk; p[0] = lp;
+      let i = 0;
+      for (;;) {
+        const l = 2 * i + 1, r = l + 1;
+        let m = i;
+        if (l < k.length && p[l] < p[m]) m = l;
+        if (r < k.length && p[r] < p[m]) m = r;
+        if (m === i) break;
+        [k[m], k[i]] = [k[i], k[m]]; [p[m], p[i]] = [p[i], p[m]];
+        i = m;
+      }
+    }
+    return top;
+  }
+}
+
+// Douglas-Peucker line simplification.
+function simplifyLine(pts, tol) {
+  if (pts.length < 3) return pts;
+  const a = pts[0], b = pts[pts.length - 1], len = Math.max(1e-6, dist(a.x, a.y, b.x, b.y));
+  let worst = 0, wi = 0;
+  for (let i = 1; i < pts.length - 1; i++) {
+    const d = Math.abs((b.x - a.x) * (a.y - pts[i].y) - (a.x - pts[i].x) * (b.y - a.y)) / len;
+    if (d > worst) { worst = d; wi = i; }
+  }
+  if (worst <= tol) return [a, b];
+  return simplifyLine(pts.slice(0, wi + 1), tol).slice(0, -1).concat(simplifyLine(pts.slice(wi), tol));
+}
+
+// ---- src/units.js
+'use strict';
+// Soldiers, fire teams and squads, and the builders for each side.
+
+let NEXT_ID = 1;
+const ORDINAL = ['1st', '2nd', '3rd', '4th'];
+
+class Soldier {
+  constructor(side, billet, team, cfg) {
+    this.id = NEXT_ID++;
+    this.side = side;
+    this.billet = billet;
+    this.team = team;
+    this.squad = team.squad;
+    this.title = cfg.title;
+    this.rank = cfg.rank || '';
+    this.name = cfg.name;
+    this.x = 0; this.y = 0;
+    this.facing = side === 'blue' ? -Math.PI / 2 : Math.PI / 2;
+    this.faceAngle = null;
+    this.posture = 'kneel'; this.homePosture = 'kneel'; this.postureBusy = 0;
+    this.postureCheckT = 0; this.postureAdj = null;
+    this.moveMode = 'walk'; this.path = [];
+    this.health = 'ok'; this.supp = 0; this.fatigue = 0;
+    this.weaponKey = cfg.weapon; this.weapon = WEAPONS[cfg.weapon];
+    this.inMag = this.weapon.mag;
+    this.mags = cfg.mags != null ? cfg.mags : this.weapon.mags - 1;
+    this.launcherKey = cfg.launcher || null;
+    this.launcher = cfg.launcher ? LAUNCHERS[cfg.launcher] : null;
+    this.lRounds = this.launcher ? (cfg.lRounds != null ? cfg.lRounds : this.launcher.rounds) : 0;
+    this.grenade = side === 'blue' ? GRENADES.M67 : GRENADES.RGD5;
+    this.frags = cfg.frags != null ? cfg.frags : 2;
+    this.fireControl = 'free';
+    this.targetId = null; this.priorityId = null; this.suppressPt = null; this.launchQueue = null;
+    this.fireCD = randRange(0.3, 1.5); this.reloadT = 0; this.launchCD = randRange(2, 5); this.fragCD = 0;
+    this.lastFired = -99; this.lastHitAt = -99;
+    this.look = this.facing; this.scanPhase = randRange(0, Math.PI * 2); this.scanJerk = 0;
+    this.coneHalf = 0.5; this.alert = 0; this.agit = 0;
+    this.assault = false; this.routing = false; this.routed = false;
+    this.shots = 0; this.hits = 0; this.dryLogged = false;
+    this.loadKg = this.computeLoad();
+  }
+  get alive() { return this.health !== 'kia'; }
+  get active() { return (this.health === 'ok' || this.health === 'light') && !this.routed; }
+  get pinned() { return this.supp >= 85; }
+  get suppressed() { return this.supp >= 50; }
+  get moving() { return this.path.length > 0; }
+  get label() { return (this.rank ? this.rank + ' ' : '') + this.name; }
+
+  computeLoad() {
+    let kg = 22; // helmet, plate carrier, water, kit
+    kg += this.weapon.kg + (this.mags + 1) * (MAG_KG[this.weapon.mag] || 0.5);
+    if (this.launcher) kg += 1.4 + this.lRounds * this.launcher.kg;
+    kg += this.frags * this.grenade.kg;
+    return kg;
+  }
+  get loadFactor() { return clamp(1 - (this.loadKg - 30) / 70, 0.72, 1.05); }
+
+  get statusText() {
+    if (this.health === 'kia') return 'KIA';
+    if (this.health === 'serious') return 'Casualty';
+    if (this.routed) return 'Withdrawn';
+    if (this.routing) return 'Falling back';
+    if (this.pinned) return 'Pinned';
+    if (this.suppressed) return 'Suppressed';
+    if (this.health === 'light') return 'Wounded';
+    if (this.reloadT > 0) return 'Reloading';
+    if (this.moving) return MOVE[this.moveMode].label === 'Walk' ? 'Moving' : MOVE[this.moveMode].label + 'ing';
+    if (this.lastFired > G.time - 2) return 'Firing';
+    return 'Ready';
+  }
+  get ammoText() {
+    if (this.inMag + this.mags === 0) return 'Out';
+    return this.inMag + '+' + this.mags;
+  }
+}
+
+class Team {
+  constructor(side, squad, num, name) {
+    this.side = side; this.squad = squad; this.num = num; this.name = name;
+    this.members = [];
+    this.formation = 'wedge';
+    this.morale = squad.morale;
+    this.lastFiredUpon = -99;
+    this.threats = new Map(); // enemy id -> time it last fired at this team
+    this.task = null;         // AI task
+  }
+  get leader() { return this.members.find(s => s.active) || null; }
+  get active() { return this.members.filter(s => s.active); }
+  get short() { return this.num ? ORDINAL[this.num - 1] + ' FT' : 'SL'; }
+  get broken() { return this.morale < 12; }
+  get shaken() { return this.morale < 28; }
+}
+
+class Squad {
+  constructor(side, name, morale) {
+    this.side = side; this.name = name; this.morale = morale;
+    this.teams = []; this.hq = null; this.leader = null;
+    this.formation = 'wedge';
+    this.training = 1;
+  }
+  get all() { return [this.hq, ...this.teams].flatMap(t => t.members); }
+  get active() { return this.all.filter(s => s.active); }
+}
+
+function defaultLoadout() {
+  const lo = {};
+  for (const k of Object.keys(USMC_BILLETS)) {
+    const b = USMC_BILLETS[k];
+    lo[k] = { weapon: b.weapon, mags: WEAPONS[b.weapon].mags - 1, frags: 2, launcher: b.launcher || null,
+      lRounds: b.launcher ? LAUNCHERS[b.launcher].rounds : 0 };
+  }
+  return lo;
+}
+
+function buildUSMCSquad(loadout) {
+  const sq = new Squad('blue', '1st Squad', 82);
+  sq.training = 0.85;
+  const names = shuffle(SURNAMES.slice());
+  const make = (key, team) => {
+    const b = USMC_BILLETS[key], lo = loadout[key];
+    const s = new Soldier('blue', key, team, { title: b.title, rank: b.rank, name: names.pop(), weapon: lo.weapon,
+      mags: lo.mags, frags: lo.frags, launcher: lo.launcher, lRounds: lo.lRounds });
+    team.members.push(s);
+    return s;
+  };
+  sq.hq = new Team('blue', sq, 0, 'Squad Leader');
+  sq.leader = make('SL', sq.hq);
+  for (let k = 1; k <= 3; k++) {
+    const t = new Team('blue', sq, k, ORDINAL[k - 1] + ' Fire Team');
+    for (const key of TEAM_ORDER) make(key, t);
+    sq.teams.push(t);
+  }
+  return sq;
+}
+
+// Random opposing force: a leader and two or three groups of three to five men.
+function buildOpforSquad() {
+  const sq = new Squad('red', 'Enemy squad', randRange(55, 80));
+  const make = (key, team) => {
+    const b = OPFOR_BILLETS[key];
+    const weapon = b.alt && chance(0.35) ? b.alt : b.weapon;
+    const s = new Soldier('red', key, team, { title: b.title, name: b.title, weapon, launcher: b.launcher,
+      frags: randInt(1, 2) });
+    team.members.push(s);
+    return s;
+  };
+  sq.hq = new Team('red', sq, 0, 'Enemy leader');
+  sq.leader = make('SL', sq.hq);
+  const n = randInt(2, 3);
+  for (let k = 1; k <= n; k++) {
+    const t = new Team('red', sq, k, 'Enemy group ' + k);
+    make('TL', t);
+    const size = randInt(2, 3);
+    for (let i = 0; i < size; i++) make(pick(OPFOR_POOL), t);
+    sq.teams.push(t);
+  }
+  return sq;
+}
+
+// Lay a squad out in its formation around (x, y), facing heading.
+function placeSquad(sq, map, x, y, heading) {
+  const n = sq.teams.length;
+  const put = (s, px, py) => {
+    const c = map.nearestPassable(Math.floor(clamp(px, 2, MAP_W - 2) / CELL), Math.floor(clamp(py, 2, MAP_H - 2) / CELL));
+    s.x = (c.cx + 0.5) * CELL; s.y = (c.cy + 0.5) * CELL;
+    s.facing = heading; s.look = heading;
+  };
+  sq.teams.forEach((t, k) => {
+    const a = rotateOffset(squadSlot(sq.formation, k, n).x, squadSlot(sq.formation, k, n).y, heading);
+    t.members.forEach((s, i) => {
+      const o = teamSlot(t.formation, i), w = rotateOffset(o.x, o.y, heading);
+      put(s, x + a.x + w.x, y + a.y + w.y);
+    });
+  });
+  const so = squadLeaderSlot(sq.formation), w = rotateOffset(so.x, so.y, heading);
+  put(sq.leader, x + w.x, y + w.y);
+}
+
+// ---- src/combat.js
+'use strict';
+// Spotting, direct fire, suppression, indirect fire (40mm, RPG, hand grenades) and wounds.
+
+const SPOT_RANGE = 800;
+
+function sightLine(a, b) {
+  return G.map.los(a.x, a.y, POSTURE[a.posture].eye, b.x, b.y, POSTURE[b.posture].eye);
+}
+
+// Share of the target a shooter can hit: 1 fully exposed, 0.3 head only over hard cover.
+function exposure(s, e) {
+  const eye = POSTURE[s.posture].eye;
+  const vc = G.map.los(s.x, s.y, eye, e.x, e.y, POSTURE[e.posture].center);
+  if (vc > 0) return vc;
+  const vh = G.map.los(s.x, s.y, eye, e.x, e.y, POSTURE[e.posture].eye);
+  return vh > 0 ? 0.3 * vh : 0;
+}
+
+// ---------------------------------------------------------------- spotting
+// Each side shares what any of its men can see. Detection is a roll each check;
+// once seen, a man stays tracked while anyone keeps line of sight to him.
+function updateSpotting() {
+  for (const side of ['blue', 'red']) {
+    const known = G.known[side];
+    const observers = G.soldiers.filter(s => s.side === side && s.active);
+    const fresh = [];
+    for (const e of G.soldiers) {
+      if (e.side === side || e.routed) continue;
+      let entry = known.get(e.id), seenBy = null;
+      for (const o of observers) {
+        const d = dist(o.x, o.y, e.x, e.y);
+        if (d > SPOT_RANGE) continue;
+        const v = sightLine(o, e);
+        if (v <= 0) continue;
+        if (entry && entry.visible) { seenBy = o; break; }
+        let p = 0.55 * Math.pow(clamp(1 - d / 760, 0.03, 1), 1.6);
+        p *= POSTURE[e.posture].size + 0.1;
+        if (e.moving) p *= e.moveMode === 'rush' ? 2.6 : e.moveMode === 'walk' ? 1.8 : 1.1;
+        if (G.time - e.lastFired < 4) p *= 5;
+        if (!e.alive || e.health === 'serious') p *= 0.5;
+        p *= v;
+        // Inside the cone a man sees well; at the edge of his vision poorly; behind him hardly at all.
+        const off = Math.abs(angleDiff(o.look, angleTo(o.x, o.y, e.x, e.y)));
+        p *= off <= o.coneHalf ? 1.25 : off < 1.75 ? 0.45 : 0.12;
+        p *= 1 - o.supp / 120;
+        if (d < 25) p = Math.max(p, 0.5 * v);
+        if (chance(Math.min(0.95, p))) { seenBy = o; break; }
+      }
+      if (seenBy) {
+        if (!entry) {
+          entry = { id: e.id, firstSeen: G.time };
+          known.set(e.id, entry);
+          if (e.active) fresh.push({ e, o: seenBy });
+        }
+        entry.visible = true; entry.x = e.x; entry.y = e.y; entry.t = G.time;
+        entry.billet = e.billet; entry.health = e.health;
+      } else if (entry) {
+        entry.visible = false;
+        if (G.time - entry.t > 45 && e.active) known.delete(e.id);
+      }
+    }
+    if (side === 'blue' && fresh.length) contactReport(fresh);
+  }
+}
+
+function contactReport(fresh) {
+  fresh.sort((a, b) => dist(a.o.x, a.o.y, a.e.x, a.e.y) - dist(b.o.x, b.o.y, b.e.x, b.e.y));
+  const { e, o } = fresh[0];
+  const d = Math.round(dist(o.x, o.y, e.x, e.y) / 10) * 10;
+  const what = fresh.length > 1 ? fresh.length + ' enemy' : 'enemy ' + e.title.toLowerCase();
+  G.log(o.team.short + ': Contact! ' + what + ', ' + d + ' m, bearing ' + pad3(bearing(o.x, o.y, e.x, e.y)) + '.', 'contact');
+}
+
+// ---------------------------------------------------------------- where each man looks
+// A man sweeps his sector left and right. Calm, the sweep is wide and slow. Alert, with
+// the enemy known to be near or recent fire, it narrows toward the threat and quickens.
+// Agitated, suppressed or under fire, it is fast and erratic, with sudden glances aside.
+// A man firing holds his eyes on his target.
+function updateLook(s, dt) {
+  if (!s.active) return;
+  const sinceFire = G.time - s.team.lastFiredUpon;
+  const threat = threatPoint(s);
+  s.alert = threat ? 1 : sinceFire < 30 ? 0.6 : 0;
+  s.agit = clamp(Math.max(s.supp / 80, sinceFire < 4 ? 0.6 : 0), 0, 1);
+  s.coneHalf = 0.5 - 0.14 * s.alert;
+
+  const aiming = G.time - s.lastFired < 2.5;
+  const tgt = aiming && s.targetId ? G.byId.get(s.targetId) : null;
+  const aimAt = tgt ? tgt : aiming && s.suppressPt ? s.suppressPt : null;
+  if (aimAt) {
+    s.look = turnToward(s.look, angleTo(s.x, s.y, aimAt.x, aimAt.y) + gauss() * 0.02, dt * 8);
+    s.coneHalf = 0.22;
+    return;
+  }
+  let center;
+  if (s.faceAngle != null) center = s.faceAngle;
+  else if (s.moving) center = angleTo(s.x, s.y, s.path[0].x, s.path[0].y);
+  else if (threat) center = angleTo(s.x, s.y, threat.x, threat.y);
+  else center = s.facing;
+  const amp = (1 - 0.45 * s.alert) * (s.moving ? 0.6 : 1.05) + 0.35 * s.agit;
+  const rate = 0.7 + 1.6 * s.alert + 3.5 * s.agit;
+  s.scanPhase += rate * dt * (1 + (s.agit > 0.3 ? gauss() * 0.6 * s.agit : 0));
+  if (s.agit > 0.4 && chance(dt * s.agit * 1.5)) s.scanJerk = gauss() * 0.7 * s.agit;
+  s.scanJerk *= Math.max(0, 1 - dt * 2);
+  s.look = turnToward(s.look, center + Math.sin(s.scanPhase) * amp + s.scanJerk, dt * (2.5 + 5 * s.agit));
+}
+
+// ---------------------------------------------------------------- direct fire
+function pickTarget(s) {
+  const known = G.known[s.side];
+  if (s.priorityId) {
+    const e = G.byId.get(s.priorityId), k = known.get(s.priorityId);
+    if (!e || !e.active) s.priorityId = null;
+    else if (k && k.visible) {
+      const exp = exposure(s, e);
+      if (exp > 0 && dist(s.x, s.y, e.x, e.y) <= s.weapon.range * 1.2) return { e, exp };
+    }
+  }
+  const cands = [];
+  for (const k of known.values()) {
+    if (!k.visible) continue;
+    const e = G.byId.get(k.id);
+    if (!e || !e.active) continue;
+    const d = dist(s.x, s.y, e.x, e.y);
+    if (d > s.weapon.range * 1.2) continue;
+    if (s.fireControl === 'return' && !(s.team.threats.get(e.id) > G.time - 15) && d > 40) continue;
+    let sc = d;
+    if (G.time - e.lastFired < 3) sc *= 0.6;
+    if (e.id === s.targetId) sc *= 0.7;
+    if (e.billet === 'MG' || e.billet === 'AR') sc *= 0.8;
+    cands.push({ e, sc });
+  }
+  cands.sort((a, b) => a.sc - b.sc);
+  for (let i = 0; i < cands.length && i < 4; i++) {
+    const exp = exposure(s, cands[i].e);
+    if (exp > 0) return { e: cands[i].e, exp };
+  }
+  return null;
+}
+
+function updateCombat(s, dt) {
+  s.fireCD -= dt; s.launchCD -= dt; s.fragCD -= dt;
+  if (s.reloadT > 0) {
+    s.reloadT -= dt;
+    if (s.reloadT <= 0) s.inMag = s.weapon.mag;
+    return;
+  }
+  if (!s.active || s.routing || s.postureBusy > 0) return;
+
+  // An explicit 40mm mission is fired even under hold fire.
+  if (s.launchQueue && !s.moving && s.launchCD <= 0) {
+    const q = s.launchQueue;
+    if (s.lRounds <= 0 || !launchAt(s, q.x, q.y)) s.launchQueue = null;
+    else if (--q.count <= 0) s.launchQueue = null;
+    return;
+  }
+  if (s.fireControl === 'hold') return;
+  if (s.moving && !(s.assault && s.moveMode === 'walk')) return;
+  if (s.fireCD > 0) return;
+  if (s.inMag <= 0) { startReload(s); return; }
+  if (s.pinned && chance(0.6)) { s.fireCD = 1.5; return; }
+
+  const tgt = pickTarget(s);
+  if (tgt) {
+    const e = tgt.e, d = dist(s.x, s.y, e.x, e.y);
+    s.targetId = e.id;
+    if (s.launcher && s.lRounds > 0 && s.launchCD <= 0 && !s.moving && d >= s.launcher.min && d <= s.launcher.range) {
+      const clustered = G.soldiers.some(o => o !== e && o.side === e.side && o.active && dist(o.x, o.y, e.x, e.y) < 8);
+      if (tgt.exp < 0.6 || clustered || chance(0.25)) { launchAt(s, e.x, e.y); s.fireCD = 2; return; }
+    }
+    if (s.frags > 0 && s.fragCD <= 0 && d >= 8 && d <= s.grenade.range && (tgt.exp < 0.6 || s.assault) && chance(0.5)) {
+      throwFrag(s, e.x, e.y);
+      s.fireCD = 1.5;
+      return;
+    }
+    fireBurst(s, e, tgt.exp);
+    return;
+  }
+  s.targetId = null;
+
+  if (s.suppressPt && !s.moving) {
+    const p = s.suppressPt;
+    if (s.launcher && s.lRounds > 0 && s.launchCD <= 0 && chance(0.3) && launchAt(s, p.x, p.y)) { s.fireCD = 2; return; }
+    fireArea(s, p.x, p.y);
+    return;
+  }
+  // Automatic weapons keep fire on where the enemy was last seen.
+  if (s.fireControl === 'free' && !s.moving && (s.billet === 'AR' || s.billet === 'MG')) {
+    let best = null, bd = Infinity;
+    for (const k of G.known[s.side].values()) {
+      if (k.visible || G.time - k.t > 10) continue;
+      const e = G.byId.get(k.id);
+      if (!e || !e.active) continue;
+      const d = dist(s.x, s.y, k.x, k.y);
+      if (d < bd && d < s.weapon.range) { bd = d; best = k; }
+    }
+    if (best) { fireArea(s, best.x, best.y, 0.6); return; }
+  }
+  s.fireCD = 0.5;
+}
+
+function hitChance(s, e, exp, d) {
+  const W = s.weapon;
+  let p = W.acc * (d <= 100 ? 1 : Math.pow(100 / d, 1.1));
+  if (d > W.range) p *= 0.4;
+  p *= POSTURE[e.posture].size;
+  if (e.moving && e.moveMode === 'rush') p *= 0.6;
+  p *= exp;
+  p *= POSTURE[s.posture].acc;
+  if (s.moving) p *= 0.35;
+  p *= 1 - s.supp / 130;
+  if (s.health === 'light') p *= 0.7;
+  if (s.fatigue > 60) p *= 0.8;
+  if (s.pinned) p *= 0.3;
+  return p;
+}
+
+function fireBurst(s, e, exp) {
+  const W = s.weapon, n = Math.min(W.rounds, s.inMag), d = dist(s.x, s.y, e.x, e.y);
+  s.inMag -= n; s.shots += n; s.lastFired = G.time;
+  s.facing = angleTo(s.x, s.y, e.x, e.y);
+  const p = hitChance(s, e, exp, d);
+  let hit = false;
+  for (let i = 0; i < n; i++) {
+    const pi = i === 0 ? p : p * 0.55;
+    const h = e.alive && e.health !== 'serious' && chance(Math.min(0.9, pi));
+    if (h) { applyHit(e, s); s.hits++; hit = true; }
+    const miss = h ? 0 : 1 + d * 0.02;
+    addTracer(s, e.x + gauss() * miss, e.y + gauss() * miss, i * 0.07);
+  }
+  addSupp(e, W.supp * n * (exp < 0.5 ? 0.75 : 1) * (hit ? 1.5 : 1));
+  for (const o of G.soldiers) {
+    if (o !== e && o.side === e.side && o.active && dist(o.x, o.y, e.x, e.y) < 5) addSupp(o, W.supp * n * 0.4);
+  }
+  noteFiredUpon(e.team, s);
+  s.fireCD = W.cycle * randRange(0.8, 1.3) * (s.pinned ? 2.5 : 1) * (s.moving ? 1.6 : 1);
+  if (s.inMag <= 0) startReload(s);
+}
+
+// Fire at a place rather than a man: suppresses anyone near it, seen or not.
+function fireArea(s, x, y, rate) {
+  const W = s.weapon, d = dist(s.x, s.y, x, y);
+  if (d > W.range * 1.2 || G.map.los(s.x, s.y, POSTURE[s.posture].eye, x, y, 0.6) <= 0) { s.fireCD = 1; return; }
+  const n = Math.min(W.rounds, s.inMag);
+  s.inMag -= n; s.shots += n; s.lastFired = G.time;
+  s.facing = angleTo(s.x, s.y, x, y);
+  const spread = 2 + d * 0.015;
+  for (let i = 0; i < n; i++) addTracer(s, x + gauss() * spread, y + gauss() * spread, i * 0.07);
+  for (const o of G.soldiers) {
+    if (o.side === s.side || !o.active) continue;
+    const dd = dist(o.x, o.y, x, y);
+    if (dd > 8) continue;
+    addSupp(o, W.supp * n * 0.7 * (1 - dd / 10));
+    noteFiredUpon(o.team, s);
+    if (dd < 3) {
+      const exp = exposure(s, o);
+      for (let i = 0; i < n; i++) if (o.alive && o.health !== 'serious' && chance(0.025 * POSTURE[o.posture].size * exp)) { applyHit(o, s); s.hits++; }
+    }
+  }
+  s.fireCD = W.cycle * randRange(0.9, 1.4) * (s.pinned ? 2.5 : 1) / (rate || 1);
+  if (s.inMag <= 0) startReload(s);
+}
+
+function startReload(s) {
+  if (s.mags > 0) { s.mags--; s.reloadT = s.weapon.reload * randRange(0.9, 1.3); }
+  else if (!s.dryLogged) {
+    s.dryLogged = true;
+    if (s.side === 'blue') G.log(s.team.short + ': ' + s.label + ' is out of ammunition.', 'warn');
+  }
+}
+
+function addSupp(t, amount) {
+  if (!t.active) return;
+  t.supp = Math.min(100, t.supp + amount * t.squad.training * (t.team.shaken ? 1.3 : 1));
+}
+
+function noteFiredUpon(team, shooter) {
+  team.lastFiredUpon = G.time;
+  if (shooter) team.threats.set(shooter.id, G.time);
+}
+
+function addTracer(s, x, y, delay) {
+  G.effects.push({ type: 'tracer', x1: s.x, y1: s.y, x2: x, y2: y, t: -(delay || 0), life: 0.14, side: s.side });
+}
+
+// ---------------------------------------------------------------- indirect fire
+// Where a flat-trajectory rocket meets its first building or wall.
+function flatImpact(ax, ay, bx, by) {
+  const d = dist(ax, ay, bx, by), n = Math.ceil(d / 0.8);
+  for (let i = 4; i <= n; i++) {
+    const t = i / n, x = ax + (bx - ax) * t, y = ay + (by - ay) * t;
+    const k = G.map.terAt(x, y);
+    if (k === TER.BUILDING || k === TER.WALL) return { x, y };
+  }
+  return { x: bx, y: by };
+}
+
+function launchAt(s, x, y) {
+  const L = s.launcher, d = dist(s.x, s.y, x, y);
+  if (d < L.min || d > L.range) return false;
+  const sc = L.scatter * d * (1 + s.supp / 100) + 1;
+  let tx = x + gauss() * sc, ty = y + gauss() * sc;
+  const kind = s.launcherKey === 'RPG7' ? 'rpg' : '40mm';
+  if (kind === 'rpg') ({ x: tx, y: ty } = flatImpact(s.x, s.y, tx, ty));
+  G.projectiles.push({ x0: s.x, y0: s.y, x1: tx, y1: ty, t: 0, flight: dist(s.x, s.y, tx, ty) / L.vel + 0.05, fuse: 0,
+    spec: L, side: s.side, shooter: s, kind });
+  s.lRounds--; s.launchCD = L.cycle * randRange(1, 1.5); s.lastFired = G.time;
+  s.facing = angleTo(s.x, s.y, x, y);
+  G.effects.push({ type: 'flash', x: s.x, y: s.y, t: 0, life: 0.2 });
+  return true;
+}
+
+function throwFrag(s, x, y) {
+  const R = s.grenade;
+  let d = dist(s.x, s.y, x, y);
+  if (d > R.range) {
+    const a = angleTo(s.x, s.y, x, y);
+    x = s.x + Math.cos(a) * R.range; y = s.y + Math.sin(a) * R.range; d = R.range;
+  }
+  const sc = 1 + d * 0.08 + s.supp / 40;
+  G.projectiles.push({ x0: s.x, y0: s.y, x1: x + gauss() * sc, y1: y + gauss() * sc, t: 0, flight: d / 14, fuse: R.fuse,
+    spec: R, side: s.side, shooter: s, kind: 'frag' });
+  s.frags--; s.fragCD = 8; s.lastFired = G.time;
+  s.loadKg = s.computeLoad();
+  if (s.side === 'blue') G.log(s.team.short + ': Frag out!', 'fire');
+}
+
+function updateProjectiles(dt) {
+  for (let i = G.projectiles.length - 1; i >= 0; i--) {
+    const p = G.projectiles[i];
+    p.t += dt;
+    if (p.t >= p.flight + p.fuse) {
+      explode(p.x1, p.y1, p.spec, p.side, p.shooter);
+      G.projectiles.splice(i, 1);
+    }
+  }
+}
+
+function explode(x, y, spec, side, shooter) {
+  G.effects.push({ type: 'blast', x, y, r: spec.casualty, t: 0, life: 0.7 });
+  for (const o of G.soldiers) {
+    if (!o.alive || o.routed) continue;
+    const d = dist(o.x, o.y, x, y);
+    if (d < spec.casualty && o.health !== 'serious') {
+      const shielded = G.map.los(x, y, 0.4, o.x, o.y, POSTURE[o.posture].center) <= 0;
+      let p = d < spec.lethal ? 0.8 : 0.4 * (1 - (d - spec.lethal) / (spec.casualty - spec.lethal));
+      if (o.posture === 'prone') p *= 0.55;
+      if (shielded) p *= 0.12;
+      if (chance(p)) { applyHit(o, shooter, true); if (shooter && o.side !== shooter.side) shooter.hits++; }
+    }
+    if (d < spec.casualty * 1.6 && o.active) {
+      addSupp(o, 70 * (1 - d / (spec.casualty * 1.6)));
+      if (o.side !== side) noteFiredUpon(o.team, shooter);
+    }
+  }
+}
+
+// ---------------------------------------------------------------- wounds and morale
+function applyHit(t, shooter, blast) {
+  if (!t.alive || t.health === 'serious') return;
+  const r = rand();
+  let res;
+  if (t.health === 'light') res = r < 0.4 ? 'kia' : 'serious';
+  else res = r < (blast ? 0.3 : 0.25) ? 'kia' : r < 0.62 ? 'serious' : 'light';
+  t.health = res; t.lastHitAt = G.time;
+  G.stats[t.side][res]++;
+  if (res === 'light') {
+    t.supp = Math.min(100, t.supp + 40);
+    if (t.side === 'blue') G.log(t.team.short + ': ' + t.label + ' is wounded, still in the fight.', 'warn');
+    G.floaters.push({ id: t.id, x: t.x, y: t.y, text: 'WIA', t: 0, life: 1.6, side: t.side });
+    return;
+  }
+  t.path = []; t.posture = 'prone'; t.suppressPt = null; t.launchQueue = null; t.assault = false;
+  G.floaters.push({ id: t.id, x: t.x, y: t.y, text: res === 'kia' ? 'KIA' : 'CASUALTY', t: 0, life: 2, side: t.side });
+  casualtyEvent(t, res);
+}
+
+function casualtyEvent(t, res) {
+  const team = t.team, sq = t.squad;
+  const leader = t.billet === 'SL' || t.billet === 'TL';
+  team.morale -= leader ? 22 : 14;
+  for (const other of sq.teams) if (other !== team) other.morale -= t.billet === 'SL' ? 12 : 4;
+  for (const tm of [sq.hq, ...sq.teams]) tm.morale = clamp(tm.morale, 0, 100);
+  for (const o of sq.all) if (o !== t && o.active && dist(o.x, o.y, t.x, t.y) < 30) addSupp(o, 22);
+  if (t.side === 'blue') {
+    const what = res === 'kia' ? 'killed' : 'down, serious casualty';
+    G.log((leader ? t.title + ' ' : '') + t.label + ' is ' + what + '.', 'loss');
+    if (t.billet === 'TL' && team.leader) G.log(team.short + ': ' + team.leader.label + ' takes command of the team.', 'info');
+    if (t.billet === 'SL') {
+      const next = sq.teams.map(tm => tm.members.find(s => s.billet === 'TL' && s.active)).find(Boolean);
+      if (next) G.log(next.label + ' assumes command of the squad.', 'info');
+    }
+  } else if (G.known.blue.get(t.id)?.visible) {
+    G.log('Enemy ' + t.title.toLowerCase() + ' hit.', 'kill');
+  }
+}
+
+// ---- src/orders.js
+'use strict';
+// Orders to a Marine, a fire team or the squad, and the movement that carries them out.
+
+// A selection is { level: 'soldier' | 'team' | 'squad', soldier, team, squad }.
+function selMembers(sel) {
+  if (!sel) return [];
+  if (sel.level === 'soldier') return [sel.soldier];
+  if (sel.level === 'team') return sel.team.members.slice();
+  return sel.squad.all;
+}
+function selName(sel) {
+  if (sel.level === 'soldier') return sel.soldier.label;
+  if (sel.level === 'team') return sel.team.name;
+  return sel.squad.name;
+}
+function commandable(s) { return s.active && !s.routing; }
+
+function setPosture(s, p) {
+  if (s.posture === p) return;
+  s.postureBusy = Math.max(s.postureBusy, POSTURE_TIME[s.posture][p] || 0.5);
+  s.posture = p;
+}
+
+// Lowest posture from which a man can still see and fire on a point: prone, else kneeling.
+function firingPosture(s, x, y) {
+  if (G.map.los(s.x, s.y, POSTURE.prone.eye, x, y, 0.8) > 0.3) return 'prone';
+  if (G.map.los(s.x, s.y, POSTURE.kneel.eye, x, y, 0.8) > 0) return 'kneel';
+  return 'prone';
+}
+
+function turnToward(a, b, step) {
+  const d = angleDiff(a, b);
+  return Math.abs(d) <= step ? b : a + Math.sign(d) * step;
+}
+
+// Any new order to a man releases him from a bounding drill.
+function releaseControllers(members) {
+  G.controllers = G.controllers.filter(c => !c.members.some(m => members.includes(m)));
+}
+
+function orderMove(s, x, y, mode) {
+  if (!commandable(s)) return false;
+  const p = G.map.findPath(s.x, s.y, x, y);
+  s.path = p || [];
+  s.moveMode = mode;
+  s.faceAngle = null;
+  return true;
+}
+
+function teamMove(team, x, y, mode, heading) {
+  const act = team.members.filter(commandable);
+  if (!act.length) return;
+  const c = centroid(act);
+  if (heading == null) heading = angleTo(c.x, c.y, x, y);
+  // On a long move the team plots one route and each man keeps station on it.
+  if (dist(c.x, c.y, x, y) > 120) {
+    const route = G.map.findPath(c.x, c.y, x, y);
+    if (route) {
+      act.forEach((s, i) => {
+        if (!commandable(s)) return;
+        const o = teamSlot(team.formation, i);
+        s.path = G.map.offsetPath(s.x, s.y, route, o.x, o.y);
+        s.moveMode = mode; s.faceAngle = null;
+      });
+      return;
+    }
+  }
+  act.forEach((s, i) => {
+    const o = teamSlot(team.formation, i), w = rotateOffset(o.x, o.y, heading);
+    orderMove(s, x + w.x, y + w.y, mode);
+  });
+}
+
+function squadMove(sq, x, y, mode) {
+  const act = sq.all.filter(commandable);
+  if (!act.length) return;
+  const c = centroid(act), heading = angleTo(c.x, c.y, x, y);
+  const teams = sq.teams.filter(t => t.members.some(commandable));
+  teams.forEach((t, k) => {
+    const o = squadSlot(sq.formation, k, teams.length), w = rotateOffset(o.x, o.y, heading);
+    teamMove(t, x + w.x, y + w.y, mode, heading);
+  });
+  const sl = sq.hq.members[0];
+  if (commandable(sl)) {
+    const o = squadLeaderSlot(sq.formation), w = rotateOffset(o.x, o.y, heading);
+    orderMove(sl, x + w.x, y + w.y, mode);
+  }
+}
+
+function groupMove(sel, x, y, mode) {
+  const members = selMembers(sel);
+  releaseControllers(members);
+  for (const s of members) { s.assault = false; s.launchQueue = null; }
+  if (sel.level === 'soldier') orderMove(sel.soldier, x, y, mode);
+  else if (sel.level === 'team') teamMove(sel.team, x, y, mode);
+  else squadMove(sel.squad, x, y, mode);
+}
+
+// Nearest enemy this man's side knows about, or the last man who shot at his team.
+function threatPoint(s) {
+  let best = null, bd = Infinity;
+  for (const k of G.known[s.side].values()) {
+    if (G.time - k.t > 30) continue;
+    const e = G.byId.get(k.id);
+    if (!e || !e.active) continue;
+    const d = dist(s.x, s.y, k.x, k.y);
+    if (d < bd) { bd = d; best = { x: k.x, y: k.y }; }
+  }
+  if (best) return best;
+  for (const [id, t] of s.team.threats) {
+    if (G.time - t > 20) continue;
+    const e = G.byId.get(id);
+    if (e) return { x: e.x + gauss() * 15, y: e.y + gauss() * 15 };
+  }
+  return null;
+}
+
+function threatCentroid(side, members) {
+  const pts = [];
+  for (const k of G.known[side].values()) {
+    const e = G.byId.get(k.id);
+    if (e && e.active && G.time - k.t < 60) pts.push(k);
+  }
+  if (pts.length) return centroid(pts);
+  const c = centroid(members);
+  return { x: c.x, y: side === 'blue' ? 0 : MAP_H };
+}
+
+// ---------------------------------------------------------------- bounding overwatch
+// Elements take turns: one rushes forward past the others while the rest
+// lie in overwatch with fire at will, until every element reaches the objective.
+class BoundController {
+  constructor(elements, x, y, label) {
+    this.elements = elements.filter(e => e.some(commandable));
+    this.members = this.elements.flat();
+    this.label = label;
+    this.dest = { x, y };
+    this.start = centroid(this.members);
+    this.total = Math.max(1, dist(this.start.x, this.start.y, x, y));
+    this.heading = angleTo(this.start.x, this.start.y, x, y);
+    this.prog = this.elements.map(() => 0);
+    this.boundLen = this.elements.length > 2 ? 35 : 25;
+    this.idx = 0; this.timer = 0; this.done = false;
+    for (const s of this.members) { s.path = []; s.assault = false; s.fireControl = 'free'; }
+    this.startBound();
+  }
+  slotFor(k, prog, i, m) {
+    const n = this.elements.length;
+    const lat = (k - (n - 1) / 2) * (n > 2 ? 24 : 12) + (i - (m - 1) / 2) * 6;
+    const w = rotateOffset(lat, 0, this.heading);
+    return { x: lerp(this.start.x, this.dest.x, prog) + w.x, y: lerp(this.start.y, this.dest.y, prog) + w.y };
+  }
+  overwatchPosture(s) {
+    const t = threatPoint(s) || { x: s.x + Math.cos(this.heading) * 80, y: s.y + Math.sin(this.heading) * 80 };
+    return firingPosture(s, t.x, t.y);
+  }
+  startBound() {
+    const n = this.elements.length;
+    for (let tries = 0; tries < n; tries++) {
+      const k = (this.idx + tries) % n;
+      if (this.prog[k] < 1 && this.elements[k].some(commandable)) { this.idx = k; break; }
+      if (tries === n - 1) { this.finish(); return; }
+    }
+    const k = this.idx;
+    const np = Math.min(1, Math.max(...this.prog) + this.boundLen / this.total);
+    this.prog[k] = np;
+    const movers = this.elements[k].filter(commandable);
+    movers.forEach((s, i) => {
+      const p = this.slotFor(k, np, i, movers.length);
+      orderMove(s, p.x, p.y, 'rush');
+    });
+    for (const s of this.members) if (!movers.includes(s)) s.homePosture = this.overwatchPosture(s);
+    this.timer = 0;
+  }
+  update(dt) {
+    this.timer += dt;
+    const movers = this.elements[this.idx].filter(commandable);
+    const arrived = movers.every(s => !s.moving || s.pinned);
+    if ((arrived && this.timer > 1) || this.timer > 40) {
+      for (const s of movers) { s.path = []; s.homePosture = this.overwatchPosture(s); }
+      if (this.prog.every(p => p >= 1)) this.finish();
+      else { this.idx = (this.idx + 1) % this.elements.length; this.startBound(); }
+    }
+  }
+  finish() {
+    this.done = true;
+    if (this.members[0].side === 'blue') G.log(this.label + ': Set. Bounds complete.', 'info');
+  }
+}
+
+function boundElements(sel) {
+  if (sel.level === 'squad') {
+    const teams = sel.squad.teams.map(t => t.members.filter(commandable)).filter(e => e.length);
+    const sl = sel.squad.hq.members[0];
+    if (commandable(sl) && teams.length) teams[Math.min(1, teams.length - 1)].push(sl);
+    return teams;
+  }
+  // Within a fire team, two buddy pairs: team leader and rifleman, automatic rifleman and grenadier.
+  const m = sel.team.members.filter(commandable);
+  const a = [], b = [];
+  sel.team.members.forEach((s, i) => { if (!commandable(s)) return; ([0, 3, 4].includes(i) ? a : b).push(s); });
+  return [a, b].filter(e => e.length).length > 1 ? [a, b] : m.map(s => [s]);
+}
+
+// ---------------------------------------------------------------- the order set
+function issueOrder(sel, type, arg) {
+  const members = selMembers(sel).filter(commandable);
+  const who = selName(sel);
+  if (!members.length) { G.toast(who + ' cannot take orders.'); return; }
+  const team = sel.level === 'soldier' ? sel.soldier.team : sel.team;
+
+  switch (type) {
+    case 'move':
+      groupMove(sel, arg.x, arg.y, G.ui.moveMode);
+      break;
+    case 'posture':
+      for (const s of members) { s.homePosture = arg; if (!s.moving) setPosture(s, arg); }
+      G.toast(who + ': ' + POSTURE[arg].label.toLowerCase() + '.');
+      break;
+    case 'fire':
+      for (const s of members) { s.fireControl = arg; if (arg === 'hold') { s.suppressPt = null; s.priorityId = null; } }
+      G.toast(who + ': ' + { free: 'Fire at will.', return: 'Return fire only.', hold: 'Hold fire.' }[arg]);
+      break;
+    case 'formation':
+      if (sel.level === 'squad') sel.squad.formation = arg; else team.formation = arg;
+      G.toast(who + ': formation ' + FORMATIONS[arg].label.toLowerCase() + '.');
+      break;
+    case 'halt':
+      releaseControllers(members);
+      for (const s of members) { s.path = []; s.assault = false; s.launchQueue = null; }
+      G.toast(who + ': Halt.');
+      break;
+    case 'cover': {
+      releaseControllers(members);
+      const reserved = [];
+      for (const s of members) {
+        s.assault = false;
+        const t = threatPoint(s);
+        if (!t) { s.path = []; s.homePosture = 'prone'; continue; }
+        const c = G.map.findCover(s.x, s.y, t.x, t.y, 14, reserved);
+        reserved.push(c);
+        orderMove(s, c.x, c.y, 'rush');
+        s.homePosture = c.posture;
+      }
+      G.toast(who + ': Take cover.');
+      break;
+    }
+    case 'fallback': {
+      releaseControllers(members);
+      const c = centroid(members), t = threatCentroid(members[0].side, members);
+      const a = angleTo(t.x, t.y, c.x, c.y);
+      for (const s of members) {
+        s.assault = false; s.suppressPt = null; s.launchQueue = null;
+        orderMove(s, clamp(s.x + Math.cos(a) * 45, 2, MAP_W - 2), clamp(s.y + Math.sin(a) * 45, 2, MAP_H - 2), 'rush');
+        s.homePosture = 'prone';
+      }
+      G.toast(who + ': Fall back.');
+      break;
+    }
+    case 'assault':
+      groupMove(sel, arg.x, arg.y, 'walk');
+      for (const s of members) { s.assault = true; s.fireControl = 'free'; s.homePosture = 'kneel'; }
+      G.log(who + ': Assault through!', 'fire');
+      break;
+    case 'bound': {
+      if (sel.level === 'soldier') { groupMove(sel, arg.x, arg.y, 'rush'); break; }
+      releaseControllers(members);
+      for (const s of members) { s.launchQueue = null; }
+      G.controllers.push(new BoundController(boundElements(sel), arg.x, arg.y, who));
+      G.toast(who + ': Bounding overwatch.');
+      break;
+    }
+    case 'suppress':
+      for (const s of members) { s.suppressPt = { x: arg.x, y: arg.y }; s.priorityId = null; if (s.fireControl === 'hold') s.fireControl = 'free'; }
+      G.log(who + ': Suppressing, bearing ' + pad3(bearing(members[0].x, members[0].y, arg.x, arg.y)) + '.', 'fire');
+      break;
+    case 'lift':
+      for (const s of members) { s.suppressPt = null; s.priorityId = null; }
+      G.toast(who + ': Lift fire.');
+      break;
+    case 'engage':
+      for (const s of members) { s.priorityId = arg.id; s.suppressPt = null; if (s.fireControl === 'hold') s.fireControl = 'free'; }
+      G.toast(who + ': Engage the ' + arg.title.toLowerCase() + '.');
+      break;
+    case 'launcher': {
+      const gs = members.filter(s => s.launcher && s.lRounds > 0);
+      if (!gs.length) { G.toast('No grenadier with 40mm rounds in ' + who + '.'); break; }
+      let any = false;
+      for (const s of gs) {
+        const d = dist(s.x, s.y, arg.x, arg.y);
+        if (d < s.launcher.min || d > s.launcher.range) continue;
+        s.launchQueue = { x: arg.x, y: arg.y, count: 3 }; any = true;
+      }
+      if (any) G.log(who + ': Firing 40mm, three rounds.', 'fire');
+      else G.toast('Target is outside 40mm range (' + gs[0].launcher.min + '–' + gs[0].launcher.range + ' m).');
+      break;
+    }
+    case 'frag': {
+      const cands = members.filter(s => s.frags > 0 && !s.moving && dist(s.x, s.y, arg.x, arg.y) <= s.grenade.range + 4)
+        .sort((a, b) => dist(a.x, a.y, arg.x, arg.y) - dist(b.x, b.y, arg.x, arg.y));
+      if (!cands.length) { G.toast('Nobody halted within ' + GRENADES.M67.range + ' m with a grenade.'); break; }
+      throwFrag(cands[0], arg.x, arg.y);
+      break;
+    }
+    case 'face':
+      for (const s of members) { s.faceAngle = angleTo(s.x, s.y, arg.x, arg.y); }
+      G.toast(who + ': Watching bearing ' + pad3(bearing(members[0].x, members[0].y, arg.x, arg.y)) + '.');
+      break;
+  }
+}
+
+// ---------------------------------------------------------------- movement
+function updateMovement(s, dt) {
+  if (!s.active) return;
+  if (s.postureBusy > 0) { s.postureBusy -= dt; return; }
+
+  if (!s.path.length) {
+    s.assault = false;
+    let want = s.homePosture;
+    // A man ordered prone rises to a knee if that is the only way to see the enemy.
+    if (want === 'prone') {
+      s.postureCheckT -= dt;
+      if (s.postureCheckT <= 0) {
+        s.postureCheckT = 2;
+        const t = s.fireControl !== 'hold' ? threatPoint(s) : null;
+        s.postureAdj = t ? firingPosture(s, t.x, t.y) : null;
+      }
+      if (s.postureAdj) want = s.postureAdj;
+    }
+    if (s.supp > 70) want = 'prone';
+    else if (s.supp > 40 && want === 'stand') want = 'kneel';
+    if (s.posture !== want) setPosture(s, want);
+    if (s.faceAngle != null && G.time - s.lastFired > 2) s.facing = turnToward(s.facing, s.faceAngle, dt * 3);
+    s.fatigue = Math.max(0, s.fatigue - dt * 4);
+    return;
+  }
+
+  let mode = s.moveMode;
+  if (mode === 'rush' && s.fatigue > 85) mode = 'walk';
+  if (s.pinned && mode !== 'crawl' && !s.routing) {
+    if (s.posture !== 'prone') setPosture(s, 'prone');
+    return;
+  }
+  let want = MOVE[mode].posture, spMul = 1;
+  if (mode === 'walk' && (s.suppressed || s.assault)) { want = 'kneel'; spMul = 0.65; }
+  if (s.posture !== want) { setPosture(s, want); return; }
+
+  const tgt = s.path[0], d = dist(s.x, s.y, tgt.x, tgt.y);
+  const ter = TERRAIN[G.map.terAt(s.x, s.y)].speed || 0.3;
+  const sp = MOVE[mode].speed * spMul * ter * s.loadFactor * (s.health === 'light' ? 0.7 : 1) * (s.fatigue > 60 && mode === 'rush' ? 0.8 : 1);
+  const step = sp * dt;
+  const a = angleTo(s.x, s.y, tgt.x, tgt.y);
+  if (step >= d) { s.x = tgt.x; s.y = tgt.y; s.path.shift(); }
+  else { s.x += Math.cos(a) * step; s.y += Math.sin(a) * step; }
+  if (!(s.assault && G.time - s.lastFired < 1.5)) s.facing = turnToward(s.facing, a, dt * 6);
+  s.fatigue = clamp(s.fatigue + (MOVE[mode].fatigue - 1.5) * dt, 0, 100);
+}
+
+// ---- src/ai.js
+'use strict';
+// Enemy squad AI. On contact the heaviest group becomes the base of fire and the
+// others try to flank and assault. It breaks contact after heavy losses.
+
+const AI = { mode: 'defend', objective: null, contact: false, withdrawing: false, timer: 0, lastContact: -99 };
+
+function initAI(mode, objective) {
+  AI.mode = mode; AI.objective = objective;
+  AI.contact = false; AI.withdrawing = false; AI.timer = 2; AI.lastContact = -99;
+  for (const t of [G.squads.red.hq, ...G.squads.red.teams]) t.task = null;
+}
+
+// Defenders start dug in: each man takes the best cover near the position.
+function setupDefense(sq, threat) {
+  const reserved = [];
+  for (const s of sq.all) {
+    const c = G.map.findCover(s.x, s.y, threat.x, threat.y, 16, reserved);
+    reserved.push(c);
+    s.x = c.x; s.y = c.y;
+    s.homePosture = c.posture; s.posture = c.posture;
+    s.facing = angleTo(s.x, s.y, threat.x, threat.y);
+    s.faceAngle = s.facing; s.look = s.facing;
+  }
+}
+
+function aiTakeCover(members, threat) {
+  const reserved = [];
+  for (const s of members) {
+    s.assault = false;
+    const c = G.map.findCover(s.x, s.y, threat.x, threat.y, 14, reserved);
+    reserved.push(c);
+    orderMove(s, c.x, c.y, 'rush');
+    s.homePosture = c.posture;
+    s.faceAngle = angleTo(c.x, c.y, threat.x, threat.y);
+  }
+}
+
+function firepower(t) {
+  return t.members.reduce((n, s) => n + (s.active ? (s.billet === 'MG' ? 4 : s.billet === 'AR' ? 2.5 : 1) : 0), 0);
+}
+
+function assignTasks(sq) {
+  const teams = sq.teams.filter(t => t.members.some(commandable)).sort((a, b) => firepower(b) - firepower(a));
+  let maneuvers = 0;
+  teams.forEach((t, i) => {
+    if (i === 0) { t.task = { type: 'base' }; return; }
+    const go = t.morale > 45 && (AI.mode === 'advance' ? true : maneuvers === 0 && chance(0.55));
+    t.task = go ? { type: 'maneuver', phase: 'start', t0: G.time } : { type: 'hold' };
+    if (go) maneuvers++;
+  });
+  sq.hq.task = { type: 'hold' };
+}
+
+function updateAI(dt) {
+  AI.timer -= dt;
+  if (AI.timer > 0) return;
+  AI.timer = 1.5;
+  const sq = G.squads.red;
+  const act = sq.all.filter(commandable);
+  if (!act.length || AI.withdrawing) return;
+
+  if (sq.active.length / sq.all.length < 0.45) {
+    AI.withdrawing = true;
+    for (const t of [sq.hq, ...sq.teams]) startRouting(t, 'withdraw');
+    if (sq.all.some(s => G.known.blue.get(s.id)?.visible)) G.log('Enemy is breaking contact.', 'kill');
+    return;
+  }
+
+  const contacts = [...G.known.red.values()].filter(k => G.time - k.t < 30 && G.byId.get(k.id)?.active);
+  if (contacts.length) AI.lastContact = G.time;
+  const enemyC = contacts.length ? centroid(contacts) : null;
+
+  if (!enemyC) {
+    if (AI.contact && G.time - AI.lastContact > 40) { AI.contact = false; for (const t of sq.teams) t.task = null; }
+    if (!AI.contact && AI.mode === 'advance' && act.every(s => !s.moving)) {
+      const c = centroid(act);
+      if (dist(c.x, c.y, AI.objective.x, AI.objective.y) > 15) {
+        for (const s of act) { s.homePosture = 'kneel'; }
+        squadMove(sq, AI.objective.x, AI.objective.y, 'walk');
+      }
+    }
+    return;
+  }
+
+  if (!AI.contact) {
+    AI.contact = true;
+    assignTasks(sq);
+    if (AI.mode === 'advance') {
+      for (const s of act) { s.path = []; }
+    }
+  }
+
+  for (const t of [sq.hq, ...sq.teams]) {
+    const m = t.members.filter(commandable);
+    if (!m.length || !t.task) continue;
+    runTask(t, m, enemyC);
+  }
+}
+
+function runTask(t, m, enemyC) {
+  const task = t.task;
+  const avgSupp = m.reduce((n, s) => n + s.supp, 0) / m.length;
+
+  if (task.type === 'base' || task.type === 'hold') {
+    if (!task.covered) { aiTakeCover(m, enemyC); task.covered = true; }
+    // Automatic weapons in the base of fire keep rounds on the enemy's last position.
+    if (task.type === 'base') {
+      for (const s of m) {
+        if ((s.billet === 'MG' || s.billet === 'AR') && !s.targetId) s.suppressPt = { x: enemyC.x + gauss() * 4, y: enemyC.y + gauss() * 4 };
+      }
+    }
+    return;
+  }
+
+  // Maneuver: flank, then assault. Give up and go to ground when the fire is too heavy.
+  if (t.morale < 35 || avgSupp > 65) {
+    t.task = { type: 'hold' };
+    return;
+  }
+  const c = centroid(m);
+  if (task.phase === 'start') {
+    const toUs = angleTo(enemyC.x, enemyC.y, c.x, c.y);
+    const options = [1, -1].map(side => {
+      const a = toUs + side * Math.PI / 2;
+      const x = clamp(enemyC.x + Math.cos(a) * 55 + Math.cos(toUs) * 25, 6, MAP_W - 6);
+      const y = clamp(enemyC.y + Math.sin(a) * 55 + Math.sin(toUs) * 25, 6, MAP_H - 6);
+      let cover = 0;
+      for (let i = 1; i <= 8; i++) {
+        const k = G.map.terAt(lerp(c.x, x, i / 8), lerp(c.y, y, i / 8));
+        if (k === TER.WOODS || k === TER.GRASS || k === TER.WALL || k === TER.BUILDING) cover++;
+      }
+      return { x, y, score: cover + rand() * 2 };
+    });
+    const p = options[0].score > options[1].score ? options[0] : options[1];
+    task.flank = p;
+    task.phase = 'flank';
+    task.t0 = G.time;
+    teamMove(t, p.x, p.y, 'walk');
+    return;
+  }
+  if (task.phase === 'flank') {
+    if (m.every(s => !s.moving || s.pinned) || G.time - task.t0 > 70) {
+      task.phase = 'assault';
+      task.t0 = G.time;
+      teamMove(t, enemyC.x, enemyC.y, 'walk');
+      for (const s of m) { s.assault = true; s.fireControl = 'free'; }
+    }
+    return;
+  }
+  if (task.phase === 'assault') {
+    if (m.every(s => !s.moving)) {
+      if (dist(c.x, c.y, enemyC.x, enemyC.y) > 20 && G.time - task.t0 < 90) {
+        teamMove(t, enemyC.x, enemyC.y, 'walk');
+        for (const s of m) s.assault = true;
+      } else {
+        t.task = { type: 'hold' };
+      }
+    }
+  }
+}
+
+// ---- src/symbols.js
+'use strict';
+// Billet symbols from the Marine rifle squad organization figure:
+// squad leader (circle, X, lower half solid), fire team leader (slash),
+// automatic rifleman (arrow), grenadier (G), rifleman (R).
+// Enemy-only billets (machine gunner, RPG, marksman) are placeholders until
+// each foreign organization is modeled.
+
+const SIDE_FILL = { blue: '#80e0ff', red: '#ff8080' };
+const INK = '#0d1418';
+
+function drawSymbol(ctx, x, y, r, billet, o) {
+  o = o || {};
+  const fill = o.fill || SIDE_FILL[o.side || 'blue'], ink = o.ink || INK;
+  ctx.save();
+  ctx.translate(x, y);
+  if (o.alpha != null) ctx.globalAlpha *= o.alpha;
+  if (o.prone) ctx.scale(1.12, 0.74);
+  const lw = Math.max(1.2, r * 0.13);
+  ctx.lineWidth = lw;
+  ctx.lineCap = 'round';
+  ctx.strokeStyle = ink;
+  ctx.fillStyle = fill;
+  ctx.beginPath(); ctx.arc(0, 0, r, 0, Math.PI * 2); ctx.fill();
+  const k = r * 0.7071;
+  switch (billet) {
+    case 'SL': {
+      ctx.fillStyle = ink;
+      ctx.beginPath(); ctx.arc(0, 0, r, 0, Math.PI); ctx.closePath(); ctx.fill();
+      ctx.beginPath(); ctx.moveTo(-k, -k); ctx.lineTo(0, 0); ctx.lineTo(k, -k); ctx.stroke();
+      ctx.strokeStyle = fill;
+      ctx.beginPath(); ctx.moveTo(-k, k); ctx.lineTo(0, 0); ctx.lineTo(k, k); ctx.stroke();
+      break;
+    }
+    case 'TL':
+      ctx.beginPath(); ctx.moveTo(-k, k); ctx.lineTo(k, -k); ctx.stroke();
+      break;
+    case 'AR':
+    case 'MG': {
+      ctx.beginPath(); ctx.moveTo(0, r * 0.62); ctx.lineTo(0, -r * 0.15); ctx.stroke();
+      ctx.fillStyle = ink;
+      ctx.beginPath(); ctx.moveTo(0, -r * 0.7); ctx.lineTo(r * 0.38, -r * 0.08); ctx.lineTo(-r * 0.38, -r * 0.08); ctx.closePath(); ctx.fill();
+      if (billet === 'MG') { ctx.beginPath(); ctx.moveTo(-r * 0.36, r * 0.36); ctx.lineTo(r * 0.36, r * 0.36); ctx.stroke(); }
+      break;
+    }
+    default: {
+      const txt = { G: 'G', R: 'R', MM: 'M', RPG: 'AT' }[billet] || billet;
+      ctx.fillStyle = ink;
+      ctx.font = '700 ' + Math.round(r * (txt.length > 1 ? 0.9 : 1.25)) + 'px "Saira Condensed", "Arial Narrow", sans-serif';
+      ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+      ctx.fillText(txt, 0, r * 0.06);
+    }
+  }
+  ctx.strokeStyle = ink;
+  ctx.lineWidth = lw;
+  // A dashed frame marks a suspected or last-known position.
+  if (o.dashed) ctx.setLineDash([r * 0.42, r * 0.3]);
+  ctx.beginPath(); ctx.arc(0, 0, r, 0, Math.PI * 2); ctx.stroke();
+  ctx.setLineDash([]);
+  ctx.restore();
+}
+
+// Small standalone symbol for the roster.
+function symbolCanvas(billet, side, size) {
+  const c = document.createElement('canvas');
+  const dpr = Math.min(window.devicePixelRatio || 1, 2);
+  c.width = c.height = size * dpr;
+  c.style.width = c.style.height = size + 'px';
+  const ctx = c.getContext('2d');
+  ctx.scale(dpr, dpr);
+  drawSymbol(ctx, size / 2, size / 2, size / 2 - 1.5, billet, { side });
+  return c;
+}
+
+// ---- src/render.js
+'use strict';
+// Drawing: a printed military map sheet on a planning table, with game pieces and
+// overlay graphics on top. The sheet is drawn at three levels of detail: the whole
+// sheet with its margin, then tiles of 600 m and 200 m drawn on demand as you zoom in.
+
+const R = {
+  canvas: null, ctx: null, w: 0, h: 0, dpr: 1, cam: { x: MAP_W / 2, y: MAP_H / 2, zoom: 1 },
+  sheet: null, tiles: new Map(), queue: [], minZoom: 0.1, table: null, grain: null,
+};
+// Collar (margin) around the map body, in meters, holding the marginal information.
+const SHEET = { ml: 170, mr: 170, mt: 200, mb: 480 };
+const SHEET_W = MAP_W + SHEET.ml + SHEET.mr, SHEET_H = MAP_H + SHEET.mt + SHEET.mb;
+const SHEET_PPM = 0.55; // whole-sheet pixels per meter
+const LEVELS = [null, { ppm: 1.4, size: 600, label: 11 }, { ppm: 4, size: 200, label: 12 }];
+const TILE_CACHE = 28;
+
+function initRender(canvas) {
+  R.canvas = canvas;
+  R.ctx = canvas.getContext('2d');
+  resizeView();
+  window.addEventListener('resize', resizeView);
+}
+
+function resizeView() {
+  const c = R.canvas;
+  R.dpr = Math.min(window.devicePixelRatio || 1, 2);
+  R.w = c.clientWidth; R.h = c.clientHeight;
+  c.width = Math.round(R.w * R.dpr); c.height = Math.round(R.h * R.dpr);
+  R.minZoom = Math.min(R.w / SHEET_W, (R.h - 52 - (G.ui.panelH || 150)) / SHEET_H) * 0.95;
+  clampCam();
+}
+
+// Keep the sheet within the band between the header and the order panel: when it is
+// bigger than the band it must cover it (a little table may show at the edges);
+// when smaller, it sits centered in it.
+function clampCam() {
+  const c = R.cam;
+  c.zoom = clamp(c.zoom, R.minZoom, 16);
+  const slack = 40 / c.zoom;
+  const axis = (lo0, hi0, bandLo, bandHi, size) => {
+    const lo = lo0 - slack - (bandLo - size / 2) / c.zoom;
+    const hi = hi0 + slack - (bandHi - size / 2) / c.zoom;
+    return lo <= hi ? [lo, hi] : [(lo + hi) / 2, (lo + hi) / 2];
+  };
+  const [x0, x1] = axis(-SHEET.ml, MAP_W + SHEET.mr, 0, R.w, R.w);
+  const [y0, y1] = axis(-SHEET.mt, MAP_H + SHEET.mb, 52, R.h - (G.ui.panelH || 150), R.h);
+  c.x = clamp(c.x, x0, x1); c.y = clamp(c.y, y0, y1);
+}
+
+function fitCamera(focus, zoom) {
+  R.cam.zoom = zoom || Math.max(R.minZoom, R.w / 1100);
+  R.cam.x = focus ? focus.x : MAP_W / 2;
+  R.cam.y = focus ? focus.y - 60 / R.cam.zoom : MAP_H / 2;
+  clampCam();
+}
+
+function toScreen(x, y) {
+  const z = R.cam.zoom;
+  return { x: R.w / 2 + (x - R.cam.x) * z, y: R.h / 2 + (y - R.cam.y) * z };
+}
+function toWorld(sx, sy) {
+  const z = R.cam.zoom;
+  return { x: R.cam.x + (sx - R.w / 2) / z, y: R.cam.y + (sy - R.h / 2) / z };
+}
+
+// ---------------------------------------------------------------- map colors
+// Standard colors of US military topographic maps (FM 3-25.26): black for man-made
+// features and the grid, red-brown for contours and elevations, blue for water,
+// green for vegetation, red for main roads. Contours every 5 m, index every 25 m.
+const MAPC = {
+  paper: [247, 245, 236],
+  plowed: [243, 239, 226],
+  grass: [226, 239, 204],
+  woods: [190, 220, 164],
+  woodsEdge: [132, 176, 108],
+  orchard: [214, 233, 194],
+  vineyard: [218, 234, 198],
+  water: [176, 220, 244],
+  waterEdge: [40, 140, 205],
+  contour: [168, 84, 50],
+};
+const CONTOUR_INTERVAL = 5, INDEX_EVERY = 5;
+const MAP_INK = '#161616', BLUE_LINE = 'rgb(40,140,205)', RED_BROWN = 'rgb(168,84,50)';
+const CLASS_COLOR = (k) => k === TER.WOODS ? MAPC.woods : k === TER.GRASS ? MAPC.grass : k === TER.PLOWED ? MAPC.plowed
+  : k === TER.ORCHARD ? MAPC.orchard : k === TER.VINEYARD ? MAPC.vineyard : k === TER.POND ? MAPC.water : MAPC.paper;
+
+// Ground class at a point: the class with the most weight among the four nearest
+// cells, which gives smooth edges to woods, fields and water at any zoom.
+function groundClass(map, x, y) {
+  const fx = clamp(x / CELL - 0.5, 0, GW - 1.001), fy = clamp(y / CELL - 0.5, 0, GH - 1.001);
+  const x0 = Math.floor(fx), y0 = Math.floor(fy), tx = fx - x0, ty = fy - y0, i = y0 * GW + x0;
+  const cls = (k) => k === TER.WOODS || k === TER.GRASS || k === TER.PLOWED || k === TER.ORCHARD || k === TER.VINEYARD || k === TER.POND ? k : 0;
+  const a = cls(map.ter[i]), b = cls(map.ter[i + 1]), c = cls(map.ter[i + GW]), d = cls(map.ter[i + GW + 1]);
+  if (a === b && b === c && c === d) return a;
+  const w = new Map();
+  w.set(a, (w.get(a) || 0) + (1 - tx) * (1 - ty)); w.set(b, (w.get(b) || 0) + tx * (1 - ty));
+  w.set(c, (w.get(c) || 0) + (1 - tx) * ty); w.set(d, (w.get(d) || 0) + tx * ty);
+  let best = 0, bw = -1;
+  for (const [k, v] of w) if (v > bw) { bw = v; best = k; }
+  return best;
+}
+
+// Wall cells joined into chains, then simplified so diagonal walls draw straight.
+function wallLines(map) {
+  if (map._walls) return map._walls;
+  const isWall = (cx, cy) => map.inGrid(cx, cy) && map.ter[cy * GW + cx] === TER.WALL;
+  const nbrs = (cx, cy) => {
+    const out = [];
+    for (let j = -1; j <= 1; j++) for (let i = -1; i <= 1; i++) if ((i || j) && isWall(cx + i, cy + j)) out.push([cx + i, cy + j]);
+    return out;
+  };
+  const seen = new Set(), key = (cx, cy) => cy * GW + cx, lines = [];
+  const trace = (cx, cy) => {
+    const pts = [[cx, cy]];
+    seen.add(key(cx, cy));
+    for (;;) {
+      const [x, y] = pts[pts.length - 1];
+      const next = nbrs(x, y).filter(([a, b]) => !seen.has(key(a, b)))
+        .sort((p, q) => (Math.abs(p[0] - x) + Math.abs(p[1] - y)) - (Math.abs(q[0] - x) + Math.abs(q[1] - y)))[0];
+      if (!next) break;
+      seen.add(key(next[0], next[1]));
+      pts.push(next);
+    }
+    return pts.map(([x, y]) => ({ x: (x + 0.5) * CELL, y: (y + 0.5) * CELL }));
+  };
+  for (const pass of [1, 0]) {
+    for (let cy = 0; cy < GH; cy++) for (let cx = 0; cx < GW; cx++) {
+      if (!isWall(cx, cy) || seen.has(key(cx, cy))) continue;
+      if (pass && nbrs(cx, cy).length > 1) continue;
+      const pts = trace(cx, cy);
+      lines.push(pts.length > 1 ? simplifyLine(pts, 4.4) : [{ x: pts[0].x - 1.2, y: pts[0].y }, { x: pts[0].x + 1.2, y: pts[0].y }]);
+    }
+  }
+  map._walls = lines;
+  return lines;
+}
+
+// ---------------------------------------------------------------- drawing a piece of the map
+// Draws the map body for the region (x0, y0, w, h meters) into ctx at ppm pixels per meter.
+// level 0 is the whole sheet; 1 and 2 are the closer tiles and carry more detail.
+function drawMapRegion(ctx, map, x0, y0, w, h, ppm, level) {
+  const W = Math.ceil(w * ppm), H = Math.ceil(h * ppm);
+  const img = ctx.createImageData(W, H), px = img.data;
+  const elev = new Float32Array((W + 2) * (H + 2)), cls = new Uint8Array(W * H);
+  for (let y = 0; y < H + 2; y++) for (let x = 0; x < W + 2; x++) elev[y * (W + 2) + x] = map.elevAt(x0 + (x - 0.5) / ppm, y0 + (y - 0.5) / ppm);
+  for (let y = 0; y < H; y++) for (let x = 0; x < W; x++) cls[y * W + x] = groundClass(map, x0 + (x + 0.5) / ppm, y0 + (y + 0.5) / ppm);
+  const ci = CONTOUR_INTERVAL, ii = CONTOUR_INTERVAL * INDEX_EVERY;
+  for (let y = 0; y < H; y++) {
+    for (let x = 0; x < W; x++) {
+      const i = y * W + x, k = cls[i];
+      let col = CLASS_COLOR(k);
+      // Outline woods and water where they meet other ground.
+      if (k === TER.WOODS || k === TER.POND) {
+        const edge = (x > 0 && cls[i - 1] !== k) || (x < W - 1 && cls[i + 1] !== k) || (y > 0 && cls[i - W] !== k) || (y < H - 1 && cls[i + W] !== k);
+        if (edge && (k === TER.POND || level > 0)) col = k === TER.POND ? MAPC.waterEdge : MAPC.woodsEdge;
+      }
+      let [r, g, b] = col;
+      if (k !== TER.POND) {
+        const e = elev[(y + 1) * (W + 2) + x + 1], er = elev[(y + 1) * (W + 2) + x + 2], ed = elev[(y + 2) * (W + 2) + x + 1];
+        const onIndex = Math.floor(e / ii) !== Math.floor(er / ii) || Math.floor(e / ii) !== Math.floor(ed / ii);
+        const onLine = Math.floor(e / ci) !== Math.floor(er / ci) || Math.floor(e / ci) !== Math.floor(ed / ci);
+        if (onIndex || onLine) {
+          const a = onIndex ? 1 : level === 0 ? 0.45 : 0.7;
+          r = r * (1 - a) + MAPC.contour[0] * a; g = g * (1 - a) + MAPC.contour[1] * a; b = b * (1 - a) + MAPC.contour[2] * a;
+        }
+        // Heavier index contours on close tiles.
+        if (level === 2 && !onIndex) {
+          const el = elev[(y + 1) * (W + 2) + x], eu = elev[y * (W + 2) + x + 1];
+          if (Math.floor(e / ii) !== Math.floor(el / ii) || Math.floor(e / ii) !== Math.floor(eu / ii)) {
+            r = r * 0.15 + MAPC.contour[0] * 0.85; g = g * 0.15 + MAPC.contour[1] * 0.85; b = b * 0.15 + MAPC.contour[2] * 0.85;
+          }
+        }
+      }
+      px[i * 4] = r; px[i * 4 + 1] = g; px[i * 4 + 2] = b; px[i * 4 + 3] = 255;
+    }
+  }
+  ctx.putImageData(img, 0, 0);
+
+  ctx.save();
+  ctx.setTransform(ppm, 0, 0, ppm, -x0 * ppm, -y0 * ppm);
+  ctx.lineCap = 'round'; ctx.lineJoin = 'round';
+  const pxm = 1 / ppm; // one pixel in meters
+  const inBox = (x, y, m) => x > x0 - m && x < x0 + w + m && y > y0 - m && y < y0 + h + m;
+  const lineIn = (pts, m) => pts.some(p => inBox(p.x, p.y, m + 200));
+  const stroke = (pts) => { ctx.beginPath(); pts.forEach((p, i) => i ? ctx.lineTo(p.x, p.y) : ctx.moveTo(p.x, p.y)); ctx.stroke(); };
+
+  // Vegetation symbols on close tiles: orchard trees in rows, vine rows, grass tufts.
+  if (level > 0) {
+    const c0 = map.cellOf(x0, y0), c1 = map.cellOf(x0 + w, y0 + h);
+    const step = level === 2 ? 2 : 4;
+    ctx.lineWidth = Math.max(0.25, 0.8 * pxm);
+    for (let cy = c0.cy; cy <= c1.cy; cy += step) for (let cx = c0.cx; cx <= c1.cx; cx += step) {
+      const k = map.ter[cy * GW + cx], x = (cx + 0.5) * CELL, y = (cy + 0.5) * CELL;
+      if (k === TER.ORCHARD) {
+        ctx.strokeStyle = '#4f8a3a';
+        ctx.beginPath(); ctx.arc(x, y, Math.max(1.2, 2.2 * pxm), 0, Math.PI * 2); ctx.stroke();
+      } else if (k === TER.VINEYARD) {
+        ctx.strokeStyle = '#4f8a3a';
+        ctx.beginPath(); ctx.moveTo(x - CELL * step * 0.35, y); ctx.lineTo(x + CELL * step * 0.35, y); ctx.stroke();
+      } else if (k === TER.GRASS && level === 2 && (cx * 7 + cy * 13) % 5 === 0) {
+        ctx.strokeStyle = '#6f9a52';
+        const s = 1.4;
+        ctx.beginPath();
+        ctx.moveTo(x - s, y - s); ctx.lineTo(x, y); ctx.lineTo(x + s, y - s);
+        ctx.moveTo(x - s * 1.4, y); ctx.lineTo(x + s * 1.4, y);
+        ctx.stroke();
+      }
+    }
+  }
+
+  // Streams: blue lines, wider downstream.
+  ctx.strokeStyle = BLUE_LINE;
+  for (const s of map.streams) {
+    if (!lineIn(s.pts, 0)) continue;
+    ctx.lineWidth = Math.max(s.width, 1.3 * pxm);
+    stroke(s.pts);
+  }
+
+  // Roads: the paved road red with black casing; dirt tracks a dashed black double line.
+  for (const r of map.roads) {
+    if (!lineIn(r.pts, 0)) continue;
+    if (r.kind === 'paved') {
+      ctx.strokeStyle = MAP_INK; ctx.lineWidth = Math.max(9, 4.2 * pxm); stroke(r.pts);
+      ctx.strokeStyle = '#d0362a'; ctx.lineWidth = Math.max(6.4, 2.4 * pxm); stroke(r.pts);
+    } else {
+      ctx.strokeStyle = MAP_INK; ctx.lineWidth = Math.max(6, 3.4 * pxm);
+      ctx.setLineDash([Math.max(8, 6 * pxm), Math.max(4, 3 * pxm)]); stroke(r.pts); ctx.setLineDash([]);
+      ctx.strokeStyle = 'rgb(' + MAPC.paper.join(',') + ')'; ctx.lineWidth = Math.max(4.4, 1.8 * pxm); stroke(r.pts);
+    }
+  }
+
+  // Stone walls: black line, ticked on close tiles.
+  ctx.strokeStyle = MAP_INK;
+  for (const line of wallLines(map)) {
+    if (!lineIn(line, 0)) continue;
+    ctx.lineWidth = Math.max(0.7, 1 * pxm);
+    stroke(line);
+    if (level !== 2) continue;
+    ctx.lineWidth = Math.max(0.35, 0.7 * pxm);
+    ctx.beginPath();
+    for (let i = 1; i < line.length; i++) {
+      const a = line[i - 1], b = line[i], len = dist(a.x, a.y, b.x, b.y);
+      const nx = -(b.y - a.y) / len, ny = (b.x - a.x) / len;
+      for (let d = 1; d < len; d += 2.4) {
+        const tx = a.x + (b.x - a.x) * d / len, ty = a.y + (b.y - a.y) * d / len;
+        ctx.moveTo(tx, ty); ctx.lineTo(tx + nx * 1.3, ty + ny * 1.3);
+      }
+    }
+    ctx.stroke();
+  }
+
+  // Buildings: solid black.
+  ctx.fillStyle = MAP_INK;
+  for (const bd of map.buildings) {
+    if (!inBox(bd.x0, bd.y0, 20)) continue;
+    const m = Math.min(0.4, (bd.x1 - bd.x0) / 6);
+    ctx.fillRect(bd.x0 + m, bd.y0 + m, Math.max(bd.x1 - bd.x0 - 2 * m, 1.5 * pxm), Math.max(bd.y1 - bd.y0 - 2 * m, 1.5 * pxm));
+  }
+
+  // Grid: 1 km squares.
+  ctx.strokeStyle = 'rgba(10,10,10,0.85)'; ctx.lineWidth = Math.max(1.2, 0.9 * pxm);
+  for (let x = 1000; x < MAP_W; x += 1000) { ctx.beginPath(); ctx.moveTo(x, 0); ctx.lineTo(x, MAP_H); ctx.stroke(); }
+  for (let n = 1000; n < MAP_H; n += 1000) { ctx.beginPath(); ctx.moveTo(0, MAP_H - n); ctx.lineTo(MAP_W, MAP_H - n); ctx.stroke(); }
+
+  // Lettering: sized in screen pixels for each level, as each would be printed.
+  const fs = (level === 0 ? 10 : LEVELS[level].label) * pxm;
+  const halo = (text, x, y, color, size, font) => {
+    ctx.font = font || '600 ' + size + 'px "IBM Plex Mono", ui-monospace, monospace';
+    ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+    ctx.lineWidth = size * 0.3; ctx.strokeStyle = 'rgba(247,245,236,0.95)';
+    ctx.strokeText(text, x, y);
+    ctx.fillStyle = color; ctx.fillText(text, x, y);
+  };
+  for (const l of map.contourLabels) if (inBox(l.x, l.y, 30)) halo(String(Math.round(map.elevBase + l.v)), l.x, l.y, RED_BROWN, fs);
+  for (const p of map.peaks.slice(0, level === 0 ? 6 : 12)) {
+    if (!inBox(p.x, p.y, 40)) continue;
+    ctx.fillStyle = RED_BROWN;
+    ctx.beginPath(); ctx.arc(p.x, p.y, 2.2 * pxm, 0, Math.PI * 2); ctx.fill();
+    halo(String(Math.round(map.elevBase + p.e)), p.x + fs * 1.6, p.y - fs * 0.8, RED_BROWN, fs);
+  }
+  for (const pl of map.places) {
+    if (pl.kind === 'farm' && level === 0) continue;
+    if (!inBox(pl.x, pl.y, 200)) continue;
+    const size = pl.kind === 'village' ? fs * 1.45 : fs * 0.95;
+    const font = (pl.kind === 'village' ? '700 ' : 'italic 600 ') + size + 'px "Saira Condensed", "Arial Narrow", sans-serif';
+    halo(pl.kind === 'village' ? pl.name.toUpperCase() : pl.name, pl.x, pl.y - (pl.kind === 'village' ? 40 : 0), MAP_INK, size, font);
+  }
+  ctx.restore();
+}
+
+// ---------------------------------------------------------------- the printed sheet
+// The whole sheet: map body at low detail inside a collar of marginal information
+// (sheet name, grid values, legend, graphic scale, declination diagram).
+function buildTerrain(map) {
+  R.tiles.clear(); R.queue = [];
+  const P = SHEET_PPM;
+  const body = document.createElement('canvas');
+  body.width = Math.ceil(MAP_W * P); body.height = Math.ceil(MAP_H * P);
+  drawMapRegion(body.getContext('2d'), map, 0, 0, MAP_W, MAP_H, P, 0);
+
+  const c = document.createElement('canvas');
+  c.width = Math.ceil(SHEET_W * P); c.height = Math.ceil(SHEET_H * P);
+  const ctx = c.getContext('2d');
+  ctx.fillStyle = 'rgb(' + MAPC.paper.join(',') + ')';
+  ctx.fillRect(0, 0, c.width, c.height);
+  ctx.drawImage(body, Math.round(SHEET.ml * P), Math.round(SHEET.mt * P));
+
+  ctx.save();
+  ctx.scale(P, P);
+  ctx.translate(SHEET.ml, SHEET.mt);
+  const text = (t, x, y, size, opts) => {
+    opts = opts || {};
+    ctx.font = (opts.weight || 600) + ' ' + size + 'px ' + (opts.serif ? '"Saira Condensed", "Arial Narrow", sans-serif' : '"IBM Plex Mono", ui-monospace, monospace');
+    ctx.fillStyle = opts.color || MAP_INK;
+    ctx.textAlign = opts.align || 'left'; ctx.textBaseline = opts.base || 'alphabetic';
+    ctx.fillText(t, x, y);
+  };
+  ctx.strokeStyle = MAP_INK; ctx.lineWidth = 3;
+  ctx.strokeRect(0, 0, MAP_W, MAP_H);
+
+  // Grid values: small 100 km digit, large principal digits; full values at the corners.
+  const gridLabel = (lead, v, x, y, align) => {
+    const big = String(v).padStart(2, '0');
+    ctx.font = '600 22px "IBM Plex Mono", monospace';
+    const sw = ctx.measureText(String(lead)).width;
+    ctx.font = '700 40px "IBM Plex Mono", monospace';
+    const bw = ctx.measureText(big).width;
+    const x0 = align === 'center' ? x - (sw + bw) / 2 : align === 'right' ? x - sw - bw : x;
+    text(String(lead), x0, y - 16, 22);
+    text(big, x0 + sw, y, 40, { weight: 700 });
+  };
+  for (let x = 0; x <= MAP_W; x += 1000) {
+    const v = G.grid.e + x / 1000;
+    gridLabel(G.grid.le, v, x, -14, 'center');
+    gridLabel(G.grid.le, v, x, MAP_H + 50, 'center');
+  }
+  for (let n = 0; n <= MAP_H; n += 1000) {
+    const y = MAP_H - n, v = G.grid.n + n / 1000;
+    gridLabel(G.grid.ln, v, -14, y + 14, 'right');
+    gridLabel(G.grid.ln, v, MAP_W + 14, y + 14, 'left');
+  }
+  text(G.grid.le + String(G.grid.e).padStart(2, '0') + '000mE.', 0, -64, 20, { weight: 600 });
+  text(G.grid.ln + String(G.grid.n).padStart(2, '0') + '000mN.', -14, MAP_H + 92, 20, { weight: 600, align: 'right' });
+  // 100 m ticks along the neatline.
+  ctx.lineWidth = 2;
+  for (let m = 100; m < MAP_W; m += 100) {
+    ctx.beginPath(); ctx.moveTo(m, 0); ctx.lineTo(m, -12); ctx.moveTo(m, MAP_H); ctx.lineTo(m, MAP_H + 12);
+    ctx.moveTo(0, m); ctx.lineTo(-12, m); ctx.moveTo(MAP_W, m); ctx.lineTo(MAP_W + 12, m); ctx.stroke();
+  }
+
+  // Title block.
+  text('SQUAD TACTICAL MAP', 0, -140, 34, { weight: 700 });
+  text('SERIES T25 · EDITION 1', 0, -104, 22, { weight: 500 });
+  text(('HILL ' + map.peak).toUpperCase(), MAP_W / 2, -118, 76, { weight: 700, serif: true, align: 'center' });
+  text('SHEET ' + String(G.settings ? G.settings.seed : 0).padStart(5, '0'), MAP_W, -140, 34, { weight: 700, align: 'right' });
+  text('1:25 000 · 3 × 3 KM', MAP_W, -104, 22, { weight: 500, align: 'right' });
+
+  // Legend, bottom left.
+  const ly = MAP_H + 160;
+  text('LEGEND', 0, ly, 26, { weight: 700 });
+  const rows = [
+    ['woods', 'Woods, hedgerow'], ['grass', 'Tall grass, scrub'], ['orchard', 'Orchard'], ['vineyard', 'Vineyard'],
+    ['paved', 'Hard surface road'], ['road', 'Unimproved road'], ['wall', 'Stone wall'], ['building', 'Building'],
+    ['stream', 'Stream'], ['pond', 'Pond'], ['index', 'Index contour (25 m)'], ['contour', 'Contour (5 m)'],
+  ];
+  rows.forEach(([k, label], i) => {
+    const col = Math.floor(i / 4), row = i % 4;
+    const x = col * 560, y = ly + 50 + row * 56;
+    ctx.save();
+    const sw = (c) => { ctx.fillStyle = 'rgb(' + c.join(',') + ')'; ctx.fillRect(x, y - 16, 90, 32); };
+    ctx.lineCap = 'round';
+    if (k === 'woods') sw(MAPC.woods);
+    else if (k === 'grass') sw(MAPC.grass);
+    else if (k === 'orchard') { sw(MAPC.orchard); ctx.strokeStyle = '#4f8a3a'; ctx.lineWidth = 2; for (let t = 12; t < 90; t += 22) { ctx.beginPath(); ctx.arc(x + t, y, 5, 0, Math.PI * 2); ctx.stroke(); } }
+    else if (k === 'vineyard') { sw(MAPC.vineyard); ctx.strokeStyle = '#4f8a3a'; ctx.lineWidth = 2; for (const dy of [-8, 0, 8]) { ctx.beginPath(); ctx.moveTo(x + 6, y + dy); ctx.lineTo(x + 84, y + dy); ctx.stroke(); } }
+    else if (k === 'paved') { ctx.strokeStyle = MAP_INK; ctx.lineWidth = 16; ctx.beginPath(); ctx.moveTo(x, y); ctx.lineTo(x + 90, y); ctx.stroke(); ctx.strokeStyle = '#d0362a'; ctx.lineWidth = 10; ctx.stroke(); }
+    else if (k === 'road') { ctx.strokeStyle = MAP_INK; ctx.lineWidth = 12; ctx.setLineDash([14, 7]); ctx.beginPath(); ctx.moveTo(x, y); ctx.lineTo(x + 90, y); ctx.stroke(); ctx.setLineDash([]); ctx.strokeStyle = 'rgb(' + MAPC.paper.join(',') + ')'; ctx.lineWidth = 7; ctx.stroke(); }
+    else if (k === 'wall') { ctx.strokeStyle = MAP_INK; ctx.lineWidth = 3; ctx.beginPath(); ctx.moveTo(x, y); ctx.lineTo(x + 90, y); ctx.stroke(); ctx.lineWidth = 2; ctx.beginPath(); for (let t = 6; t < 90; t += 12) { ctx.moveTo(x + t, y); ctx.lineTo(x + t, y + 8); } ctx.stroke(); }
+    else if (k === 'building') { ctx.fillStyle = MAP_INK; ctx.fillRect(x + 30, y - 14, 30, 28); }
+    else if (k === 'stream') { ctx.strokeStyle = BLUE_LINE; ctx.lineWidth = 5; ctx.beginPath(); ctx.moveTo(x, y + 8); ctx.bezierCurveTo(x + 30, y - 16, x + 60, y + 16, x + 90, y - 6); ctx.stroke(); }
+    else if (k === 'pond') { ctx.fillStyle = 'rgb(' + MAPC.water.join(',') + ')'; ctx.strokeStyle = BLUE_LINE; ctx.lineWidth = 3; ctx.beginPath(); ctx.ellipse(x + 45, y, 40, 15, 0, 0, Math.PI * 2); ctx.fill(); ctx.stroke(); }
+    else if (k === 'index' || k === 'contour') { ctx.strokeStyle = RED_BROWN; ctx.lineWidth = k === 'index' ? 5 : 2.5; ctx.beginPath(); ctx.moveTo(x, y + 8); ctx.bezierCurveTo(x + 30, y - 16, x + 60, y + 16, x + 90, y - 6); ctx.stroke(); }
+    ctx.restore();
+    text(label, x + 110, y + 9, 26, { weight: 500, serif: true });
+  });
+
+  // Graphic scale, bottom center.
+  const sx = MAP_W / 2 - 500, sy = MAP_H + 120;
+  text('GRAPHIC SCALE', MAP_W / 2, sy - 22, 24, { weight: 700, align: 'center' });
+  ctx.strokeStyle = MAP_INK; ctx.lineWidth = 2;
+  for (let i = 0; i < 10; i++) {
+    ctx.fillStyle = i % 2 ? 'rgb(' + MAPC.paper.join(',') + ')' : MAP_INK;
+    ctx.fillRect(sx + i * 100, sy, 100, 14); ctx.strokeRect(sx + i * 100, sy, 100, 14);
+  }
+  for (let m = 0; m <= 1000; m += 200) text(String(m), sx + m, sy + 44, 22, { align: 'center' });
+  text('METERS', sx + 1030, sy + 14, 22, { weight: 700 });
+  // The declination diagram and notes sit at the bottom right.
+  const nx = MAP_W - 520;
+  text('CONTOUR INTERVAL 5 METERS', nx, MAP_H + 200, 24, { weight: 700 });
+  text('ELEVATIONS IN METERS ABOVE MEAN SEA LEVEL', nx, MAP_H + 234, 19, { weight: 500 });
+  text('GRID: 1000 METER SQUARES', nx, MAP_H + 262, 19, { weight: 500 });
+  text('TO GIVE A GRID REFERENCE: READ RIGHT, THEN UP', nx, MAP_H + 290, 19, { weight: 500 });
+  const dx = MAP_W - 70, dy = MAP_H + 440, gm = map.gmAngle;
+  const ray = (deg, len) => ({ x: dx + Math.sin(deg * Math.PI / 180) * len, y: dy - Math.cos(deg * Math.PI / 180) * len });
+  ctx.strokeStyle = MAP_INK; ctx.lineWidth = 3;
+  const tn = ray(0, 120), gn = ray(-1.2, 120), mn = ray(gm, 108);
+  for (const p of [tn, gn, mn]) { ctx.beginPath(); ctx.moveTo(dx, dy); ctx.lineTo(p.x, p.y); ctx.stroke(); }
+  ctx.fillStyle = MAP_INK;
+  ctx.beginPath();
+  for (let i = 0; i < 10; i++) { const a = -Math.PI / 2 + i * Math.PI / 5, rr = i % 2 ? 4 : 10; ctx.lineTo(tn.x + Math.cos(a) * rr, tn.y - 6 + Math.sin(a) * rr); }
+  ctx.fill();
+  text('GN', gn.x - 10, gn.y - 4, 20, { weight: 700, align: 'right' });
+  ctx.beginPath(); ctx.moveTo(mn.x, mn.y); ctx.lineTo(mn.x + 9, mn.y + 20); ctx.lineTo(mn.x, mn.y + 17); ctx.fill();
+  text('MN', mn.x + 12, mn.y + 6, 20, { weight: 700 });
+  text(Math.abs(gm).toFixed(1) + '° G-M ANGLE ' + (gm >= 0 ? 'EAST' : 'WEST'), nx, MAP_H + 330, 19, { weight: 500 });
+  text('GRID BEARINGS USED IN REPORTS', nx, MAP_H + 358, 19, { weight: 500 });
+  ctx.restore();
+  R.sheet = c;
+}
+
+// ---------------------------------------------------------------- tiles
+function levelFor(zoom) { return zoom < 0.95 ? 0 : zoom < 2.8 ? 1 : 2; }
+
+function tileFor(level, i, j) {
+  const key = level + ':' + i + ':' + j;
+  let t = R.tiles.get(key);
+  if (t) { t.used = performance.now(); return t.canvas ? t : null; }
+  R.tiles.set(key, { level, i, j, canvas: null, used: performance.now() });
+  R.queue.push(key);
+  return null;
+}
+
+// Draw at most a few missing tiles per frame so panning never stalls.
+function drawQueuedTiles(budgetMs) {
+  const start = performance.now();
+  while (R.queue.length && performance.now() - start < budgetMs) {
+    // Nearest to the view center first.
+    R.queue.sort((a, b) => tileDist(b) - tileDist(a));
+    const key = R.queue.pop(), t = R.tiles.get(key);
+    if (!t || t.canvas) continue;
+    const L = LEVELS[t.level], x0 = t.i * L.size, y0 = t.j * L.size;
+    const w = Math.min(L.size, MAP_W - x0), h = Math.min(L.size, MAP_H - y0);
+    const c = document.createElement('canvas');
+    c.width = Math.ceil(w * L.ppm); c.height = Math.ceil(h * L.ppm);
+    drawMapRegion(c.getContext('2d'), G.map, x0, y0, w, h, L.ppm, t.level);
+    t.canvas = c; t.w = w; t.h = h;
+  }
+  // Forget the least recently used tiles.
+  if (R.tiles.size > TILE_CACHE) {
+    const done = [...R.tiles.entries()].filter(([, t]) => t.canvas).sort((a, b) => a[1].used - b[1].used);
+    for (let k = 0; k < done.length && R.tiles.size > TILE_CACHE; k++) R.tiles.delete(done[k][0]);
+  }
+}
+function tileDist(key) {
+  const [l, i, j] = key.split(':').map(Number), L = LEVELS[l];
+  return Math.hypot((i + 0.5) * L.size - R.cam.x, (j + 0.5) * L.size - R.cam.y);
+}
+
+// ---------------------------------------------------------------- frame
+const TEAM_TAG = ['', '1', '2', '3', '4'];
+// Overlay colors follow US doctrine for graphics on a map overlay:
+// blue for friendly, red for enemy, black for fire support targets.
+const OVL = { blue: '#1f4fbf', red: '#c62828', black: '#161616' };
+
+function tableTexture() {
+  if (R.table) return R.table;
+  const c = document.createElement('canvas');
+  c.width = c.height = 160;
+  const ctx = c.getContext('2d');
+  ctx.fillStyle = '#3a4031'; ctx.fillRect(0, 0, 160, 160);
+  for (let i = 0; i < 2400; i++) {
+    ctx.fillStyle = 'rgba(' + (Math.random() < 0.5 ? '0,0,0' : '255,255,230') + ',' + (Math.random() * 0.06) + ')';
+    ctx.fillRect(Math.random() * 160, Math.random() * 160, 1 + Math.random() * 2, 1);
+  }
+  R.table = R.ctx.createPattern(c, 'repeat');
+  const n = document.createElement('canvas');
+  n.width = n.height = 256;
+  const nctx = n.getContext('2d'), nimg = nctx.createImageData(256, 256);
+  for (let i = 0; i < 256 * 256; i++) {
+    const v = 120 + Math.random() * 135;
+    nimg.data[i * 4] = v; nimg.data[i * 4 + 1] = v * 0.97; nimg.data[i * 4 + 2] = v * 0.9; nimg.data[i * 4 + 3] = 255;
+  }
+  nctx.putImageData(nimg, 0, 0);
+  R.grain = R.ctx.createPattern(n, 'repeat');
+  return R.table;
+}
+
+function render() {
+  const ctx = R.ctx, z = R.cam.zoom;
+  ctx.setTransform(R.dpr, 0, 0, R.dpr, 0, 0);
+  ctx.fillStyle = tableTexture();
+  ctx.fillRect(0, 0, R.w, R.h);
+  if (R.sheet) {
+    const o = toScreen(-SHEET.ml, -SHEET.mt);
+    ctx.save();
+    ctx.shadowColor = 'rgba(0,0,0,0.55)'; ctx.shadowBlur = 24; ctx.shadowOffsetX = 6; ctx.shadowOffsetY = 10;
+    ctx.imageSmoothingEnabled = true;
+    ctx.drawImage(R.sheet, o.x, o.y, SHEET_W * z, SHEET_H * z);
+    ctx.restore();
+    drawTiles(ctx);
+    drawPaper(ctx);
+  }
+  drawEdgeLabels(ctx);
+  drawOrdersOverlay(ctx);
+  drawProjectiles(ctx);
+  drawEffects(ctx);
+  drawCones(ctx);
+  drawUnits(ctx);
+  drawFloaters(ctx);
+  drawScale(ctx);
+}
+
+function drawTiles(ctx) {
+  const lvl = levelFor(R.cam.zoom);
+  if (!lvl || !G.map) return;
+  const L = LEVELS[lvl], a = toWorld(0, 0), b = toWorld(R.w, R.h);
+  const i0 = Math.max(0, Math.floor(a.x / L.size)), i1 = Math.min(Math.ceil(MAP_W / L.size) - 1, Math.floor(b.x / L.size));
+  const j0 = Math.max(0, Math.floor(a.y / L.size)), j1 = Math.min(Math.ceil(MAP_H / L.size) - 1, Math.floor(b.y / L.size));
+  for (let j = j0; j <= j1; j++) for (let i = i0; i <= i1; i++) {
+    const t = tileFor(lvl, i, j);
+    // While a close tile is being drawn, show the coarser one if it is ready.
+    if (!t && lvl === 2) {
+      const k = R.tiles.get('1:' + Math.floor(i * 200 / 600) + ':' + Math.floor(j * 200 / 600));
+      if (k && k.canvas) { const p = toScreen(k.i * 600, k.j * 600); ctx.drawImage(k.canvas, p.x, p.y, k.w * R.cam.zoom, k.h * R.cam.zoom); }
+      continue;
+    }
+    if (!t) continue;
+    const p = toScreen(i * L.size, j * L.size);
+    ctx.drawImage(t.canvas, p.x, p.y, t.w * R.cam.zoom + 0.5, t.h * R.cam.zoom + 0.5);
+  }
+  drawQueuedTiles(R.queue.length > 4 ? 30 : 14);
+}
+
+// Paper grain and fold creases, fixed to the sheet.
+function drawPaper(ctx) {
+  const z = R.cam.zoom, o = toScreen(-SHEET.ml, -SHEET.mt), w = SHEET_W * z, h = SHEET_H * z;
+  ctx.save();
+  ctx.globalCompositeOperation = 'multiply';
+  ctx.globalAlpha = 0.07;
+  if (R.grain.setTransform) R.grain.setTransform(new DOMMatrix([1, 0, 0, 1, o.x, o.y]));
+  ctx.fillStyle = R.grain;
+  ctx.fillRect(Math.max(0, o.x), Math.max(0, o.y), Math.min(R.w, o.x + w) - Math.max(0, o.x), Math.min(R.h, o.y + h) - Math.max(0, o.y));
+  ctx.restore();
+  const crease = (pos, vertical) => {
+    const g = vertical ? ctx.createLinearGradient(pos - 12, 0, pos + 12, 0) : ctx.createLinearGradient(0, pos - 12, 0, pos + 12);
+    g.addColorStop(0, 'rgba(60,50,30,0)'); g.addColorStop(0.47, 'rgba(60,50,30,0.08)');
+    g.addColorStop(0.5, 'rgba(255,255,250,0.3)'); g.addColorStop(0.54, 'rgba(60,50,30,0.04)'); g.addColorStop(1, 'rgba(60,50,30,0)');
+    ctx.fillStyle = g;
+    if (vertical) ctx.fillRect(pos - 12, Math.max(0, o.y), 24, Math.min(R.h, o.y + h) - Math.max(0, o.y));
+    else ctx.fillRect(Math.max(0, o.x), pos - 12, Math.min(R.w, o.x + w) - Math.max(0, o.x), 24);
+  };
+  crease(o.x + w / 2, true);
+  crease(o.y + h / 3, false);
+  crease(o.y + h * 2 / 3, false);
+}
+
+// When the margin is scrolled off screen, repeat the grid values along the screen edge.
+function drawEdgeLabels(ctx) {
+  ctx.font = '600 12px "IBM Plex Mono", ui-monospace, monospace';
+  ctx.lineWidth = 3; ctx.strokeStyle = 'rgba(247,245,236,0.95)'; ctx.fillStyle = OVL.black;
+  const top = 56;
+  if (toScreen(0, 0).y < top) {
+    ctx.textAlign = 'left'; ctx.textBaseline = 'top';
+    for (let x = 1000; x < MAP_W; x += 1000) {
+      const p = toScreen(x, 0), t = String(G.grid.e + x / 1000).padStart(2, '0');
+      if (p.x < 4 || p.x > R.w - 30) continue;
+      ctx.strokeText(t, p.x + 3, top); ctx.fillText(t, p.x + 3, top);
+    }
+  }
+  const left = R.w > 760 ? 306 : 4;
+  if (toScreen(0, 0).x < left) {
+    ctx.textAlign = 'left'; ctx.textBaseline = 'bottom';
+    for (let n = 1000; n < MAP_H; n += 1000) {
+      const p = toScreen(0, MAP_H - n), t = String(G.grid.n + n / 1000).padStart(2, '0');
+      if (p.y < top + 16 || p.y > R.h - 10) continue;
+      ctx.strokeText(t, left, p.y - 2); ctx.fillText(t, left, p.y - 2);
+    }
+  }
+}
+
+// Coordinate card: graphic scale at the current zoom and the grid reference under the cursor.
+function drawScale(ctx) {
+  const z = R.cam.zoom;
+  const steps = [10, 25, 50, 100, 250, 500, 1000];
+  const m = steps.find(s => s * z >= 70) || 1000, len = m * z;
+  const hv = G.ui.hover && G.ui.hoverIsPointer ? G.ui.hover : null;
+  const onMap = hv && G.map && hv.x >= 0 && hv.y >= 0 && hv.x <= MAP_W && hv.y <= MAP_H;
+  const w = Math.max(len + 70, 230), h = onMap ? 46 : 30;
+  const x = Math.max(14, R.w - w - 10), y = R.h - (G.ui.panelH || 0) - h - 10;
+  ctx.save();
+  ctx.shadowColor = 'rgba(0,0,0,0.4)'; ctx.shadowBlur = 6; ctx.shadowOffsetX = 2; ctx.shadowOffsetY = 3;
+  ctx.fillStyle = '#f8f5ea';
+  ctx.fillRect(x, y, w, h);
+  ctx.restore();
+  ctx.strokeStyle = OVL.black; ctx.lineWidth = 1;
+  ctx.strokeRect(x + 0.5, y + 0.5, w - 1, h - 1);
+  ctx.fillStyle = OVL.black;
+  ctx.fillRect(x + 10, y + 16, len / 2, 4);
+  ctx.strokeRect(x + 10, y + 16, len, 4);
+  ctx.font = '600 11px "IBM Plex Mono", ui-monospace, monospace';
+  ctx.textAlign = 'left'; ctx.textBaseline = 'bottom';
+  ctx.fillText('0', x + 7, y + 14);
+  ctx.textAlign = 'right';
+  ctx.fillText(m + ' M', x + 10 + len + 4, y + 14);
+  ctx.textAlign = 'left';
+  if (onMap) {
+    ctx.textBaseline = 'top';
+    ctx.fillText('GR ' + gridRef(hv.x, hv.y) + '  ELEV ' + Math.round(G.map.elevBase + G.map.elevAt(hv.x, hv.y)) + ' M', x + 10, y + 26);
+  }
+}
+
+// 8-digit grid reference (10 m precision) for a map point.
+function gridRef(x, y) {
+  const e = Math.floor((G.grid.e * 1000 + x) / 10) % 10000;
+  const n = Math.floor((G.grid.n * 1000 + (MAP_H - y)) / 10) % 10000;
+  return String(e).padStart(4, '0') + ' ' + String(n).padStart(4, '0');
+}
+
+// ---------------------------------------------------------------- pieces
+function unitRadius() { return clamp(R.cam.zoom * 1.6, 10, 17); }
+
+function enemyVisible(e) {
+  const k = G.known.blue.get(e.id);
+  return G.revealAll || (k && k.visible);
+}
+
+// What sits on the map at this zoom: each man as a round counter close in; farther out,
+// a square counter for each fire team; farther still, one for each squad.
+function pieceLevel() { return R.cam.zoom >= 2 ? 'man' : R.cam.zoom >= 0.7 ? 'team' : 'squad'; }
+
+function displayPieces() {
+  const level = pieceLevel(), out = [];
+  if (!G.squads.blue) return out;
+  const visible = (s) => s.side === 'blue' || enemyVisible(s);
+  if (level === 'man') {
+    for (const s of G.soldiers) if (!s.routed && visible(s)) out.push({ kind: 'man', x: s.x, y: s.y, side: s.side, soldier: s });
+  } else {
+    for (const sq of [G.squads.blue, G.squads.red]) {
+      const groups = level === 'team' ? [sq.hq, ...sq.teams].map(t => ({ team: t, men: t.members })) : [{ squad: sq, men: sq.all }];
+      for (const gr of groups) {
+        const seen = gr.men.filter(s => !s.routed && visible(s));
+        if (!seen.length) continue;
+        const live = seen.filter(s => s.active);
+        const c = centroid(live.length ? live : seen);
+        out.push({ kind: level, x: c.x, y: c.y, side: sq.side, team: gr.team, squad: gr.squad || sq, men: seen, live });
+      }
+    }
+  }
+  // Last known enemy positions, grouped the same way.
+  if (!G.revealAll) {
+    const lost = [];
+    for (const k of G.known.blue.values()) {
+      const e = G.byId.get(k.id);
+      if (!k.visible && e && e.active) lost.push({ k, e });
+    }
+    if (level === 'man') for (const { k } of lost) out.push({ kind: 'lost', x: k.x, y: k.y, side: 'red', billet: k.billet, age: G.time - k.t });
+    else {
+      const by = new Map();
+      for (const l of lost) {
+        const key = level === 'team' ? l.e.team : l.e.squad;
+        if (!by.has(key)) by.set(key, []);
+        by.get(key).push(l);
+      }
+      for (const [, list] of by) {
+        const c = centroid(list.map(l => l.k));
+        out.push({ kind: 'lost', x: c.x, y: c.y, side: 'red', unit: level, age: G.time - Math.max(...list.map(l => l.k.t)) });
+      }
+    }
+  }
+  return out;
+}
+
+function pieceAt(sx, sy) {
+  const r = (pieceLevel() === 'man' ? unitRadius() : 18) + 5;
+  let best = null, bd = Infinity;
+  for (const p of displayPieces()) {
+    if (p.kind === 'lost') continue;
+    const q = toScreen(p.x, p.y), d = Math.hypot(q.x - sx, q.y - sy);
+    const pen = d + (p.kind === 'man' && !p.soldier.alive ? 6 : 0) + (p.side === 'blue' ? 0 : 2);
+    if (d < r && pen < bd) { bd = pen; best = p; }
+  }
+  return best;
+}
+
+const PIECE_EDGE = { blue: '#3a7d96', red: '#a14646' };
+
+// A round counter for one man: a thick disc with the billet symbol on its face.
+// Picked-up (selected) pieces are lifted off the map and throw a longer shadow.
+function drawDisc(ctx, side, billet, x, py, r, lifted) {
+  const th = Math.max(2, r * 0.22), lift = lifted ? 4 : 0, y = py - lift;
+  ctx.save();
+  ctx.shadowColor = 'rgba(0,0,0,0.5)'; ctx.shadowBlur = 3 + lift * 2;
+  ctx.shadowOffsetX = 1.5 + lift * 0.8; ctx.shadowOffsetY = 2 + lift * 1.2;
+  ctx.fillStyle = PIECE_EDGE[side];
+  ctx.beginPath(); ctx.arc(x, y + th, r, 0, Math.PI * 2); ctx.fill();
+  ctx.restore();
+  ctx.fillStyle = PIECE_EDGE[side];
+  ctx.fillRect(x - r, y, r * 2, th);
+  drawSymbol(ctx, x, y, r, billet, { side });
+  ctx.strokeStyle = 'rgba(255,255,255,0.45)'; ctx.lineWidth = 1.2;
+  ctx.beginPath(); ctx.arc(x, y, r - 2.2, Math.PI * 1.08, Math.PI * 1.55); ctx.stroke();
+  return y;
+}
+
+// Unit symbol (MIL-STD-2525): friendly a rectangle, hostile a diamond, infantry an X,
+// with the echelon above: a circle with a slash for a team, a dot for a squad.
+function drawUnitSymbol(ctx, x, y, s, side, echelon, opts) {
+  opts = opts || {};
+  const fill = opts.fill != null ? opts.fill : SIDE_FILL[side], ink = opts.ink || MAP_INK;
+  ctx.save();
+  ctx.lineWidth = Math.max(1.4, s * 0.09);
+  ctx.strokeStyle = ink; ctx.fillStyle = fill;
+  if (opts.dashed) ctx.setLineDash([s * 0.22, s * 0.16]);
+  let top;
+  if (side === 'blue') {
+    const w = s * 1.5, h = s;
+    ctx.beginPath(); ctx.rect(x - w / 2, y - h / 2, w, h); ctx.fill(); ctx.stroke();
+    ctx.setLineDash([]);
+    ctx.beginPath(); ctx.moveTo(x - w / 2, y - h / 2); ctx.lineTo(x + w / 2, y + h / 2); ctx.moveTo(x + w / 2, y - h / 2); ctx.lineTo(x - w / 2, y + h / 2); ctx.stroke();
+    top = y - h / 2;
+  } else {
+    const d = s * 0.8;
+    ctx.beginPath(); ctx.moveTo(x, y - d); ctx.lineTo(x + d, y); ctx.lineTo(x, y + d); ctx.lineTo(x - d, y); ctx.closePath(); ctx.fill(); ctx.stroke();
+    ctx.setLineDash([]);
+    ctx.beginPath(); ctx.moveTo(x - d / 2, y - d / 2); ctx.lineTo(x + d / 2, y + d / 2); ctx.moveTo(x + d / 2, y - d / 2); ctx.lineTo(x - d / 2, y + d / 2); ctx.stroke();
+    top = y - d;
+  }
+  ctx.fillStyle = ink; ctx.strokeStyle = ink;
+  const ey = top - s * 0.28;
+  if (echelon === 'team') {
+    const rr = s * 0.16;
+    ctx.lineWidth = Math.max(1.2, s * 0.07);
+    ctx.beginPath(); ctx.arc(x, ey, rr, 0, Math.PI * 2); ctx.stroke();
+    ctx.beginPath(); ctx.moveTo(x - rr * 1.5, ey + rr * 1.5); ctx.lineTo(x + rr * 1.5, ey - rr * 1.5); ctx.stroke();
+  } else if (echelon === 'squad') {
+    ctx.beginPath(); ctx.arc(x, ey, s * 0.09, 0, Math.PI * 2); ctx.fill();
+  }
+  ctx.restore();
+}
+
+// A square cardboard counter for a fire team or squad, with its symbol and strength.
+function drawCounter(ctx, p, sx, sy, s, lifted) {
+  const lift = lifted ? 4 : 0, y = sy - lift, half = s * 1.25, th = Math.max(2, s * 0.14);
+  ctx.save();
+  ctx.shadowColor = 'rgba(0,0,0,0.5)'; ctx.shadowBlur = 3 + lift * 2;
+  ctx.shadowOffsetX = 1.5 + lift * 0.8; ctx.shadowOffsetY = 2 + lift * 1.2;
+  ctx.fillStyle = PIECE_EDGE[p.side];
+  ctx.fillRect(sx - half, y - half + th, half * 2, half * 2);
+  ctx.restore();
+  ctx.fillStyle = p.side === 'blue' ? '#e9f6fb' : '#fbeaea';
+  ctx.fillRect(sx - half, y - half, half * 2, half * 2);
+  ctx.strokeStyle = PIECE_EDGE[p.side]; ctx.lineWidth = 1.5;
+  ctx.strokeRect(sx - half + 0.75, y - half + 0.75, half * 2 - 1.5, half * 2 - 1.5);
+  drawUnitSymbol(ctx, sx, y - s * 0.05, s * 0.85, p.side, p.kind);
+  // Designation at the top left, effective strength at the bottom.
+  ctx.fillStyle = MAP_INK;
+  ctx.font = '700 ' + Math.round(s * 0.42) + 'px "IBM Plex Mono", ui-monospace, monospace';
+  ctx.textBaseline = 'alphabetic';
+  ctx.textAlign = 'center';
+  ctx.fillText(p.live.length + '/' + p.men.length, sx, y + half - s * 0.14);
+  if (p.kind === 'team') {
+    ctx.textAlign = 'left';
+    ctx.fillText(p.team.num ? String(p.team.num) : 'SL', sx - half + 3, y - half + s * 0.48);
+  }
+  return y;
+}
+
+// Small square status chit stacked against a piece, as in a board wargame.
+function drawChit(ctx, x, y, size, label, bg, fg) {
+  ctx.save();
+  ctx.shadowColor = 'rgba(0,0,0,0.45)'; ctx.shadowBlur = 2; ctx.shadowOffsetX = 1; ctx.shadowOffsetY = 1.5;
+  ctx.fillStyle = bg;
+  ctx.fillRect(x, y, size * 1.7, size);
+  ctx.restore();
+  ctx.strokeStyle = 'rgba(0,0,0,0.6)'; ctx.lineWidth = 0.8;
+  ctx.strokeRect(x + 0.5, y + 0.5, size * 1.7 - 1, size - 1);
+  ctx.fillStyle = fg;
+  ctx.font = '700 ' + Math.round(size * 0.68) + 'px "IBM Plex Mono", ui-monospace, monospace';
+  ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+  ctx.fillText(label, x + size * 0.85, y + size / 2 + 0.5);
+}
+
+function drawUnits(ctx) {
+  const r = unitRadius();
+  const sel = new Set(selMembers(G.ui.sel));
+  const pieces = displayPieces();
+  const isSel = (p) => p.kind === 'man' ? sel.has(p.soldier) : p.men ? p.men.some(s => sel.has(s)) : false;
+  pieces.sort((a, b) => (a.kind === 'lost' ? -1 : 0) - (b.kind === 'lost' ? -1 : 0)
+    || (a.kind === 'man' && !a.soldier.alive ? -1 : 0) - (b.kind === 'man' && !b.soldier.alive ? -1 : 0)
+    || (isSel(a) ? 1 : 0) - (isSel(b) ? 1 : 0) || a.y - b.y);
+  const chit = Math.max(9, r * 0.7);
+  for (const p of pieces) {
+    const q = toScreen(p.x, p.y);
+    if (q.x < -50 || q.y < -50 || q.x > R.w + 50 || q.y > R.h + 50) continue;
+    if (p.kind === 'lost') {
+      ctx.save();
+      ctx.globalAlpha = clamp(1 - p.age / 50, 0.3, 0.9);
+      if (p.billet) drawSymbol(ctx, q.x, q.y, r, p.billet, { fill: 'rgba(255,255,255,0)', ink: OVL.red, dashed: true });
+      else drawUnitSymbol(ctx, q.x, q.y, r * 1.1, 'red', p.unit, { fill: 'rgba(255,255,255,0)', ink: OVL.red, dashed: true });
+      ctx.restore();
+      continue;
+    }
+    const lifted = isSel(p) && (p.kind !== 'man' || p.soldier.active);
+    if (isSel(p)) {
+      ctx.strokeStyle = OVL.blue; ctx.lineWidth = 2.2;
+      ctx.beginPath(); ctx.arc(q.x + 0.5, q.y + 1, (p.kind === 'man' ? r : 24) + 6, 0, Math.PI * 2); ctx.stroke();
+    }
+    if (p.kind !== 'man') {
+      const y = drawCounter(ctx, p, q.x, q.y, 14, lifted);
+      const pinned = p.live.filter(s => s.pinned).length, supp = p.live.filter(s => s.suppressed).length;
+      const chits = [];
+      if (p.live.length && pinned * 2 >= p.live.length) chits.push(['PIN', '#b3261e', '#fff']);
+      else if (p.live.length && supp * 2 >= p.live.length) chits.push(['SUP', '#e8871e', '#1b1405']);
+      if (p.live.some(s => s.moving)) chits.push(['MOV', '#f3eedc', MAP_INK]);
+      chits.forEach(([label, bg, fg], i) => drawChit(ctx, q.x + r * 0.7 + i * 3, y + r * 0.8 + i * (chit * 0.62), chit, label, bg, fg));
+      continue;
+    }
+    const s = p.soldier, down = !s.active;
+    const y = drawDisc(ctx, s.side, s.billet, q.x, q.y, r, lifted);
+    // Operational condition (MIL-STD-2525): slash for a casualty, X for killed.
+    if (down) {
+      ctx.strokeStyle = OVL.black; ctx.lineWidth = 2.6; ctx.lineCap = 'round';
+      const k = r + 4;
+      ctx.beginPath(); ctx.moveTo(q.x - k, y + k); ctx.lineTo(q.x + k, y - k);
+      if (s.health === 'kia') { ctx.moveTo(q.x - k, y - k); ctx.lineTo(q.x + k, y + k); }
+      ctx.stroke();
+      continue;
+    }
+    if (s.team.num) {
+      ctx.font = '700 ' + Math.round(r * 0.9) + 'px "Saira Condensed", "Arial Narrow", sans-serif';
+      ctx.textAlign = 'left'; ctx.textBaseline = 'middle';
+      ctx.lineWidth = 3; ctx.strokeStyle = 'rgba(247,245,236,0.95)';
+      ctx.strokeText(TEAM_TAG[s.team.num], q.x + r + 3, y - r * 0.55);
+      ctx.fillStyle = s.side === 'blue' ? OVL.blue : OVL.red;
+      ctx.fillText(TEAM_TAG[s.team.num], q.x + r + 3, y - r * 0.55);
+    }
+    const chits = [[POSTURE[s.posture].short, '#f3eedc', OVL.black]];
+    if (s.pinned) chits.push(['PIN', '#b3261e', '#fff']);
+    else if (s.suppressed) chits.push(['SUP', '#e8871e', '#1b1405']);
+    if (s.health === 'light') chits.push(['WIA', '#fff', '#b3261e']);
+    if (s.side === 'blue' && s.inMag + s.mags === 0) chits.push(['AMO', '#ffd60a', OVL.black]);
+    chits.forEach(([label, bg, fg], i) => drawChit(ctx, q.x + r * 0.35 + i * 3, y + r * 0.45 + i * (chit * 0.62), chit, label, bg, fg));
+  }
+}
+
+// Vision cones: where each man is looking, shaded in his side's overlay color.
+// The cone narrows as he grows alert and becomes a thin line while he aims.
+function drawCones(ctx) {
+  if (!G.ui.cones || pieceLevel() !== 'man' || !G.squads.blue) return;
+  const z = R.cam.zoom, len = clamp(40 + z * 14, 60, 150);
+  for (const s of G.soldiers) {
+    if (!s.active || s.routed || (s.side === 'red' && !enemyVisible(s))) continue;
+    const q = toScreen(s.x, s.y);
+    if (q.x < -len || q.y < -len || q.x > R.w + len || q.y > R.h + len) continue;
+    const rgb = s.side === 'blue' ? '31,79,191' : '198,40,40';
+    const g = ctx.createRadialGradient(q.x, q.y, 6, q.x, q.y, len);
+    g.addColorStop(0, 'rgba(' + rgb + ',' + (0.26 + 0.12 * s.agit) + ')');
+    g.addColorStop(1, 'rgba(' + rgb + ',0)');
+    ctx.fillStyle = g;
+    ctx.beginPath();
+    ctx.moveTo(q.x, q.y);
+    ctx.arc(q.x, q.y, len, s.look - s.coneHalf, s.look + s.coneHalf);
+    ctx.closePath();
+    ctx.fill();
+    ctx.strokeStyle = 'rgba(' + rgb + ',0.45)'; ctx.lineWidth = 1;
+    ctx.beginPath();
+    ctx.moveTo(q.x + Math.cos(s.look - s.coneHalf) * 8, q.y + Math.sin(s.look - s.coneHalf) * 8);
+    ctx.lineTo(q.x + Math.cos(s.look - s.coneHalf) * len * 0.75, q.y + Math.sin(s.look - s.coneHalf) * len * 0.75);
+    ctx.moveTo(q.x + Math.cos(s.look + s.coneHalf) * 8, q.y + Math.sin(s.look + s.coneHalf) * 8);
+    ctx.lineTo(q.x + Math.cos(s.look + s.coneHalf) * len * 0.75, q.y + Math.sin(s.look + s.coneHalf) * len * 0.75);
+    ctx.stroke();
+  }
+}
+
+// ---------------------------------------------------------------- overlay graphics
+function arrowHead(ctx, from, to, size, filled) {
+  const a = Math.atan2(to.y - from.y, to.x - from.x);
+  ctx.beginPath();
+  ctx.moveTo(to.x + Math.cos(a + 2.6) * size, to.y + Math.sin(a + 2.6) * size);
+  ctx.lineTo(to.x, to.y);
+  ctx.lineTo(to.x + Math.cos(a - 2.6) * size, to.y + Math.sin(a - 2.6) * size);
+  if (filled) { ctx.closePath(); ctx.fill(); } else ctx.stroke();
+}
+
+// Target symbol: a cross in a circle with its label, in black.
+function drawTarget(ctx, x, y, radius, label) {
+  const p = toScreen(x, y), rr = Math.max(7, radius * R.cam.zoom);
+  ctx.strokeStyle = OVL.black; ctx.lineWidth = 1.6;
+  ctx.beginPath(); ctx.arc(p.x, p.y, rr, 0, Math.PI * 2); ctx.stroke();
+  ctx.beginPath(); ctx.moveTo(p.x - rr - 4, p.y); ctx.lineTo(p.x + rr + 4, p.y); ctx.moveTo(p.x, p.y - rr - 4); ctx.lineTo(p.x, p.y + rr + 4); ctx.stroke();
+  ctx.font = '700 11px "IBM Plex Mono", ui-monospace, monospace';
+  ctx.textAlign = 'left'; ctx.textBaseline = 'bottom';
+  ctx.lineWidth = 3; ctx.strokeStyle = 'rgba(247,245,236,0.95)';
+  ctx.strokeText(label, p.x + rr + 4, p.y - 3); ctx.fillStyle = OVL.black; ctx.fillText(label, p.x + rr + 4, p.y - 3);
+}
+
+// Friendly graphics drawn as on an acetate overlay, in blue grease pencil.
+function drawOrdersOverlay(ctx) {
+  const sel = G.ui.sel, selSet = new Set(selMembers(sel));
+  const blue = G.squads.blue ? G.squads.blue.all.filter(s => s.active) : [];
+  ctx.lineCap = 'round'; ctx.lineJoin = 'round';
+
+  // Routes, with an arrowhead at the end. Assaults use the direction-of-attack arrow.
+  for (const s of blue) {
+    if (!s.path.length) continue;
+    const pts = [toScreen(s.x, s.y), ...s.path.map(w => toScreen(w.x, w.y))];
+    const strong = selSet.has(s);
+    ctx.strokeStyle = OVL.blue; ctx.fillStyle = OVL.blue;
+    ctx.globalAlpha = strong ? 0.95 : 0.55;
+    ctx.lineWidth = s.assault ? 3 : strong ? 2.2 : 1.4;
+    if (s.moveMode === 'crawl') ctx.setLineDash([2, 4]); else if (s.moveMode === 'rush') ctx.setLineDash([9, 4]);
+    ctx.beginPath(); pts.forEach((q, i) => i ? ctx.lineTo(q.x, q.y) : ctx.moveTo(q.x, q.y)); ctx.stroke();
+    ctx.setLineDash([]);
+    arrowHead(ctx, pts[pts.length - 2], pts[pts.length - 1], s.assault ? 11 : 8, s.assault);
+    ctx.globalAlpha = 1;
+  }
+  // Objectives of bounding drills.
+  for (const c of G.controllers) {
+    if (c.members[0].side !== 'blue') continue;
+    const p = toScreen(c.dest.x, c.dest.y), rr = Math.max(18, 16 * R.cam.zoom);
+    ctx.strokeStyle = OVL.blue; ctx.lineWidth = 2.4;
+    ctx.beginPath();
+    for (let i = 0; i <= 24; i++) {
+      const a = i / 24 * Math.PI * 2, w = 1 + 0.12 * Math.sin(a * 3 + 1);
+      const x = p.x + Math.cos(a) * rr * w, y = p.y + Math.sin(a) * rr * 0.75 * w;
+      i ? ctx.lineTo(x, y) : ctx.moveTo(x, y);
+    }
+    ctx.closePath(); ctx.stroke();
+    ctx.font = '700 14px "Saira Condensed", "Arial Narrow", sans-serif';
+    ctx.textAlign = 'center'; ctx.textBaseline = 'middle'; ctx.fillStyle = OVL.blue;
+    ctx.fillText('OBJ', p.x, p.y);
+  }
+  // Suppression: support-by-fire lines from the shooters to a target.
+  const targets = new Map();
+  for (const s of blue) {
+    if (s.suppressPt) {
+      const key = Math.round(s.suppressPt.x) + ',' + Math.round(s.suppressPt.y);
+      if (!targets.has(key)) targets.set(key, { pt: s.suppressPt, shooters: [] });
+      targets.get(key).shooters.push(s);
+    }
+    if (s.launchQueue) drawTarget(ctx, s.launchQueue.x, s.launchQueue.y, 4, '40MM');
+  }
+  for (const t of targets.values()) {
+    const b = toScreen(t.pt.x, t.pt.y);
+    ctx.strokeStyle = OVL.blue; ctx.globalAlpha = 0.6; ctx.lineWidth = 1.2; ctx.setLineDash([6, 4]);
+    for (const s of t.shooters) { const a = toScreen(s.x, s.y); ctx.beginPath(); ctx.moveTo(a.x, a.y); ctx.lineTo(b.x, b.y); ctx.stroke(); }
+    ctx.setLineDash([]); ctx.globalAlpha = 1;
+    drawTarget(ctx, t.pt.x, t.pt.y, 6, 'SUPP');
+  }
+  // Sectors of fire for selected men told to watch a direction.
+  for (const s of selSet) {
+    if (!s.active || s.faceAngle == null) continue;
+    const p = toScreen(s.x, s.y), L = Math.max(60, 35 * R.cam.zoom);
+    ctx.strokeStyle = OVL.blue; ctx.lineWidth = 1.4; ctx.globalAlpha = 0.8;
+    ctx.beginPath();
+    for (const d of [-0.6, 0.6]) { ctx.moveTo(p.x, p.y); ctx.lineTo(p.x + Math.cos(s.faceAngle + d) * L, p.y + Math.sin(s.faceAngle + d) * L); }
+    ctx.stroke(); ctx.globalAlpha = 1;
+  }
+
+  // The order being plotted: grease-pencil line to the cursor, with range and bearing on a tag.
+  const pend = G.ui.pending, hv = G.ui.hover;
+  if (!sel || !hv) return;
+  const m = selMembers(sel).filter(s => s.active);
+  if (!m.length) return;
+  const c = centroid(m), a = toScreen(c.x, c.y), b = toScreen(hv.x, hv.y);
+  if (pend === 'launcher' || pend === 'frag') {
+    const gs = pend === 'launcher' ? m.filter(s => s.launcher) : m;
+    for (const s of gs.slice(0, 3)) {
+      const sp = toScreen(s.x, s.y), max = pend === 'launcher' ? s.launcher.range : s.grenade.range;
+      ctx.strokeStyle = OVL.blue; ctx.lineWidth = 1.2; ctx.setLineDash([4, 5]);
+      ctx.beginPath(); ctx.arc(sp.x, sp.y, max * R.cam.zoom, 0, Math.PI * 2); ctx.stroke();
+      ctx.setLineDash([]);
+    }
+  }
+  if (!pend && !G.ui.hoverIsPointer) return;
+  ctx.strokeStyle = OVL.blue; ctx.fillStyle = OVL.blue; ctx.globalAlpha = pend ? 0.95 : 0.45;
+  ctx.lineWidth = 2; ctx.setLineDash([7, 5]);
+  ctx.beginPath(); ctx.moveTo(a.x, a.y); ctx.lineTo(b.x, b.y); ctx.stroke();
+  ctx.setLineDash([]);
+  arrowHead(ctx, a, b, 9, pend === 'assault');
+  ctx.globalAlpha = 1;
+  const d = Math.round(dist(c.x, c.y, hv.x, hv.y));
+  const label = (pend ? ORDER_LABEL[pend].toUpperCase() + '  ' : '') + d + ' M  ' + pad3(bearing(c.x, c.y, hv.x, hv.y)) + '°';
+  ctx.font = '600 12px "IBM Plex Mono", ui-monospace, monospace';
+  const tw = ctx.measureText(label).width;
+  ctx.save();
+  ctx.shadowColor = 'rgba(0,0,0,0.4)'; ctx.shadowBlur = 4; ctx.shadowOffsetX = 1; ctx.shadowOffsetY = 2;
+  ctx.fillStyle = '#f8f5ea'; ctx.fillRect(b.x + 14, b.y - 26, tw + 14, 21);
+  ctx.restore();
+  ctx.strokeStyle = OVL.black; ctx.lineWidth = 1; ctx.strokeRect(b.x + 14.5, b.y - 25.5, tw + 13, 20);
+  ctx.fillStyle = OVL.black; ctx.textAlign = 'left'; ctx.textBaseline = 'middle';
+  ctx.fillText(label, b.x + 21, b.y - 15);
+}
+
+function drawProjectiles(ctx) {
+  for (const p of G.projectiles) {
+    const f = Math.min(1, p.t / p.flight);
+    const s = toScreen(lerp(p.x0, p.x1, f), lerp(p.y0, p.y1, f));
+    ctx.fillStyle = '#2b2b2b'; ctx.strokeStyle = '#f8f5ea'; ctx.lineWidth = 1;
+    ctx.beginPath(); ctx.arc(s.x, s.y, p.kind === 'frag' ? 3 : 2.5, 0, Math.PI * 2); ctx.fill(); ctx.stroke();
+    if (p.kind === 'rpg' && f < 1) {
+      const t = toScreen(lerp(p.x0, p.x1, Math.max(0, f - 0.15)), lerp(p.y0, p.y1, Math.max(0, f - 0.15)));
+      ctx.strokeStyle = 'rgba(90,90,90,0.5)'; ctx.lineWidth = 3;
+      ctx.beginPath(); ctx.moveTo(t.x, t.y); ctx.lineTo(s.x, s.y); ctx.stroke();
+    }
+  }
+}
+
+// Fire: thin streaks in each side's overlay color; bursts as fading rings.
+function drawEffects(ctx) {
+  const z = R.cam.zoom;
+  for (const e of G.effects) {
+    if (e.t < 0) continue;
+    const f = e.t / e.life;
+    if (e.type === 'tracer') {
+      const h = clamp(f * 1.3, 0, 1), tl = clamp(f * 1.3 - 0.35, 0, 1);
+      const a = toScreen(lerp(e.x1, e.x2, tl), lerp(e.y1, e.y2, tl)), b = toScreen(lerp(e.x1, e.x2, h), lerp(e.y1, e.y2, h));
+      ctx.strokeStyle = e.side === 'blue' ? 'rgba(31,79,191,0.85)' : 'rgba(198,40,40,0.85)';
+      ctx.lineWidth = 1.5;
+      ctx.beginPath(); ctx.moveTo(a.x, a.y); ctx.lineTo(b.x, b.y); ctx.stroke();
+    } else if (e.type === 'flash') {
+      const p = toScreen(e.x, e.y);
+      ctx.fillStyle = 'rgba(232,135,30,' + (1 - f) + ')';
+      ctx.beginPath(); ctx.arc(p.x, p.y, 4 + 5 * f, 0, Math.PI * 2); ctx.fill();
+    } else if (e.type === 'blast') {
+      const p = toScreen(e.x, e.y), rr = Math.max(4, (2 + e.r * 0.6 * Math.sqrt(f)) * z);
+      ctx.fillStyle = 'rgba(232,135,30,' + (0.75 * (1 - f)) + ')';
+      ctx.beginPath(); ctx.arc(p.x, p.y, rr * 0.55, 0, Math.PI * 2); ctx.fill();
+      ctx.strokeStyle = 'rgba(22,22,22,' + (0.7 * (1 - f)) + ')'; ctx.lineWidth = 1.5;
+      ctx.beginPath(); ctx.arc(p.x, p.y, rr, 0, Math.PI * 2); ctx.stroke();
+    }
+  }
+}
+
+function drawFloaters(ctx) {
+  ctx.font = '700 12px "IBM Plex Mono", ui-monospace, monospace';
+  ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+  for (const f of G.floaters) {
+    if (f.side === 'red' && !enemyVisible(G.byId.get(f.id))) continue;
+    const p = toScreen(f.x, f.y), a = 1 - f.t / f.life, y = p.y - 26 - f.t * 14;
+    ctx.lineWidth = 3; ctx.strokeStyle = 'rgba(247,245,236,' + a + ')';
+    ctx.strokeText(f.text, p.x, y);
+    ctx.fillStyle = f.side === 'blue' ? 'rgba(31,79,191,' + a + ')' : 'rgba(198,40,40,' + a + ')';
+    ctx.fillText(f.text, p.x, y);
+  }
+}
+
+// ---- src/ui.js
+'use strict';
+// Interface: order panel, roster, radio log, briefing with loadout, debrief, help.
+
+const ORDER_LABEL = {
+  bound: 'Bound', assault: 'Assault', suppress: 'Suppress', launcher: '40mm', frag: 'Frag', face: 'Face',
+};
+// Orders that need a point on the map.
+const TARGETED = ['bound', 'assault', 'suppress', 'launcher', 'frag', 'face'];
+
+const $ = (id) => document.getElementById(id);
+function el(tag, cls, text) {
+  const e = document.createElement(tag);
+  if (cls) e.className = cls;
+  if (text != null) e.textContent = text;
+  return e;
+}
+
+const UI = {
+  logLines: [], rosterRows: [], tickT: 0,
+
+  init() {
+    this.buildOrders();
+    $('btnPause').addEventListener('click', () => togglePause());
+    $('btnSpeed').addEventListener('click', () => { G.speed = G.speed >= 16 ? 1 : G.speed * 2; this.refreshBar(); });
+    $('btnCones').addEventListener('click', () => { G.ui.cones = !G.ui.cones; $('btnCones').classList.toggle('on', G.ui.cones); });
+    $('btnRoster').addEventListener('click', () => document.body.classList.toggle('roster-open'));
+    $('btnHelp').addEventListener('click', () => this.showModal('help'));
+    $('btnMenu').addEventListener('click', () => this.showBriefing());
+    document.querySelectorAll('[data-close]').forEach(b => b.addEventListener('click', () => this.hideModal(b.dataset.close)));
+  },
+
+  // ------------------------------------------------------------ order panel
+  buildOrders() {
+    const groups = [
+      { label: 'Move', items: [['mode', 'walk', 'Walk'], ['mode', 'rush', 'Rush'], ['mode', 'crawl', 'Crawl'],
+        ['order', 'bound', 'Bound'], ['order', 'assault', 'Assault']] },
+      { label: 'Posture', items: [['posture', 'stand', 'Stand'], ['posture', 'kneel', 'Kneel'], ['posture', 'prone', 'Prone']] },
+      { label: 'Fire', items: [['fire', 'free', 'At will'], ['fire', 'return', 'Return'], ['fire', 'hold', 'Hold'],
+        ['order', 'suppress', 'Suppress'], ['now', 'lift', 'Lift']] },
+      { label: 'Weapons', items: [['order', 'launcher', '40mm'], ['order', 'frag', 'Frag']] },
+      { label: 'Act', items: [['now', 'cover', 'Take cover'], ['now', 'fallback', 'Fall back'], ['now', 'halt', 'Halt'], ['order', 'face', 'Face']] },
+      { label: 'Formation', items: FORMATION_KEYS.map(k => ['formation', k, FORMATIONS[k].label]) },
+    ];
+    const grid = $('orderGrid');
+    for (const g of groups) {
+      const box = el('div', 'ogroup');
+      box.appendChild(el('div', 'olabel', g.label));
+      const row = el('div', 'obuttons');
+      for (const [kind, val, text] of g.items) {
+        const b = el('button', 'obtn', text);
+        b.dataset.kind = kind; b.dataset.val = val;
+        b.addEventListener('click', () => this.onOrderButton(kind, val));
+        row.appendChild(b);
+      }
+      box.appendChild(row);
+      grid.appendChild(box);
+    }
+    const chips = $('selChips');
+    const mk = (text, fn) => { const b = el('button', 'chip', text); b.addEventListener('click', fn); chips.appendChild(b); return b; };
+    this.chipSquad = mk('Squad', () => this.select({ level: 'squad', squad: G.squads.blue }));
+    this.chipTeams = [1, 2, 3].map(n => mk(ORDINAL[n - 1] + ' FT', () => this.selectTeam(n)));
+  },
+
+  onOrderButton(kind, val) {
+    if (kind === 'mode') { G.ui.moveMode = val; G.ui.pending = null; this.refreshOrders(); this.toast(MOVE[val].label + ': tap the map to move.'); return; }
+    const sel = G.ui.sel;
+    if (!sel) { this.toast('Select a Marine, a fire team or the squad first.'); return; }
+    if (kind === 'order') {
+      G.ui.pending = G.ui.pending === val ? null : val;
+      if (G.ui.pending) this.toast({
+        bound: 'Tap the objective for the bounds.', assault: 'Tap the point to assault.', suppress: 'Tap the area to suppress.',
+        launcher: 'Tap the 40mm target.', frag: 'Tap where the grenade should land.', face: 'Tap the direction to watch.' }[val]);
+      this.refreshOrders();
+      return;
+    }
+    G.ui.pending = null;
+    if (kind === 'now') issueOrder(sel, val);
+    else if (kind === 'posture') issueOrder(sel, 'posture', val);
+    else if (kind === 'fire') issueOrder(sel, 'fire', val);
+    else if (kind === 'formation') issueOrder(sel, 'formation', val);
+    this.refreshOrders();
+  },
+
+  refreshOrders() {
+    const sel = G.ui.sel, m = selMembers(sel).filter(s => s.active);
+    const common = (fn) => { if (!m.length) return null; const v = fn(m[0]); return m.every(s => fn(s) === v) ? v : null; };
+    const posture = common(s => s.homePosture), fire = common(s => s.fireControl);
+    const form = sel ? (sel.level === 'squad' ? sel.squad.formation : sel.level === 'team' ? sel.team.formation : null) : null;
+    document.querySelectorAll('.obtn').forEach(b => {
+      const k = b.dataset.kind, v = b.dataset.val;
+      let on = false, dis = !sel && k !== 'mode';
+      if (k === 'mode') on = G.ui.moveMode === v;
+      else if (k === 'posture') on = posture === v;
+      else if (k === 'fire') on = fire === v;
+      else if (k === 'formation') { on = form === v; dis = dis || !form; }
+      else if (k === 'order') on = G.ui.pending === v;
+      if (v === 'launcher') dis = dis || !m.some(s => s.launcher && s.lRounds > 0);
+      b.classList.toggle('on', on);
+      b.disabled = dis;
+    });
+    this.chipSquad.classList.toggle('on', sel && sel.level === 'squad');
+    this.chipTeams.forEach((c, i) => {
+      const t = G.squads.blue && G.squads.blue.teams[i];
+      c.classList.toggle('on', !!(sel && sel.level === 'team' && sel.team === t));
+      c.disabled = !t || !t.members.some(s => s.active);
+    });
+    let txt = 'Nothing selected. Tap a Marine, tap again for the fire team, again for the squad.';
+    if (sel) {
+      const n = m.length, tot = selMembers(sel).length;
+      txt = selName(sel) + (sel.level === 'soldier' ? ' · ' + sel.soldier.title + ' · ' + sel.soldier.weapon.name
+        : ' · ' + n + ' of ' + tot + ' effective');
+    }
+    $('selText').textContent = txt;
+  },
+
+  // ------------------------------------------------------------ selection
+  select(sel) {
+    G.ui.sel = sel; G.ui.pending = null;
+    this.refreshOrders(); this.refreshRosterSel();
+  },
+  selectTeam(n) {
+    const t = G.squads.blue.teams[n - 1];
+    if (t && t.members.some(s => s.active)) this.select({ level: 'team', team: t, squad: t.squad });
+  },
+  // Tapping a Marine cycles: the man, his fire team, the squad.
+  cycleSelect(s) {
+    const sel = G.ui.sel;
+    if (sel && sel.level === 'soldier' && sel.soldier === s) {
+      if (s.team.num) this.select({ level: 'team', team: s.team, squad: s.squad });
+      else this.select({ level: 'squad', squad: s.squad });
+    } else if (sel && sel.level === 'team' && sel.team === s.team) {
+      this.select({ level: 'squad', squad: s.squad });
+    } else {
+      this.select({ level: 'soldier', soldier: s, team: s.team, squad: s.squad });
+    }
+  },
+
+  // ------------------------------------------------------------ map taps
+  handleTap(sx, sy, secondary) {
+    if (!G.running || G.over) return;
+    const w = toWorld(sx, sy);
+    const piece = pieceAt(sx, sy);
+    const sel = G.ui.sel;
+    // An enemy piece stands for its nearest visible, effective man.
+    const enemy = piece && piece.side === 'red' ? (piece.kind === 'man' ? (piece.soldier.active ? piece.soldier : null)
+      : piece.live.filter(s => enemyVisible(s)).sort((a, b) => dist(a.x, a.y, w.x, w.y) - dist(b.x, b.y, w.x, w.y))[0] || null) : null;
+    if (secondary) {
+      G.ui.pending = null;
+      if (sel) issueOrder(sel, enemy ? 'engage' : 'move', enemy || w);
+      this.refreshOrders();
+      return;
+    }
+    if (G.ui.pending && sel) {
+      const p = G.ui.pending;
+      G.ui.pending = null;
+      issueOrder(sel, p, enemy && p !== 'face' ? { x: enemy.x, y: enemy.y } : w);
+      this.refreshOrders();
+      return;
+    }
+    if (piece && piece.side === 'blue') {
+      if (piece.kind === 'man') { if (piece.soldier.alive) this.cycleSelect(piece.soldier); }
+      else if (piece.kind === 'team' && piece.team.num) this.select({ level: 'team', team: piece.team, squad: piece.team.squad });
+      else this.select({ level: 'squad', squad: G.squads.blue });
+      return;
+    }
+    if (enemy && sel) { issueOrder(sel, 'engage', enemy); return; }
+    if (sel) issueOrder(sel, 'move', w);
+  },
+
+  // ------------------------------------------------------------ roster
+  buildRoster() {
+    const box = $('roster');
+    box.innerHTML = '';
+    this.rosterRows = [];
+    const sq = G.squads.blue;
+    for (const t of [sq.hq, ...sq.teams]) {
+      const sec = el('section', 'rteam');
+      const head = el('button', 'rhead');
+      head.appendChild(el('span', 'rname', t.num ? t.name : 'Squad leader'));
+      const mor = el('span', 'rmorale');
+      mor.appendChild(el('i'));
+      head.appendChild(mor);
+      head.addEventListener('click', () => t.num ? this.selectTeam(t.num) : this.select({ level: 'squad', squad: sq }));
+      sec.appendChild(head);
+      t.ui = { sec, mor: mor.firstChild };
+      for (const s of t.members) {
+        const row = el('button', 'rrow');
+        row.appendChild(symbolCanvas(s.billet, 'blue', 22));
+        const who = el('span', 'rwho');
+        who.appendChild(el('b', null, s.label));
+        who.appendChild(el('small', null, s.title));
+        row.appendChild(who);
+        const st = el('span', 'rstat');
+        const ammo = el('span', 'rammo');
+        row.appendChild(st); row.appendChild(ammo);
+        row.addEventListener('click', () => {
+          if (s.alive) this.select({ level: 'soldier', soldier: s, team: s.team, squad: s.squad });
+          R.cam.zoom = Math.max(R.cam.zoom, 3); R.cam.x = s.x; R.cam.y = s.y; clampCam();
+        });
+        sec.appendChild(row);
+        this.rosterRows.push({ s, row, st, ammo });
+      }
+      box.appendChild(sec);
+    }
+  },
+  refreshRoster() {
+    for (const r of this.rosterRows) {
+      const s = r.s, st = s.statusText;
+      r.st.textContent = st;
+      r.st.dataset.state = s.health === 'kia' || s.health === 'serious' ? 'down' : s.pinned || s.routing ? 'bad' : s.suppressed || s.health === 'light' ? 'warn' : 'ok';
+      let a = s.ammoText;
+      if (s.launcher) a += ' · ' + s.lRounds + '×40';
+      if (s.frags) a += ' · ' + s.frags + 'F';
+      r.ammo.textContent = a;
+      r.row.classList.toggle('dead', !s.alive || s.health === 'serious');
+    }
+    const sq = G.squads.blue;
+    for (const t of [sq.hq, ...sq.teams]) {
+      if (!t.ui) continue;
+      t.ui.mor.style.width = clamp(t.morale, 0, 100) + '%';
+      t.ui.mor.dataset.state = t.broken ? 'bad' : t.shaken ? 'warn' : 'ok';
+    }
+  },
+  refreshRosterSel() {
+    const m = new Set(selMembers(G.ui.sel));
+    for (const r of this.rosterRows) r.row.classList.toggle('sel', m.has(r.s));
+  },
+
+  // ------------------------------------------------------------ log and toast
+  log(msg, kind) {
+    this.logLines.push({ msg, kind: kind || 'info', t: G.time });
+    if (this.logLines.length > 60) this.logLines.shift();
+    const box = $('log');
+    const line = el('div', 'lline ' + (kind || 'info'));
+    line.appendChild(el('span', 'ltime', fmtClock(G.time)));
+    line.appendChild(el('span', null, msg));
+    box.appendChild(line);
+    while (box.children.length > 6) box.removeChild(box.firstChild);
+  },
+  toast(msg) {
+    const t = $('toast');
+    t.textContent = msg; t.hidden = false;
+    clearTimeout(this._toastT);
+    this._toastT = setTimeout(() => { t.hidden = true; }, 2600);
+  },
+
+  refreshBar() {
+    $('clock').textContent = fmtClock(G.time);
+    $('btnPause').textContent = G.paused ? 'Resume' : 'Pause';
+    $('btnPause').classList.toggle('on', G.paused);
+    $('btnSpeed').textContent = G.speed + '×';
+  },
+
+  tick(dt) {
+    this.tickT -= dt;
+    if (this.tickT > 0) return;
+    this.tickT = 0.25;
+    this.refreshBar();
+    if (G.running) { this.refreshRoster(); this.refreshOrders(); }
+    G.ui.panelH = $('orders').offsetHeight;
+    document.documentElement.style.setProperty('--orders-h', G.ui.panelH + 'px');
+  },
+
+  // ------------------------------------------------------------ modals
+  showModal(id) { $(id).hidden = false; if (G.running && !G.paused) togglePause(); },
+  hideModal(id) { $(id).hidden = true; },
+
+  showBriefing() {
+    const set = G.settings;
+    const box = $('briefBody');
+    box.innerHTML = '';
+
+    const situation = el('div', 'bsit');
+    situation.appendChild(el('h3', null, 'Situation'));
+    situation.appendChild(el('p', null, 'An enemy squad-sized element is operating in the vicinity. Its organization and weapons are unknown; expect automatic weapons and grenade launchers. Your squad is the only friendly force in the area. There is no supporting fire.'));
+    box.appendChild(situation);
+    const sit = el('div', 'bsit');
+    sit.appendChild(el('h3', null, 'Mission'));
+    const mp = el('p');
+    const modes = { attack: 'Attack. The enemy holds a position to your front. Close with and destroy him.',
+      meeting: 'Meeting engagement. The enemy is moving toward you. Find him, fix him and destroy him.',
+      random: 'Unknown. Either the enemy holds a position, or he is moving toward you.' };
+    const modeSel = el('select'); modeSel.id = 'missionMode';
+    for (const [k, t] of [['random', 'Random'], ['attack', 'Attack a position'], ['meeting', 'Meeting engagement']]) {
+      const o = el('option', null, t); o.value = k; if (set.mode === k) o.selected = true; modeSel.appendChild(o);
+    }
+    const desc = el('span', 'bdesc', modes[set.mode]);
+    modeSel.addEventListener('change', () => { set.mode = modeSel.value; desc.textContent = modes[set.mode]; });
+    mp.appendChild(modeSel); mp.appendChild(desc);
+    sit.appendChild(mp);
+    const seedRow = el('p', 'bseed');
+    seedRow.appendChild(el('span', null, 'Map number '));
+    const seedIn = el('input'); seedIn.id = 'missionSeed'; seedIn.type = 'number'; seedIn.value = set.seed;
+    seedIn.addEventListener('change', () => { set.seed = parseInt(seedIn.value, 10) || 1; });
+    const reroll = el('button', 'obtn', 'New map');
+    reroll.addEventListener('click', () => { set.seed = Math.floor(Math.random() * 99999) + 1; seedIn.value = set.seed; });
+    seedRow.appendChild(seedIn); seedRow.appendChild(reroll);
+    sit.appendChild(seedRow);
+    box.appendChild(sit);
+
+    // Loadout by billet.
+    const lo = set.loadout;
+    const wrap = el('div', 'bload');
+    wrap.appendChild(el('h3', null, 'Loadout'));
+    const tableWrap = el('div', 'tablewrap');
+    const tbl = el('table', 'ltable');
+    const head = el('tr');
+    for (const h of ['', 'Billet', 'Weapon', 'Spare mags', '40mm', 'Frags', 'Load']) head.appendChild(el('th', null, h));
+    tbl.appendChild(head);
+    const kgCells = {};
+    const recalc = () => {
+      for (const k of Object.keys(USMC_BILLETS)) {
+        const l = lo[k], w = WEAPONS[l.weapon];
+        let kg = 22 + w.kg + (l.mags + 1) * (MAG_KG[w.mag] || 0.5) + l.frags * GRENADES.M67.kg;
+        if (l.launcher) kg += 1.4 + l.lRounds * LAUNCHERS[l.launcher].kg;
+        kgCells[k].textContent = kg.toFixed(1) + ' kg';
+      }
+    };
+    const num = (k, field, min, max) => {
+      const i = el('input'); i.type = 'number'; i.min = min; i.max = max; i.value = lo[k][field];
+      i.id = 'lo-' + k + '-' + field;
+      i.addEventListener('change', () => { lo[k][field] = clamp(parseInt(i.value, 10) || 0, min, max); i.value = lo[k][field]; recalc(); });
+      return i;
+    };
+    for (const k of Object.keys(USMC_BILLETS)) {
+      const b = USMC_BILLETS[k], tr = el('tr');
+      const sc = el('td'); sc.appendChild(symbolCanvas(k, 'blue', 22)); tr.appendChild(sc);
+      tr.appendChild(el('td', 'bname', b.title + (k === 'SL' ? '' : ' ×3')));
+      const wtd = el('td'), ws = el('select'); ws.id = 'lo-' + k + '-weapon';
+      for (const wk of b.weapons) { const o = el('option', null, WEAPONS[wk].name); o.value = wk; if (lo[k].weapon === wk) o.selected = true; ws.appendChild(o); }
+      wtd.appendChild(ws); tr.appendChild(wtd);
+      const mtd = el('td'), mags = num(k, 'mags', 1, 30); mtd.appendChild(mags); tr.appendChild(mtd);
+      ws.addEventListener('change', () => {
+        lo[k].weapon = ws.value; lo[k].mags = WEAPONS[ws.value].mags - 1; mags.value = lo[k].mags; recalc();
+      });
+      const gtd = el('td');
+      if (b.launchers) {
+        const ls = el('select'); ls.id = 'lo-G-launcher';
+        for (const lk of b.launchers) { const o = el('option', null, lk); o.value = lk; if (lo[k].launcher === lk) o.selected = true; ls.appendChild(o); }
+        ls.addEventListener('change', () => { lo[k].launcher = ls.value; recalc(); });
+        gtd.className = 'cellrow';
+        gtd.appendChild(ls); gtd.appendChild(num(k, 'lRounds', 0, 24));
+      } else gtd.textContent = '—';
+      tr.appendChild(gtd);
+      const ftd = el('td'); ftd.appendChild(num(k, 'frags', 0, 4)); tr.appendChild(ftd);
+      kgCells[k] = el('td', 'kg'); tr.appendChild(kgCells[k]);
+      tbl.appendChild(tr);
+    }
+    tableWrap.appendChild(tbl);
+    wrap.appendChild(tableWrap);
+    wrap.appendChild(el('p', 'bnote', 'Load includes about 22 kg of helmet, plates, water and kit. Heavier loads slow movement and tire men faster.'));
+    const reset = el('button', 'obtn', 'Standard loadout');
+    reset.addEventListener('click', () => { set.loadout = defaultLoadout(); this.showBriefing(); });
+    wrap.appendChild(reset);
+    box.appendChild(wrap);
+    recalc();
+    this.showModal('briefing');
+  },
+
+  showDebrief(result) {
+    const box = $('debriefBody');
+    box.innerHTML = '';
+    const won = result === 'victory';
+    $('debriefTitle').textContent = won ? 'Enemy defeated' : 'Squad combat ineffective';
+    box.appendChild(el('p', 'dsub', (won ? 'The enemy is destroyed or has withdrawn.' : 'Your squad can no longer fight.') + ' Elapsed time ' + fmtClock(G.time) + '.'));
+    const count = (sq) => {
+      const all = sq.all;
+      return {
+        kia: all.filter(s => s.health === 'kia').length,
+        serious: all.filter(s => s.health === 'serious').length,
+        light: all.filter(s => s.health === 'light').length,
+        gone: all.filter(s => s.routed || s.routing).length,
+        effective: all.filter(s => s.active && !s.routing).length,
+        total: all.length,
+        shots: all.reduce((n, s) => n + s.shots, 0),
+        hits: all.reduce((n, s) => n + s.hits, 0),
+      };
+    };
+    const b = count(G.squads.blue), r = count(G.squads.red);
+    const rows = [['Strength', b.total, r.total], ['Killed', b.kia, r.kia], ['Serious casualties', b.serious, r.serious],
+      ['Wounded, fighting', b.light, r.light], ['Withdrew or fled', b.gone, r.gone], ['Effective at end', b.effective, r.effective],
+      ['Rounds fired', b.shots, r.shots], ['Hits', b.hits, r.hits]];
+    const pre = el('pre', 'dtable');
+    const line = (a, x, y) => a.padEnd(19) + String(x).padStart(8) + String(y).padStart(7);
+    pre.textContent = line('', 'Marines', 'Enemy') + '\n' + rows.map(rw => line(rw[0], rw[1], rw[2])).join('\n');
+    box.appendChild(pre);
+    $('debrief').hidden = false;
+  },
+};
+
+function togglePause() {
+  if (!G.running) return;
+  G.paused = !G.paused;
+  UI.refreshBar();
+}
+
+// ---- src/input.js
+'use strict';
+// Mouse, touch and keyboard. Drag pans, wheel or pinch zooms, tap selects or orders,
+// right-click moves (or engages a visible enemy).
+
+const Input = {
+  pointers: new Map(), moved: false, camStart: null, pinch: null,
+
+  init(canvas) {
+    canvas.addEventListener('pointerdown', (e) => {
+      canvas.setPointerCapture(e.pointerId);
+      this.pointers.set(e.pointerId, { x: e.offsetX, y: e.offsetY, sx: e.offsetX, sy: e.offsetY, button: e.button });
+      if (this.pointers.size === 1) {
+        this.moved = false;
+        this.camStart = { x: R.cam.x, y: R.cam.y };
+      } else if (this.pointers.size === 2) {
+        this.moved = true;
+        const [a, b] = [...this.pointers.values()];
+        const mid = { x: (a.x + b.x) / 2, y: (a.y + b.y) / 2 };
+        this.pinch = { d: Math.hypot(a.x - b.x, a.y - b.y), zoom: R.cam.zoom, world: toWorld(mid.x, mid.y) };
+      }
+    });
+    canvas.addEventListener('pointermove', (e) => {
+      G.ui.hover = toWorld(e.offsetX, e.offsetY);
+      G.ui.hoverIsPointer = e.pointerType === 'mouse';
+      const p = this.pointers.get(e.pointerId);
+      if (!p) return;
+      p.x = e.offsetX; p.y = e.offsetY;
+      if (this.pointers.size === 1) {
+        if (Math.hypot(p.x - p.sx, p.y - p.sy) > 8) this.moved = true;
+        if (this.moved) {
+          R.cam.x = this.camStart.x - (p.x - p.sx) / R.cam.zoom;
+          R.cam.y = this.camStart.y - (p.y - p.sy) / R.cam.zoom;
+          clampCam();
+        }
+      } else if (this.pointers.size === 2 && this.pinch) {
+        const [a, b] = [...this.pointers.values()];
+        const mid = { x: (a.x + b.x) / 2, y: (a.y + b.y) / 2 };
+        R.cam.zoom = clamp(this.pinch.zoom * Math.hypot(a.x - b.x, a.y - b.y) / Math.max(1, this.pinch.d), R.minZoom, 16);
+        R.cam.x = this.pinch.world.x - (mid.x - R.w / 2) / R.cam.zoom;
+        R.cam.y = this.pinch.world.y - (mid.y - R.h / 2) / R.cam.zoom;
+        clampCam();
+      }
+    });
+    const end = (e) => {
+      const p = this.pointers.get(e.pointerId);
+      if (!p) return;
+      this.pointers.delete(e.pointerId);
+      if (e.type === 'pointerup' && !this.moved && this.pointers.size === 0) UI.handleTap(p.x, p.y, p.button === 2);
+      if (this.pointers.size < 2) this.pinch = null;
+      if (this.pointers.size === 1) {
+        const q = [...this.pointers.values()][0];
+        q.sx = q.x; q.sy = q.y;
+        this.camStart = { x: R.cam.x, y: R.cam.y };
+      }
+    };
+    canvas.addEventListener('pointerup', end);
+    canvas.addEventListener('pointercancel', end);
+    canvas.addEventListener('pointerleave', () => { G.ui.hover = null; });
+    canvas.addEventListener('contextmenu', (e) => e.preventDefault());
+    canvas.addEventListener('wheel', (e) => {
+      e.preventDefault();
+      const before = toWorld(e.offsetX, e.offsetY);
+      R.cam.zoom = clamp(R.cam.zoom * Math.exp(-e.deltaY * 0.0015), R.minZoom, 16);
+      R.cam.x = before.x - (e.offsetX - R.w / 2) / R.cam.zoom;
+      R.cam.y = before.y - (e.offsetY - R.h / 2) / R.cam.zoom;
+      clampCam();
+    }, { passive: false });
+
+    window.addEventListener('keydown', (e) => {
+      if (e.target.closest && e.target.closest('input, select, textarea')) return;
+      if (!G.running) return;
+      const k = e.key;
+      if (k === ' ') { e.preventDefault(); togglePause(); }
+      else if (k === 'v' || k === 'V') $('btnCones').click();
+      else if (k === '1' || k === '2' || k === '3') UI.selectTeam(+k);
+      else if (k === '0' || k === '`') UI.select({ level: 'squad', squad: G.squads.blue });
+      else if (k === 'Escape') {
+        if (G.ui.pending) { G.ui.pending = null; UI.refreshOrders(); }
+        else UI.select(null);
+      }
+    });
+  },
+};
+
+// ---- src/main.js
+'use strict';
+// Game state, mission setup and the main loop.
+
+const G = {
+  map: null, squads: {}, soldiers: [], byId: new Map(),
+  known: { blue: new Map(), red: new Map() },
+  effects: [], projectiles: [], floaters: [], controllers: [],
+  time: 0, paused: true, speed: 1, running: false, over: false,
+  spotT: 0, teamT: 0, endT: 0,
+  stats: null, grid: { e: 34, n: 72 }, revealAll: false,
+  settings: null,
+  ui: { cones: true, sel: null, pending: null, moveMode: 'walk', hover: null, hoverIsPointer: false, panelH: 0 },
+  log(msg, kind) { UI.log(msg, kind); },
+  toast(msg) { UI.toast(msg); },
+};
+
+function loadSettings() {
+  let saved = null;
+  try { saved = JSON.parse(localStorage.getItem('squad.settings') || 'null'); } catch (e) { saved = null; }
+  const s = { seed: Math.floor(Math.random() * 99999) + 1, mode: 'random', loadout: defaultLoadout() };
+  if (saved && saved.loadout) {
+    for (const k of Object.keys(s.loadout)) {
+      const l = saved.loadout[k];
+      if (l && WEAPONS[l.weapon] && USMC_BILLETS[k].weapons.includes(l.weapon)) Object.assign(s.loadout[k], l);
+    }
+    if (saved.mode) s.mode = saved.mode;
+  }
+  return s;
+}
+function saveSettings() {
+  try { localStorage.setItem('squad.settings', JSON.stringify({ mode: G.settings.mode, loadout: G.settings.loadout })); } catch (e) { /* storage unavailable */ }
+}
+
+function newMission() {
+  const set = G.settings;
+  saveSettings();
+  NEXT_ID = 1;
+  G.map = new GameMap(set.seed);
+  // Grid: a small 100 km digit and two principal digits for each kilometer line.
+  G.grid = { e: randInt(10, 85), n: randInt(10, 85), le: randInt(1, 8), ln: randInt(1, 8) };
+  const blue = buildUSMCSquad(set.loadout);
+  const red = buildOpforSquad();
+  G.squads = { blue, red };
+  const mode = set.mode === 'random' ? (chance(0.5) ? 'attack' : 'meeting') : set.mode;
+  G.mode = mode;
+
+  // The squads start about a kilometer apart, on a random axis.
+  const axis = randRange(0, Math.PI * 2), sep = randRange(900, 1150);
+  const mid = { x: MAP_W / 2 + randRange(-400, 400), y: MAP_H / 2 + randRange(-400, 400) };
+  const bx = clamp(mid.x - Math.cos(axis) * sep / 2, 250, MAP_W - 250), by = clamp(mid.y - Math.sin(axis) * sep / 2, 250, MAP_H - 250);
+  const toEnemy = axis;
+  placeSquad(blue, G.map, bx, by, toEnemy);
+  const blueStart = { x: bx, y: by };
+  let rx = clamp(bx + Math.cos(axis) * sep, 250, MAP_W - 250), ry = clamp(by + Math.sin(axis) * sep, 250, MAP_H - 250);
+
+  if (mode === 'attack') {
+    // Defenders hold the nearest village or farm to their area, or the ground where they are.
+    const near = G.map.buildings.filter(b => dist((b.x0 + b.x1) / 2, (b.y0 + b.y1) / 2, rx, ry) < 300);
+    if (near.length && chance(0.75)) { const b = pick(near); rx = (b.x0 + b.x1) / 2; ry = (b.y0 + b.y1) / 2; }
+    placeSquad(red, G.map, rx, ry, toEnemy + Math.PI);
+    setupDefense(red, blueStart);
+  } else {
+    placeSquad(red, G.map, rx, ry, toEnemy + Math.PI);
+  }
+  G.enemyArea = { x: rx, y: ry };
+  G.axisBearing = bearing(bx, by, rx, ry);
+
+  G.soldiers = [...blue.all, ...red.all];
+  G.byId = new Map(G.soldiers.map(s => [s.id, s]));
+  G.known = { blue: new Map(), red: new Map() };
+  G.effects = []; G.projectiles = []; G.floaters = []; G.controllers = [];
+  G.stats = { blue: { light: 0, serious: 0, kia: 0 }, red: { light: 0, serious: 0, kia: 0 } };
+  G.time = 0; G.spotT = 0; G.teamT = 0; G.endT = 0;
+  G.over = false; G.running = true; G.paused = true;
+  G.missionId = (G.missionId || 0) + 1;
+  $('debrief').hidden = true;
+  G.ui.sel = null; G.ui.pending = null;
+  for (const t of [blue.hq, ...blue.teams, red.hq, ...red.teams]) { t.routing = false; t.morale = t.squad.morale; }
+  initAI(mode === 'attack' ? 'defend' : 'advance', blueStart);
+
+  buildTerrain(G.map);
+  fitCamera(centroid(blue.all), Math.max(R.minZoom, 1.3));
+  $('log').innerHTML = '';
+  UI.logLines = [];
+  UI.buildRoster();
+  UI.select({ level: 'squad', squad: blue });
+  const gr = gridRef(G.enemyArea.x, G.enemyArea.y);
+  G.log(mode === 'attack' ? 'Mission: attack. Enemy squad reported holding near grid ' + gr + ', bearing ' + pad3(G.axisBearing) + '.'
+    : 'Mission: meeting engagement. Enemy squad reported near grid ' + gr + ', bearing ' + pad3(G.axisBearing) + ', moving toward you.', 'info');
+  G.log('Paused. Give your orders, then press Resume.', 'info');
+  UI.refreshBar();
+}
+
+// ---------------------------------------------------------------- morale and routing
+// A broken team falls back about 400 m away from the enemy and is out of the fight.
+function routePoint(s) {
+  const t = threatCentroid(s.side, [s]);
+  const a = angleTo(t.x, t.y, s.x, s.y);
+  return { x: clamp(s.x + Math.cos(a) * 400, 20, MAP_W - 20), y: clamp(s.y + Math.sin(a) * 400, 20, MAP_H - 20) };
+}
+
+function startRouting(team, reason) {
+  if (team.routing) return;
+  team.routing = true; team.routeReason = reason;
+  for (const s of team.members) {
+    if (!s.active) continue;
+    s.routing = true; s.assault = false; s.suppressPt = null; s.launchQueue = null;
+    s.routeTo = routePoint(s);
+    s.path = G.map.findPath(s.x, s.y, s.routeTo.x, s.routeTo.y) || [];
+    s.moveMode = 'rush';
+  }
+  releaseControllers(team.members);
+  if (team.side === 'blue' && team.members.some(s => s.active)) G.log(team.name + ' has broken and is falling back!', 'loss');
+}
+
+function rally(team) {
+  team.routing = false;
+  for (const s of team.members) if (s.routing && !s.routed) { s.routing = false; s.routeTo = null; s.path = []; s.homePosture = 'prone'; }
+  if (team.side === 'blue') G.log(team.name + ' has rallied.', 'info');
+}
+
+// Immediate action on contact: a Marine fire team walking when it takes fire, or when it
+// sees a new enemy within 250 m, halts, gets down and returns fire. Rushing, assaulting
+// and bounding teams carry on; those orders mean to move under fire.
+function reactToContact(t) {
+  if (t.routing) return;
+  const walking = t.members.filter(s => commandable(s) && s.moving && s.moveMode === 'walk' && !s.assault);
+  if (!walking.length) return;
+  t.reacted = t.reacted || new Set();
+  const underFire = G.time - t.lastFiredUpon < 1.5 && G.time - (t.reactedAt || -99) > 20;
+  const fresh = [...G.known.blue.values()].filter(k => k.visible && !t.reacted.has(k.id) && G.byId.get(k.id)?.active
+    && walking.some(s => dist(s.x, s.y, k.x, k.y) < 250));
+  if (!underFire && !fresh.length) return;
+  for (const k of fresh) t.reacted.add(k.id);
+  t.reactedAt = G.time;
+  releaseControllers(walking);
+  for (const s of walking) { s.path = []; s.homePosture = 'prone'; }
+  G.log(t.short + ': ' + (underFire ? 'Taking fire!' : 'Enemy close!') + ' Get down, return fire.', 'contact');
+}
+
+function updateTeams(dt) {
+  for (const t of [G.squads.blue.hq, ...G.squads.blue.teams]) reactToContact(t);
+  for (const sq of [G.squads.blue, G.squads.red]) {
+    for (const t of [sq.hq, ...sq.teams]) {
+      const quiet = G.time - t.lastFiredUpon;
+      if (quiet > 10) t.morale = Math.min(sq.morale, t.morale + 0.6 * dt);
+      if (!t.routing && t.broken && t.members.some(s => s.active)) startRouting(t, 'break');
+      if (t.routing && t.routeReason === 'break' && t.morale > 35 && quiet > 15) rally(t);
+      for (const s of t.members) {
+        if (!s.routing || s.routed || !s.active) continue;
+        if (!s.routeTo) s.routeTo = routePoint(s);
+        if (dist(s.x, s.y, s.routeTo.x, s.routeTo.y) < 8) { s.routed = true; s.path = []; }
+        else if (!s.moving) { s.path = G.map.findPath(s.x, s.y, s.routeTo.x, s.routeTo.y) || []; s.moveMode = 'rush'; }
+      }
+    }
+  }
+}
+
+function inCover(s) {
+  const k = G.map.terAt(s.x, s.y);
+  if (k === TER.WOODS || k === TER.STREAM) return true;
+  const o = CELL * 0.8;
+  for (const [dx, dy] of [[o, 0], [-o, 0], [0, o], [0, -o]]) {
+    const n = G.map.terAt(s.x + dx, s.y + dy);
+    if (n === TER.WALL || n === TER.BUILDING) return true;
+  }
+  return k === TER.GRASS && s.posture === 'prone';
+}
+
+function updateSuppression(s, dt) {
+  if (!s.active) { s.supp = 0; return; }
+  let rate = inCover(s) ? 14 : 9;
+  const lead = s.team.leader;
+  if (!lead || (lead.billet !== 'TL' && lead.billet !== 'SL')) rate *= 0.8;
+  rate *= clamp(s.team.morale / 80, 0.5, 1.2);
+  if (G.time - s.team.lastFiredUpon < 1.5) rate *= 0.3;
+  s.supp = Math.max(0, s.supp - rate * dt);
+}
+
+// ---------------------------------------------------------------- loop
+function update(dt) {
+  G.time += dt;
+  G.spotT -= dt;
+  if (G.spotT <= 0) { G.spotT = 0.25; updateSpotting(); }
+  for (const c of G.controllers) c.update(dt);
+  G.controllers = G.controllers.filter(c => !c.done);
+  updateAI(dt);
+  for (const s of G.soldiers) {
+    if (!s.alive || s.routed) continue;
+    updateSuppression(s, dt);
+    updateMovement(s, dt);
+    updateCombat(s, dt);
+    updateLook(s, dt);
+  }
+  updateProjectiles(dt);
+  for (const list of [G.effects, G.floaters]) {
+    for (let i = list.length - 1; i >= 0; i--) { list[i].t += dt; if (list[i].t > list[i].life) list.splice(i, 1); }
+  }
+  G.teamT -= dt;
+  if (G.teamT <= 0) { G.teamT = 0.5; updateTeams(0.5); }
+  G.endT -= dt;
+  if (G.endT <= 0) { G.endT = 1; checkEnd(); }
+}
+
+function checkEnd() {
+  const up = (sq) => sq.all.some(s => s.active && !s.routing);
+  if (!up(G.squads.red)) endMission('victory');
+  else if (!up(G.squads.blue)) endMission('defeat');
+}
+
+function endMission(result) {
+  G.over = true; G.paused = true;
+  G.revealAll = true;
+  G.log(result === 'victory' ? 'Enemy defeated.' : 'Your squad is combat ineffective.', result === 'victory' ? 'kill' : 'loss');
+  const id = G.missionId;
+  setTimeout(() => { if (G.missionId !== id) return; UI.showDebrief(result); G.revealAll = false; }, 1200);
+}
+
+let lastFrame = performance.now();
+function frame(now) {
+  const dt = Math.min(0.1, (now - lastFrame) / 1000);
+  lastFrame = now;
+  if (G.running && !G.paused && !G.over) {
+    let sim = dt * G.speed;
+    while (sim > 1e-6) { const step = Math.min(0.05, sim); update(step); sim -= step; }
+  }
+  render();
+  UI.tick(dt);
+  requestAnimationFrame(frame);
+}
+
+// Building a 3 km sheet takes a few seconds; show a notice and let it paint first.
+function withLoading(text, fn) {
+  $('loading').textContent = text;
+  $('loading').hidden = false;
+  requestAnimationFrame(() => setTimeout(() => { try { fn(); } finally { $('loading').hidden = true; } }, 30));
+}
+
+function boot() {
+  G.settings = loadSettings();
+  initRender($('view'));
+  UI.init();
+  Input.init($('view'));
+  $('btnBegin').addEventListener('click', () => {
+    G.settings.seed = parseInt($('missionSeed').value, 10) || G.settings.seed;
+    UI.hideModal('briefing');
+    withLoading('Drawing the map sheet…', newMission);
+  });
+  $('btnAgain').addEventListener('click', () => { $('debrief').hidden = true; withLoading('Drawing the map sheet…', newMission); });
+  $('btnNext').addEventListener('click', () => {
+    $('debrief').hidden = true;
+    G.settings.seed = Math.floor(Math.random() * 99999) + 1;
+    UI.showBriefing();
+  });
+  requestAnimationFrame(frame);
+  // Draw a map behind the briefing so the first view is the ground, not a blank table.
+  withLoading('Drawing the map sheet…', () => {
+    G.map = new GameMap(G.settings.seed);
+    buildTerrain(G.map);
+    fitCamera(null, R.minZoom);
+    UI.showBriefing();
+  });
+}
+
+if (document.readyState === 'loading') window.addEventListener('DOMContentLoaded', boot);
+else boot();
+
+</script>
+<script>
+if ('serviceWorker' in navigator && (location.protocol === 'https:' || location.hostname === 'localhost')) {
+  window.addEventListener('load', () => navigator.serviceWorker.register('sw.js').catch(() => {}));
+}
+</script>
+</body>
+</html>

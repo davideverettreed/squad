@@ -26,6 +26,21 @@ doctrinal colors: blue friendly, red enemy, black for targets.
 Open `dist/index.html` in a browser. It is a single file with no install, and it
 works with mouse or touch.
 
+## Website and Android app
+
+`docs/` is the website, built for GitHub Pages: the game at the root of the
+site, installable as an app on Android and desktop, and playable offline after
+the first visit. Hosting is not switched on yet. To switch it on:
+
+1. On GitHub, open the repository's **Settings → Pages**.
+2. Under **Build and deployment**, set **Source** to **Deploy from a branch**,
+   the branch to **main** and the folder to **/docs**, then **Save**.
+3. After a minute or two the game is at
+   `https://davideverettreed.github.io/squad/`.
+
+To install on Android, open that address in Chrome and choose **Install app**
+(or **Add to Home screen**) from the menu.
+
 ## What is modeled
 
 - Selection at three levels: one Marine, a fire team, or the squad.
@@ -64,7 +79,10 @@ src/            game code (plain JavaScript, loaded in order)
   ui.js         panels, roster, briefing, debrief
   input.js      mouse, touch, keyboard
   main.js       mission setup and main loop
-tools/build.js  inlines everything into dist/
+web/            app manifest, service worker and icons for the website
+tools/build.js  inlines everything into dist/ and builds the website in docs/
+tools/make-icons.js  draws the app icons into web/icons
 ```
 
-Build with `node tools/build.js`.
+Build with `node tools/build.js`. Rebuild and commit `docs/` with every change
+so the website stays current.
