@@ -1,6 +1,6 @@
-# Squad
+# STEX: Sand Table Exercise
 
-Real-time squad tactics in the browser. You command a 13-man Marine rifle squad
+STEX is real-time squad tactics in the browser. You command a 13-man Marine rifle squad
 (squad leader and three four-man fire teams) against an enemy squad, using fire
 and maneuver on a 3 × 3 km map (nine 1 km grid squares) seen straight down.
 

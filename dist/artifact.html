@@ -1,4 +1,4 @@
-<title>Squad Fire and Maneuver</title>
+<title>Sand Table Exercise</title>
 <meta name="claude:viewport-fit-sides" content="cover">
 <meta name="theme-color" content="#1d2119">
 <link rel="preconnect" href="https://fonts.googleapis.com">
@@ -216,7 +216,7 @@ kbd { font: 600 12px/1 var(--mono); border: 1px solid var(--line); border-bottom
   <canvas id="view" aria-label="Tactical map"></canvas>
 
   <header id="bar">
-    <div class="brand"><b>SQUAD</b><span>Fire and maneuver</span></div>
+    <div class="brand"><b>STEX</b><span>Sand Table Exercise</span></div>
     <div id="clock" aria-label="Mission time">00:00</div>
     <div class="barbtns">
       <button id="btnPause" class="obtn">Resume</button>
@@ -2683,7 +2683,7 @@ function buildTerrain(map) {
   }
 
   // Title block.
-  text('SQUAD TACTICAL MAP', 0, -140, 34, { weight: 700 });
+  text('STEX TACTICAL MAP', 0, -140, 34, { weight: 700 });
   text('SERIES T25 · EDITION 1', 0, -104, 22, { weight: 500 });
   text(('HILL ' + map.peak).toUpperCase(), MAP_W / 2, -118, 76, { weight: 700, serif: true, align: 'center' });
   text('SHEET ' + String(G.settings ? G.settings.seed : 0).padStart(5, '0'), MAP_W, -140, 34, { weight: 700, align: 'right' });

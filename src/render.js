@@ -349,7 +349,7 @@ function buildTerrain(map) {
   }
 
   // Title block.
-  text('SQUAD TACTICAL MAP', 0, -140, 34, { weight: 700 });
+  text('STEX TACTICAL MAP', 0, -140, 34, { weight: 700 });
   text('SERIES T25 · EDITION 1', 0, -104, 22, { weight: 500 });
   text(('HILL ' + map.peak).toUpperCase(), MAP_W / 2, -118, 76, { weight: 700, serif: true, align: 'center' });
   text('SHEET ' + String(G.settings ? G.settings.seed : 0).padStart(5, '0'), MAP_W, -140, 34, { weight: 700, align: 'right' });

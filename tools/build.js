@@ -40,7 +40,7 @@ const appHead = [
   '<link rel="apple-touch-icon" href="icons/apple-touch-icon.png">',
   '<meta name="mobile-web-app-capable" content="yes">',
   '<meta name="apple-mobile-web-app-capable" content="yes">',
-  '<meta name="apple-mobile-web-app-title" content="Squad">',
+  '<meta name="apple-mobile-web-app-title" content="STEX">',
   '<meta name="description" content="Real-time squad tactics on a military map: command a 13-man Marine rifle squad.">',
 ].join('\n');
 const register = "<script>\nif ('serviceWorker' in navigator && (location.protocol === 'https:' || location.hostname === 'localhost')) {\n" +

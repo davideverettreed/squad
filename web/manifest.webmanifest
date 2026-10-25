@@ -1,6 +1,6 @@
 {
-  "name": "Squad: Fire and Maneuver",
-  "short_name": "Squad",
+  "name": "Sand Table Exercise",
+  "short_name": "STEX",
   "description": "Real-time squad tactics on a military map: command a 13-man Marine rifle squad.",
   "start_url": "./",
   "scope": "./",
