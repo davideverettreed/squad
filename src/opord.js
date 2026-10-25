@@ -265,6 +265,61 @@ const OPORD = {
   },
 
   // ------------------------------------------------------------ 4. Execution
+  // Plain definitions of the control measures, tasks, triggers and signals. It stays open
+  // or closed across redraws.
+  cheatOpen: false,
+  cheatSheet(box) {
+    const d = el('details', 'cheat');
+    d.open = this.cheatOpen;
+    d.addEventListener('toggle', () => { this.cheatOpen = d.open; });
+    d.appendChild(el('summary', null, 'Cheat sheet: control measures, tasks, triggers'));
+    const sec = (title, rows) => {
+      d.appendChild(el('h5', null, title));
+      const t = el('dl');
+      for (const [k, v] of rows) { t.appendChild(el('dt', null, k)); t.appendChild(el('dd', null, v)); }
+      d.appendChild(t);
+    };
+    sec('Control measures (map)', [
+      ['CP · Checkpoint', 'A point on the ground to control and report movement. A unit sent here moves to it and waits for its next line.'],
+      ['RTE · Route', 'A path of waypoints. The unit follows it instead of the shortest way: use it to stay in a draw or behind a tree line.'],
+      ['SBF · Support by fire', 'Where the base of fire sets in to fire onto the objective and cover the assault.'],
+      ['ASLT POS · Assault position', 'The last covered ground short of the objective, where the assault element shakes out and waits for the signal.'],
+      ['OBJ · Objective', 'The ground or enemy position to be seized or cleared.'],
+      ['TRP · Target reference point', 'A marked point that fire can be put onto quickly. Units sent to it suppress it.'],
+      ['FP · Fighting position', 'A defensive position with a sector of fire (set its center and width when selected).'],
+      ['PL · Phase line', 'A line across the ground; crossing it is reported. Used to control and time the movement.'],
+      ['LOA · Limit of advance', 'No one goes past it. Stops the assault from running on into the open or into friendly fire.'],
+      ['RP · Release point', 'Where the squad splits and the fire teams go to their own tasks.'],
+      ['RLY PT · Rally point', 'Where the squad regroups if it is scattered.'],
+      ['CCP · Casualty collection point', 'Where wounded are brought for treatment and evacuation.'],
+    ]);
+    sec('Tasks (plan lines)', [
+      ['Move to', 'Go to the point in the chosen mode: walk, rush or crawl.'],
+      ['Move along route', 'Follow a route to its end.'],
+      ['Bound to', 'Bounding overwatch: one element moves while another covers, then they swap. Slower, but covered.'],
+      ['Support by fire from', 'Move to the SBF, then fire onto the target until told to lift.'],
+      ['Suppress', 'Area fire on a point to keep the enemy\'s heads down.'],
+      ['Assault', 'Close with the enemy and fight through the objective to the LOA.'],
+      ['Occupy fighting position', 'Move into an FP and cover its sector.'],
+      ['Lift fire and hold', 'Cease fire (or shift it) so the assault is not hit, and hold in place.'],
+      ['Halt and hold', 'Stop where the unit is and hold.'],
+      ['Fire signal', 'The squad leader fires a star cluster; lines waiting on it start.'],
+    ]);
+    sec('Triggers (when a line starts)', [
+      ['At step-off', 'As soon as the plan runs.'],
+      ['After the line above', 'When the line above is finished.'],
+      ['With the line above', 'At the same moment as the line above.'],
+      ['On signal', 'When that star cluster is fired.'],
+      ['At H+ minutes', 'That many minutes after step-off.'],
+      ['On enemy contact', 'When the squad first makes contact.'],
+    ]);
+    sec('Signals', Object.values(SIGNALS).map(s => [s.label, s.meaning + '.']));
+    sec('Map menu', [
+      ['Tap the map', 'With a unit selected, opens a menu that places a measure at that spot and adds the line for that unit.'],
+      ['Tool buttons', 'Place measures without a line. A tool stays on: tap again for another, tap its button or Esc to stop.'],
+    ]);
+    box.appendChild(d);
+  },
   execution(box) {
     this.para(box, 'Execution', 'Draw control measures on the map, then write the scheme of maneuver line by line. After you step off each line starts on its trigger, and your orders go by radio. A better plan makes a more confident squad.');
     this.gradeCard(box, false);
@@ -278,6 +333,7 @@ const OPORD = {
     clear.addEventListener('click', () => { Plan.graphics = []; Plan.lines = []; Plan.selected = null; this.refresh(); });
     if (Plan.planning) acts.appendChild(clear);
     box.appendChild(acts);
+    this.cheatSheet(box);
 
     // The selected control measure: rename or delete.
     const g = Plan.graphic(Plan.selected);

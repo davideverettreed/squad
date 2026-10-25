@@ -325,3 +325,11 @@ kbd { font: 600 12px/1 var(--mono); border: 1px solid var(--line); border-bottom
 .planmenu .pmitem span { color: #6b7380; font-size: 12px; }
 .planmenu .pmitem:hover { background: rgba(176,141,87,.18); }
 .planmenu .pmcancel { justify-content: center; color: #8a2d2d; border-top: 1px solid rgba(176,141,87,.5); margin-top: 2px; }
+
+/* Execution: the cheat sheet of definitions. */
+details.cheat { margin: 8px 0 12px; border: 1px solid rgba(176,141,87,.45); border-radius: 5px; padding: 0 10px; }
+details.cheat summary { cursor: pointer; padding: 8px 0; font: 700 12px "Saira Condensed", sans-serif; letter-spacing: .06em; text-transform: uppercase; color: #d9b36c; }
+details.cheat h5 { margin: 8px 0 4px; font: 700 11px "Saira Condensed", sans-serif; letter-spacing: .08em; text-transform: uppercase; opacity: .8; }
+details.cheat dl { display: grid; grid-template-columns: minmax(110px, 38%) 1fr; gap: 4px 10px; margin: 0 0 8px; font-size: 13px; }
+details.cheat dt { font-weight: 700; }
+details.cheat dd { margin: 0; opacity: .9; }
