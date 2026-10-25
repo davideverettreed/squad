@@ -70,10 +70,13 @@ const Plan = {
   aoFacts() {
     const m = G.map, N = GW * GH;
     let lo = Infinity, hi = -Infinity, woods = 0, steep = 0, worst = { s: 0 }, swamp = 0, sx0 = 0, sy0 = 0;
+    const count = new Float64Array(32);
     for (let cy = 1; cy < GH - 1; cy++) for (let cx = 1; cx < GW - 1; cx++) {
       const i = cy * GW + cx, e = m.elev[i];
-      if (e < lo) lo = e; if (e > hi) hi = e;
       const k = m.ter[i];
+      count[k]++;
+      if (k === TER.OCEAN) continue;
+      if (e < lo) lo = e; if (e > hi) hi = e;
       if (k === TER.WOODS || k === TER.ORCHARD) woods++;
       if (k === TER.SWAMP) { swamp++; sx0 += cx; sy0 += cy; }
       const s = Math.hypot(m.elev[i + 1] - m.elev[i - 1], m.elev[i + GW] - m.elev[i - GW]) / (2 * CELL);
@@ -107,7 +110,7 @@ const Plan = {
     }
     return {
       e0: G.grid.e, n0: G.grid.n, lo: Math.round(m.elevBase + lo), hi: Math.round(m.elevBase + hi),
-      woodsPct: Math.round(woods / N * 100), river: m.river,
+      woodsPct: Math.round(woods / N * 100), river: m.river, pct: (k) => count[k] / N * 100,
       swampPct: swamp / N * 100, swampAt: swamp ? { x: (sx0 / swamp + 0.5) * CELL, y: (sy0 / swamp + 0.5) * CELL } : null, steepPct: steep / N * 100, worst, ponds,
       streams: m.streams.length, road, tracks: m.roads.filter(r => r.kind === 'track').length,
       villages: m.places.filter(p => p.kind === 'village'), farms: m.places.filter(p => p.kind === 'farm').length,
@@ -127,7 +130,7 @@ const Plan = {
       out.push({ kind: 'hill', name: 'HIGH GROUND ' + Math.round(m.elevBase + f.hi.e), x: f.hi.x, y: f.hi.y, note: 'Highest point on the direct line' });
     }
     for (const p of m.places.filter(p => dist(p.x, p.y, mid.x, mid.y) < reach).slice(0, 4)) {
-      out.push({ kind: 'town', name: p.name.toUpperCase(), x: p.x, y: p.y, note: p.kind === 'village' ? 'Village' : 'Farm' });
+      out.push({ kind: 'town', name: p.name.toUpperCase(), x: p.x, y: p.y, note: p.kind === 'village' ? 'Village' : G.map.R.farmWord });
     }
     return out;
   },
@@ -612,7 +615,7 @@ const Plan = {
       const x = lerp(b.x, e.x, i / n), y = lerp(b.y, e.y, i / n), k = G.map.terAt(x, y), el = G.map.elevAt(x, y);
       if (k === TER.WOODS || k === TER.ORCHARD) woods++; else open++;
       if (el > hi.e) hi = { e: el, x, y };
-      const wet = k === TER.STREAM; if (wet && !lastWet) streams++; lastWet = wet;
+      const wet = k === TER.STREAM || k === TER.WASH; if (wet && !lastWet) streams++; lastWet = wet;
       const riv = k === TER.RIVER || k === TER.FORD; if (riv && !lastRiv) river++; lastRiv = riv;
       if (k === TER.SWAMP) swamp++;
       const rd = k === TER.ROAD || k === TER.PAVED; if (rd && !lastRoad) roads++; lastRoad = rd;
@@ -638,7 +641,7 @@ const Plan = {
         const c = G.map.nearestPassable(Math.floor(x / CELL), Math.floor(y / CELL));
         const px = (c.cx + 0.5) * CELL, py = (c.cy + 0.5) * CELL, ter = G.map.terAt(px, py);
         const los = G.map.los(px, py, 1.2, o.x, o.y, 1.0);
-        let s = (ter === TER.WOODS ? 2 : ter === TER.GRASS || ter === TER.ORCHARD ? 1 : 0);
+        let s = (ter === TER.WOODS || ter === TER.ROCK ? 2 : TERRAIN[ter].conceal >= 0.3 ? 1 : 0);
         s += wantLOS ? (los > 0 ? 4 : -4) : (los > 0 ? -2 : 2);
         if (s > bs) { bs = s; best = { x: px, y: py }; }
       }
@@ -681,7 +684,7 @@ const Plan = {
         const tx = px + Math.cos(ax) * d, ty = py + Math.sin(ax) * d;
         if (G.map.los(px, py, 1.2, tx, ty, 1.0) > 0) view++;
       }
-      const s = view * 2 + (ter === TER.WOODS ? 3 : ter === TER.GRASS || ter === TER.ORCHARD || ter === TER.VINEYARD ? 1.5 : 0) + G.map.elevAt(px, py) * 0.05;
+      const s = view * 2 + (ter === TER.WOODS || ter === TER.ROCK ? 3 : TERRAIN[ter].conceal >= 0.3 ? 1.5 : 0) + G.map.elevAt(px, py) * 0.05;
       if (s > bs) { bs = s; best = { x: px, y: py }; }
     }
     const cp = this.addGraphic('rel', [best]);

@@ -2,11 +2,9 @@
 // Terrain grid for a 3 x 3 km sheet: procedural generation (relief, streams and ponds,
 // fields, woods, roads, villages, farms), line of sight, pathfinding and cover search.
 
-const PLACE_A = ['Bran', 'Hol', 'Mer', 'Ash', 'Kel', 'Dun', 'Fair', 'Stan', 'Wex', 'Oak', 'Mill', 'Thorn', 'Rock', 'Hal', 'Elm', 'Bram', 'Cold', 'Red'];
-const PLACE_B = ['ford', 'by', 'ton', 'wick', 'ham', 'field', 'dale', 'stead', 'bury', 'well', 'moor', 'ridge', 'cote', 'leigh'];
 
 class GameMap {
-  constructor(seed) {
+  constructor(seed, region) {
     this.ter = new Uint8Array(GW * GH);
     this.elev = new Float32Array(GW * GH);
     this.buildings = [];
@@ -14,6 +12,11 @@ class GameMap {
     this.streams = [];   // { pts, width }
     this.places = [];    // { name, x, y }
     setSeed(seed);
+    // The region is drawn from the seed when not chosen, so a map number always gives the same sheet.
+    const pickR = pick(REGION_KEYS);
+    this.region = REGIONS[region] ? region : pickR;
+    this.R = REGIONS[this.region];
+    this.ci = this.R.ci; this.index = this.R.index;
     this.generate();
   }
 
@@ -39,15 +42,19 @@ class GameMap {
   // ---------------------------------------------------------------- generation
   generate() {
     this.genElevation();
+    if (this.R.coast) this.genCoast();
     this.genHydrology();
     this.genSwamps();
     this.genFields();
     this.genWoods();
+    this.genRock();
     this.genRoads();
     this.genFords();
     this.genVillages();
     this.genFarms();
-    this.elevBase = randInt(6, 40) * 10; // height above sea level of the lowest ground
+    // Height above sea level of the lowest ground, on an index contour.
+    const step = this.ci * this.index;
+    this.elevBase = Math.round(randInt(this.R.base[0], this.R.base[1]) * 10 / step) * step;
     this.gmAngle = randRange(-6, 6);     // grid-magnetic angle for the declination diagram
     this.findPeaks();
   }
@@ -63,19 +70,57 @@ class GameMap {
     };
   }
 
-  // Rolling hill country: broad hills, spurs and small folds, 60 to 120 m of relief.
+  // Relief by region: rolling hills, flat brush country, or ridged mountains with steep
+  // spurs and broad desert flats below them. On the coast the land rises from the sea.
   genElevation() {
-    const relief = randRange(60, 110);
-    const oct = [[3, 0.55], [7, 0.26], [15, 0.12], [38, 0.05], [90, 0.015]].map(([n, a]) => ({ f: this.noise(n, n), a }));
+    const R = this.R, relief = randRange(R.relief[0], R.relief[1]);
+    // In high country the small folds stay small: the fine octaves are damped so the flats stay flat.
+    const damp = Math.min(1, 150 / relief);
+    const oct = [[3, 0.55], [7, 0.26], [15, 0.12 * damp], [38, 0.05 * damp], [90, 0.015 * damp]].map(([n, a]) => ({ f: this.noise(n, n), a }));
+    const coastX = R.coast ? this.noise(1, 6) : null, range = R.ridged ? this.noise(2, 2) : null;
+    if (R.coast) this.coastAt = (v) => 220 + coastX(0.5, v) * 260;
     let lo = Infinity, hi = -Infinity;
     for (let cy = 0; cy < GH; cy++) for (let cx = 0; cx < GW; cx++) {
       const u = (cx + 0.5) / GW, v = (cy + 0.5) / GH;
       let e = 0;
-      for (const o of oct) e += o.f(u, v) * o.a;
+      oct.forEach((o, k) => {
+        let n = o.f(u, v);
+        // Ridged noise for mountains: sharp crests, then raised to a power so the low ground spreads flat.
+        if (R.ridged && k < 3) n = 1 - Math.abs(2 * n - 1);
+        e += n * o.a;
+      });
       this.elev[cy * GW + cx] = e;
       if (e < lo) lo = e; if (e > hi) hi = e;
     }
-    for (let i = 0; i < this.elev.length; i++) this.elev[i] = (this.elev[i] - lo) / (hi - lo) * relief;
+    for (let i = 0; i < this.elev.length; i++) {
+      let t = (this.elev[i] - lo) / (hi - lo);
+      if (R.ridged) {
+        // Mountain ranges over part of the sheet, broad valley or basin floor over the rest.
+        const u = (i % GW + 0.5) / GW, v = (Math.floor(i / GW) + 0.5) / GH;
+        t = Math.pow(t, 1.8) * (R.floor + (1 - R.floor) * smooth(clamp((range(u, v) - 0.3) / 0.4, 0, 1)));
+      }
+      if (R.coast) {
+        const x = (i % GW + 0.5) * CELL, c = this.coastAt((Math.floor(i / GW) + 0.5) / GH);
+        t *= 0.12 + 0.88 * smooth(clamp((x - c) / 1500, 0, 1));
+      }
+      this.elev[i] = t * relief;
+    }
+  }
+
+  // The sea along the west edge, with a sand beach between it and the coastal bluffs.
+  genCoast() {
+    const nb = this.noise(4, 30);
+    for (let cy = 0; cy < GH; cy++) {
+      const v = (cy + 0.5) / GH, c = this.coastAt(v), beach = 25 + nb(0.5, v) * 45;
+      for (let cx = 0; cx < GW; cx++) {
+        const x = (cx + 0.5) * CELL, i = cy * GW + cx;
+        if (x < c) { this.ter[i] = TER.OCEAN; this.elev[i] = 0; }
+        else {
+          this.elev[i] += 1.5;
+          if (x < c + beach) { this.ter[i] = TER.BEACH; this.elev[i] = Math.min(this.elev[i], 1.5 + (x - c) * 0.05); }
+        }
+      }
+    }
   }
 
   // Water runs downhill: each cell drains to its lowest neighbor. Cells draining a large
@@ -124,7 +169,7 @@ class GameMap {
     // Ponds: the deeper parts of small filled hollows.
     const pondSeen = new Uint8Array(N);
     for (let i = 0; i < N; i++) {
-      if (pondSeen[i] || fill[i] - e[i] < 1.2) continue;
+      if (pondSeen[i] || fill[i] - e[i] < 1.2 || this.ter[i] === TER.OCEAN) continue;
       const region = [i], q = [i];
       pondSeen[i] = 1;
       while (q.length) {
@@ -135,7 +180,8 @@ class GameMap {
           if (!pondSeen[n] && fill[n] - e[n] >= 0.6) { pondSeen[n] = 1; region.push(n); q.push(n); }
         }
       }
-      if (region.length >= 40 && region.length <= 2500) for (const c of region) this.ter[c] = TER.POND;
+      // Desert hollows are dry; in the mountains in winter the ponds are frozen.
+      if (region.length >= 40 && region.length <= 2500 && this.R.ponds !== 'dry') for (const c of region) this.ter[c] = this.R.ponds === 'ice' ? TER.ICE : TER.POND;
     }
 
     const T = 7000; // cells (about 0.11 km² of catchment) before water runs as a stream
@@ -154,17 +200,19 @@ class GameMap {
         pts.push({ x: (c % GW + 0.5) * CELL, y: (Math.floor(c / GW) + 0.5) * CELL });
         width = Math.max(width, 1.5 + 3 * clamp(Math.log(acc[c] / T) / Math.log(30), 0, 1));
         flow = Math.max(flow, acc[c]);
-        if (traced[c]) break;
+        if (traced[c] || this.ter[c] === TER.OCEAN) break;
         traced[c] = 1;
         c = down[c];
       }
-      if (pts.length > 3) this.streams.push({ pts: simplifyLine(pts, 3), width, flow, len: pts.length * CELL });
+      if (pts.length > 3) this.streams.push({ pts: simplifyLine(pts, 3), width, flow, len: pts.length * CELL, dry: !!this.R.dryStreams });
     }
     // Streams cut small gullies: a meter or so below the banks.
     const cut = new Float32Array(N);
     for (let i = 0; i < N; i++) {
-      if (!traced[i] || this.ter[i] === TER.POND) continue;
-      this.ter[i] = TER.STREAM;
+      const k0 = this.ter[i];
+      if (!traced[i] || k0 === TER.POND || k0 === TER.ICE || k0 === TER.OCEAN || k0 === TER.BEACH) continue;
+      // Dry country: the watercourses are sandy washes that run only after rain.
+      this.ter[i] = this.R.dryStreams ? TER.WASH : TER.STREAM;
       const cx = i % GW, cy = Math.floor(i / GW);
       for (let j = -1; j <= 1; j++) for (let k = -1; k <= 1; k++) {
         if (!this.inGrid(cx + k, cy + j)) continue;
@@ -175,7 +223,7 @@ class GameMap {
     for (let i = 0; i < N; i++) this.elev[i] -= cut[i];
     // On most sheets the biggest watercourse, if long enough, is a river.
     const main = this.streams.filter(s => s.len > 1200).sort((a, b) => b.flow - a.flow)[0];
-    if (main && chance(0.75)) this.makeRiver(main);
+    if (main && chance(this.R.riverChance)) this.makeRiver(main);
   }
 
   // A river 12-18 m wide down the main valley: impassable on foot except at bridges and fords.
@@ -196,17 +244,19 @@ class GameMap {
         if (d <= half && this.ter[i] !== TER.RIVER) { this.ter[i] = TER.RIVER; this.elev[i] -= 1.5; }
       }
     }
-    this.river = { pts: st.pts, width, name: pick(PLACE_A).toUpperCase() + ' RIVER', bridges: [], fords: [] };
+    this.river = { pts: st.pts, width, name: pick(this.R.rivers), bridges: [], fords: [] };
   }
 
   // Marsh in the flat low ground beside water: passable, very slow, reeds give concealment.
   genSwamps() {
+    const S = this.R.swamp;
+    if (!S) return;
     const N = GW * GH, water = (k) => k === TER.STREAM || k === TER.POND || k === TER.RIVER;
     const d = new Uint8Array(N).fill(255), q = [];
     for (let i = 0; i < N; i++) if (water(this.ter[i])) { d[i] = 0; q.push(i); }
     for (let h = 0; h < q.length; h++) {
       const c = q[h], x = c % GW, y = Math.floor(c / GW);
-      if (d[c] >= 10) continue;
+      if (d[c] >= S.reach) continue;
       for (const [dx, dy] of [[1, 0], [-1, 0], [0, 1], [0, -1]]) {
         const nx = x + dx, ny = y + dy, j = ny * GW + nx;
         if (this.inGrid(nx, ny) && d[j] === 255) { d[j] = d[c] + 1; q.push(j); }
@@ -215,13 +265,13 @@ class GameMap {
     const sample = [];
     for (let i = 0; i < N; i += 97) sample.push(this.elev[i]);
     sample.sort((a, b) => a - b);
-    const low = sample[Math.floor(sample.length * 0.3)];
+    const low = sample[Math.floor(sample.length * S.low)];
     const n1 = this.noise(16, 16);
     for (let cy = 1; cy < GH - 1; cy++) for (let cx = 1; cx < GW - 1; cx++) {
       const i = cy * GW + cx;
-      if (d[i] === 0 || d[i] > 10 || this.elev[i] > low) continue;
+      if (d[i] === 0 || d[i] > S.reach || this.elev[i] > low) continue;
       const slope = Math.hypot(this.elev[i + 1] - this.elev[i - 1], this.elev[i + GW] - this.elev[i - GW]) / (2 * CELL);
-      if (slope < 0.04 && n1((cx + 0.5) / GW, (cy + 0.5) / GH) > 0.5) this.ter[i] = TER.SWAMP;
+      if (slope < (S.slope || 0.04) && n1((cx + 0.5) / GW, (cy + 0.5) / GH) > S.noise) this.ter[i] = TER.SWAMP;
     }
   }
 
@@ -244,12 +294,28 @@ class GameMap {
     }
   }
 
-  isWet(i) { const k = this.ter[i]; return k === TER.STREAM || k === TER.POND || k === TER.SWAMP || k === TER.RIVER || k === TER.FORD; }
+  isWet(i) {
+    const k = this.ter[i];
+    return k === TER.STREAM || k === TER.POND || k === TER.SWAMP || k === TER.RIVER || k === TER.FORD ||
+      k === TER.OCEAN || k === TER.BEACH || k === TER.ICE || k === TER.WASH;
+  }
 
   // Farm fields as Voronoi patches on a jittered lattice, bounded by hedgerows, stone walls or nothing.
   genFields() {
+    const R = this.R;
+    if (!R.fields) {
+      // Open country with no fields: the region's ground cover, with patches of something else.
+      const pats = (R.desertPatches || []).map(([k, f]) => ({ k, f, n: this.noise(14, 14) }));
+      for (let cy = 0; cy < GH; cy++) for (let cx = 0; cx < GW; cx++) {
+        const i = cy * GW + cx;
+        if (this.isWet(i)) continue;
+        this.ter[i] = R.base0;
+        for (const p of pats) if (p.n((cx + 0.5) / GW, (cy + 0.5) / GH) > 1 - p.f * 2.2) this.ter[i] = p.k;
+      }
+      return;
+    }
     const S = 200, nx = Math.ceil(MAP_W / S) + 1, ny = Math.ceil(MAP_H / S) + 1;
-    const kinds = [[TER.OPEN, 3], [TER.PLOWED, 2.2], [TER.GRASS, 2.4], [TER.ORCHARD, 0.6], [TER.VINEYARD, 0.5]];
+    const kinds = R.fields;
     const total = kinds.reduce((n, k) => n + k[1], 0);
     const pickKind = () => { let r = rand() * total; for (const [k, w] of kinds) { if ((r -= w) <= 0) return k; } return TER.OPEN; };
     const seeds = [];
@@ -270,7 +336,7 @@ class GameMap {
     const edgeKind = new Map();
     const edgeFor = (a, b) => {
       const key = Math.min(a, b) * 100000 + Math.max(a, b);
-      if (!edgeKind.has(key)) { const r = rand(); edgeKind.set(key, { kind: r < 0.45 ? TER.WOODS : r < 0.65 ? TER.WALL : -1, phase: randInt(0, 30) }); }
+      if (!edgeKind.has(key)) { const r = rand(); edgeKind.set(key, { kind: r < R.hedges ? TER.WOODS : r < R.hedges + R.walls ? TER.WALL : -1, phase: randInt(0, 30) }); }
       return edgeKind.get(key);
     };
     for (let cy = 0; cy < GH - 1; cy++) for (let cx = 0; cx < GW - 1; cx++) {
@@ -297,7 +363,40 @@ class GameMap {
       const u = (cx + 0.5) / GW, v = (cy + 0.5) / GH;
       const slope = Math.hypot(this.elev[c + 1] - this.elev[c - 1], this.elev[c + GW] - this.elev[c - GW]) / (2 * CELL);
       const f = n1(u, v) * 0.7 + n2(u, v) * 0.3 + Math.min(0.18, slope * 1.5) + this.elev[c] / maxE * 0.08;
-      if (f > 0.74) this.ter[c] = TER.WOODS;
+      if (f > this.R.woods && !(this.R.treeline && this.elev[c] / maxE > this.R.treeline)) this.ter[c] = TER.WOODS;
+    }
+    // Trees along the watercourses: live oak and pecan, gum and cypress, cottonwood.
+    const rip = this.R.riparian;
+    if (rip) {
+      const N = GW * GH, d = new Uint8Array(N).fill(255), q = [];
+      for (let i = 0; i < N; i++) { const k = this.ter[i]; if (k === TER.STREAM || k === TER.WASH || k === TER.RIVER) { d[i] = 0; q.push(i); } }
+      for (let h = 0; h < q.length; h++) {
+        const c = q[h], x = c % GW, y = Math.floor(c / GW);
+        if (d[c] >= rip) continue;
+        for (const [dx, dy] of [[1, 0], [-1, 0], [0, 1], [0, -1]]) {
+          const nx = x + dx, ny = y + dy, j = ny * GW + nx;
+          if (this.inGrid(nx, ny) && d[j] === 255) { d[j] = d[c] + 1; q.push(j); }
+        }
+      }
+      for (let i = 0; i < N; i++) if (d[i] > 0 && d[i] <= rip && !this.isWet(i) && n2((i % GW + 0.5) / GW, (Math.floor(i / GW) + 0.5) / GH) > 0.42) this.ter[i] = TER.WOODS;
+    }
+    // In snow country the open ground lies under deep snow.
+    if (this.R.snow) for (let i = 0; i < GW * GH; i++) { const k = this.ter[i]; if (k === TER.OPEN || k === TER.GRASS || k === TER.PLOWED) this.ter[i] = TER.SNOW; }
+  }
+
+  // Rock outcrops and talus on the steep slopes and crests of mountain country.
+  genRock() {
+    const lim = this.R.rock;
+    if (!lim) return;
+    const n = this.noise(24, 24);
+    let maxE = 0;
+    for (const v of this.elev) if (v > maxE) maxE = v;
+    for (let cy = 1; cy < GH - 1; cy++) for (let cx = 1; cx < GW - 1; cx++) {
+      const c = cy * GW + cx;
+      if (this.isWet(c)) continue;
+      const slope = Math.hypot(this.elev[c + 1] - this.elev[c - 1], this.elev[c + GW] - this.elev[c - GW]) / (2 * CELL);
+      const nv = n((cx + 0.5) / GW, (cy + 0.5) / GH);
+      if ((slope > lim && nv > 0.3) || (this.elev[c] / maxE > 0.9 && nv > 0.45)) this.ter[c] = TER.ROCK;
     }
   }
 
@@ -318,13 +417,16 @@ class GameMap {
         const nx = cx + dx, ny = cy + dy;
         if (!this.inGrid(nx, ny)) continue;
         const ni = ny * GW + nx, k = this.ter[ni];
-        if (closed[ni] || k === TER.POND || k === TER.BUILDING) continue;
+        if (closed[ni] || k === TER.POND || k === TER.BUILDING || k === TER.OCEAN || k === TER.ICE) continue;
         const grade = Math.abs(this.elev[ni] - this.elev[cur]) / CELL;
         let cost = (dx && dy ? 1.414 : 1) * (1 + grade * grade * 400);
         if (k === TER.WOODS) cost *= 2;
         if (k === TER.STREAM) cost += 12;
         if (k === TER.RIVER) cost += 60;
         if (k === TER.SWAMP) cost *= 3;
+        if (k === TER.ROCK) cost *= 4;
+        if (k === TER.CHAPARRAL || k === TER.BEACH) cost *= 1.6;
+        if (k === TER.WASH) cost += 4;
         if (k === TER.ROAD || k === TER.PAVED) cost *= 0.4;
         const ng = g[cur] + cost;
         if (ng < g[ni]) { g[ni] = ng; came[ni] = cur; heap.push(ni, ng + h(ni)); }
@@ -362,6 +464,16 @@ class GameMap {
   }
 
   genRoads() {
+    if (this.R.coast) {
+      // The coast highway runs north and south a little inland; a canyon road climbs east.
+      const off = (v) => Math.floor((this.coastAt(v) + randRange(250, 600)) / CELL);
+      const hw = this.routeRoad(off(0), 0, off(1), GH - 1);
+      if (hw) this.layRoad(hw, 'paved');
+      const y = randInt(Math.floor(GH * 0.25), Math.floor(GH * 0.75)), x0 = off((y + 0.5) / GH);
+      const tr = this.routeRoad(x0, y, GW - 1, randInt(Math.floor(GH * 0.2), Math.floor(GH * 0.8)));
+      if (tr) this.layRoad(tr, 'track');
+      return;
+    }
     const ew = chance(0.5);
     const [a, b] = ew ? [this.edgePoint('w'), this.edgePoint('e')] : [this.edgePoint('n'), this.edgePoint('s')];
     const main = this.routeRoad(a[0], a[1], b[0], b[1]);
@@ -409,17 +521,18 @@ class GameMap {
   }
 
   placeName() {
-    for (let i = 0; i < 20; i++) {
-      const n = pick(PLACE_A) + pick(PLACE_B);
-      if (!this.places.some(p => p.name === n)) return n;
+    const R = this.R, one = () => R.whole && (!R.nameA || chance(0.35)) ? pick(R.whole) : pick(R.nameA) + pick(R.nameB);
+    for (let i = 0; i < 30; i++) {
+      const n = one();
+      if (!this.places.some(p => p.name.startsWith(n))) return n;
     }
-    return pick(PLACE_A) + pick(PLACE_B);
+    return one();
   }
 
   // Villages strung along the roads, houses facing the road with yards and walls.
   genVillages() {
     const along = this.roads.flatMap(r => r.cells.map(c => ({ c, kind: r.kind })));
-    const want = randInt(2, 4);
+    const want = randInt(this.R.villages[0], this.R.villages[1]);
     for (let tries = 0; tries < 60 && this.places.length < want; tries++) {
       const pick0 = along[randInt(0, along.length - 1)];
       if (!pick0) break;
@@ -437,7 +550,7 @@ class GameMap {
         const b = this.placeBuilding(cx, cy, w, h);
         if (!b) continue;
         built++;
-        if (chance(0.3)) this.yardWall(b);
+        if (chance(this.R.yardWalls[0])) this.yardWall(b);
       }
       if (built >= 5) this.places.push({ name: this.placeName(), x: vx, y: vy, kind: 'village' });
     }
@@ -446,7 +559,7 @@ class GameMap {
   // Outlying farms, each with a track to the nearest road.
   genFarms() {
     const roadCells = this.roads.flatMap(r => r.cells);
-    const want = randInt(6, 10);
+    const want = randInt(this.R.farms[0], this.R.farms[1]);
     let made = 0;
     for (let tries = 0; tries < 80 && made < want; tries++) {
       const x = randRange(150, MAP_W - 150), y = randRange(150, MAP_H - 150);
@@ -456,9 +569,9 @@ class GameMap {
       const b = this.placeBuilding(c.cx, c.cy, randInt(3, 5), randInt(2, 3));
       if (!b) continue;
       for (let k = 0; k < randInt(0, 2); k++) this.placeBuilding(c.cx + randInt(-6, 6), c.cy + randInt(4, 7) * (chance(0.5) ? 1 : -1), randInt(2, 3), 2);
-      if (chance(0.4)) this.yardWall(b);
+      if (chance(this.R.yardWalls[1])) this.yardWall(b);
       made++;
-      this.places.push({ name: this.placeName() + ' Farm', x: b.x1 + 6, y: b.y0, kind: 'farm' });
+      this.places.push({ name: this.placeName() + ' ' + this.R.farmWord, x: b.x1 + 6, y: b.y0, kind: 'farm' });
       // Track to the nearest road cell.
       let best = -1, bd = Infinity;
       for (let i = 0; i < roadCells.length; i += 3) {
@@ -490,7 +603,7 @@ class GameMap {
     this.peak = this.peaks.length ? Math.round(this.elevBase + this.peaks[0].e) : this.elevBase;
     this.contourLabels = [];
     for (let y = 60; y < MAP_H - 60; y += 24) for (let x = 60; x < MAP_W - 60; x += 24) {
-      const e = this.elevAt(x, y), lv = Math.round(e / 25) * 25;
+      const step = this.ci * this.index, e = this.elevAt(x, y), lv = Math.round(e / step) * step;
       if (lv <= 0 || Math.abs(e - lv) > 0.3) continue;
       if (this.contourLabels.some(l => dist(l.x, l.y, x, y) < 380)) continue;
       const k = this.terAt(x, y);

@@ -189,7 +189,7 @@ const OPORD = {
     const f = Plan.terrainFacts(), m = G.map;
     const ao = Plan.ao, two = (v) => String(v).padStart(2, '0');
     this.para(box, 'Orientation', 'AO is 3 × 3 km, grid ' + two(ao.e0) + '–' + two(ao.e0 + 3) + ' E, ' + two(ao.n0) + '–' + two(ao.n0 + 3) + ' N. ' +
-      'Rolling farmland, woods and villages. Elevation ' + ao.lo + '–' + ao.hi + ' m. North up. CI 5 m, index 25 m.');
+      m.R.brief + ' Elevation ' + ao.lo + '–' + ao.hi + ' m. North up. CI ' + m.ci + ' m, index ' + m.ci * m.index + ' m.');
 
     box.appendChild(el('h4', null, 'Obstacles and restrictive terrain'));
     if (ao.river) {
@@ -202,15 +202,25 @@ const OPORD = {
     }
     if (ao.swampPct > 0.1) this.factRow(box, 'Swamp', Math.max(0.1, ao.swampPct).toFixed(1) + '% of the AO, low ground by the water; largest vic grid ' + gridRef(ao.swampAt.x, ao.swampAt.y) +
       '. Very slow going, no cover, good concealment.' + (f.swampM ? ' About ' + Math.round(f.swampM / 10) * 10 + ' m of it on the direct line.' : ''), ao.swampAt, 1.4);
+    const pc = (k) => ao.pct(k), pf = (k) => (pc(k) < 1 ? pc(k).toFixed(1) : Math.round(pc(k))) + '% of the AO';
+    if (pc(TER.OCEAN) > 0.5) this.factRow(box, 'Pacific Ocean', 'The west edge of the AO. Impassable. The beach (' + pf(TER.BEACH).replace(' of the AO', '') + ') is soft sand, slow and wide open to the bluffs above it.', { x: G.map.coastAt(0.5) / 2, y: MAP_H / 2 }, 0.5);
+    if (pc(TER.CHAPARRAL) > 1) this.factRow(box, 'Chaparral', pf(TER.CHAPARRAL) + '. Dense, head-high brush on the slopes. Very slow going; hides men, stops no rounds.', null);
+    if (pc(TER.BRUSH) > 1) this.factRow(box, 'Mesquite brush', pf(TER.BRUSH) + '. Thorn thickets two to three meters high. Slow; good concealment, no cover, short fields of fire inside.', null);
+    if (pc(TER.DESERT) > 5) this.factRow(box, 'Desert', pf(TER.DESERT) + '. Open desert floor with scattered creosote. Fast going, long fields of fire, little concealment.', null);
+    if (pc(TER.ROCK) > 0.5) this.factRow(box, 'Rock', pf(TER.ROCK) + '. Outcrops and talus on the steep slopes and crests. Very slow going; boulders give real cover.', null);
+    if (pc(TER.SNOW) > 5) this.factRow(box, 'Deep snow', pf(TER.SNOW) + '. Snow over all open ground: about half walking speed and tiring. No concealment; tracks show.', null);
+    if (pc(TER.ICE) > 0.05) this.factRow(box, 'Frozen ponds', 'The ice bears a man: slow footing and wide open.', null);
     if (ao.ponds.length) {
       const big = ao.ponds[0];
       this.factRow(box, 'Ponds', ao.ponds.length + ' on the sheet. Impassable on foot; go around. Largest ' + big.ha.toFixed(1) + ' ha vic grid ' + gridRef(big.x, big.y) + '.', big, 1.4);
     }
-    this.factRow(box, 'Streams', ao.streams + ' on the sheet, ' + (f.streams ? f.streams + ' across your axis' : 'none across your axis') +
+    if (m.R.dryStreams) this.factRow(box, 'Dry washes', ao.streams + ' on the sheet, ' + (f.streams ? f.streams + ' across your axis' : 'none across your axis') +
+      '. Sandy beds cut below the ground around them: covered routes, but a flash flood after rain.', null);
+    else this.factRow(box, 'Streams', ao.streams + ' on the sheet, ' + (f.streams ? f.streams + ' across your axis' : 'none across your axis') +
       '. Fordable, at about a third of walking speed. The gullies give cover.', null);
-    this.factRow(box, 'Woods', ao.woodsPct + '% of the AO, with orchards. Slow going, short fields of fire, good concealment.', null);
+    if (ao.woodsPct >= 1) this.factRow(box, 'Woods', ao.woodsPct + '% of the AO' + (pc(TER.ORCHARD) > 0.5 ? ', with orchards' : '') + '. Slow going, short fields of fire, good concealment.', null);
     if (ao.steepPct > 0.5) this.factRow(box, 'Steep ground', 'Slopes over 30% on ' + ao.steepPct.toFixed(1) + '% of the AO; steepest vic grid ' + gridRef(ao.worst.x, ao.worst.y) + '. Slow to climb.', ao.worst, 1.6);
-    if (ao.villages.length) this.factRow(box, 'Built-up', ao.villages.map(v => v.name.toUpperCase() + ' (' + gridRef(v.x, v.y) + ')').join(', ') + (ao.farms ? '; ' + ao.farms + ' farms' : '') + '. Stone walls and buildings: hard cover for a defender.', ao.villages[0], 1.6);
+    if (ao.villages.length) this.factRow(box, 'Built-up', ao.villages.map(v => v.name.toUpperCase() + ' (' + gridRef(v.x, v.y) + ')').join(', ') + (ao.farms ? '; ' + ao.farms + ' ' + m.R.farmWord.toLowerCase() + (ao.farms > 1 ? (m.R.farmWord === 'Ranch' ? 'es' : 's') : '') : '') + '. ' + (pc(TER.WALL) > 0.05 ? 'Stone walls and buildings' : 'Buildings') + ': hard cover for a defender.', ao.villages[0], 1.6);
 
     box.appendChild(el('h4', null, 'Avenues of approach'));
     if (ao.road) this.factRow(box, 'Paved road', ao.road.text + ' Fastest going, open to observation.', ao.road.at, 1.4);

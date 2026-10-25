@@ -109,6 +109,11 @@ casualties 25%, time 15%.
   affecting speed.
 - Line of sight over terrain height, walls, buildings, woods, orchards,
   vineyards and tall grass. Squads start about 1 km apart; time runs up to 16×.
+- Six map regions, each with its own ground, vegetation, water, settlement and
+  place names: rolling farmland, the Southern California coast, South Texas
+  brush country, North Carolina woods and swamp, the Arizona desert and
+  mountains, and the Montana mountains in winter. Chosen in the New mission
+  dialog or drawn at random from the map number.
 - Spotting with fog of war and last-known enemy positions.
 - Suppression: suppressed men shoot worse; pinned men go prone and will not
   move except by crawling.
@@ -127,6 +132,7 @@ css/style.css   interface styles
 src/            game code (plain JavaScript, loaded in order)
   util.js       random numbers, math
   data.js       terrain, postures, weapons, billets, formations
+  regions.js    map regions: ground, vegetation, water, settlement, names
   map.js        map generation, line of sight, pathfinding, cover search
   units.js      soldiers, fire teams, squads
   combat.js     spotting, fire, suppression, explosives, wounds

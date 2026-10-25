@@ -18,25 +18,26 @@ const G = {
 function loadSettings() {
   let saved = null;
   try { saved = JSON.parse(localStorage.getItem('squad.settings') || 'null'); } catch (e) { saved = null; }
-  const s = { seed: Math.floor(Math.random() * 99999) + 1, mode: 'random', loadout: defaultLoadout() };
+  const s = { seed: Math.floor(Math.random() * 99999) + 1, mode: 'random', region: 'random', loadout: defaultLoadout() };
   if (saved && saved.loadout) {
     for (const k of Object.keys(s.loadout)) {
       const l = saved.loadout[k];
       if (l && WEAPONS[l.weapon] && USMC_BILLETS[k].weapons.includes(l.weapon)) Object.assign(s.loadout[k], l);
     }
     if (saved.mode) s.mode = saved.mode;
+    if (saved.region && (saved.region === 'random' || REGIONS[saved.region])) s.region = saved.region;
   }
   return s;
 }
 function saveSettings() {
-  try { localStorage.setItem('squad.settings', JSON.stringify({ mode: G.settings.mode, loadout: G.settings.loadout })); } catch (e) { /* storage unavailable */ }
+  try { localStorage.setItem('squad.settings', JSON.stringify({ mode: G.settings.mode, region: G.settings.region, loadout: G.settings.loadout })); } catch (e) { /* storage unavailable */ }
 }
 
 function newMission() {
   const set = G.settings;
   saveSettings();
   NEXT_ID = 1;
-  G.map = new GameMap(set.seed);
+  G.map = new GameMap(set.seed, set.region);
   // Grid: a small 100 km digit and two principal digits for each kilometer line.
   G.grid = { e: randInt(10, 85), n: randInt(10, 85), le: randInt(1, 8), ln: randInt(1, 8) };
   const blue = buildUSMCSquad(set.loadout);
@@ -178,13 +179,14 @@ function updateTeams(dt) {
 
 function inCover(s) {
   const k = G.map.terAt(s.x, s.y);
-  if (k === TER.WOODS || k === TER.STREAM) return true;
+  if (k === TER.WOODS || k === TER.STREAM || k === TER.WASH || k === TER.ROCK) return true;
   const o = CELL * 0.8;
   for (const [dx, dy] of [[o, 0], [-o, 0], [0, o], [0, -o]]) {
     const n = G.map.terAt(s.x + dx, s.y + dy);
     if (n === TER.WALL || n === TER.BUILDING) return true;
   }
-  return k === TER.GRASS && s.posture === 'prone';
+  // Low vegetation (grass, scrub, reeds) hides a man who lies down in it.
+  return TERRAIN[k].conceal >= 0.45 && s.posture === 'prone';
 }
 
 function updateSuppression(s, dt) {
@@ -278,7 +280,7 @@ function boot() {
   requestAnimationFrame(frame);
   // Draw a map behind the briefing so the first view is the ground, not a blank table.
   withLoading('Drawing the map sheet…', () => {
-    G.map = new GameMap(G.settings.seed);
+    G.map = new GameMap(G.settings.seed, G.settings.region);
     buildTerrain(G.map);
     fitCamera(null, R.minZoom);
     UI.showBriefing();

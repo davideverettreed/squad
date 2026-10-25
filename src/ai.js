@@ -127,7 +127,7 @@ function runTask(t, m, enemyC) {
       let cover = 0;
       for (let i = 1; i <= 8; i++) {
         const k = G.map.terAt(lerp(c.x, x, i / 8), lerp(c.y, y, i / 8));
-        if (k === TER.WOODS || k === TER.GRASS || k === TER.WALL || k === TER.BUILDING) cover++;
+        if (TERRAIN[k].conceal >= 0.45 || TERRAIN[k].cover >= 0.3) cover++;
       }
       return { x, y, score: cover + rand() * 2 };
     });

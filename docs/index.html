@@ -444,7 +444,7 @@ details.cheat dd { margin: 0; opacity: .9; }
         <h3>Overlay</h3>
         <p>Orders are drawn as on an acetate overlay: blue for friendly, red for enemy, black for targets. Blue lines with arrowheads are routes (long dashes for a rush, dots for a crawl); a heavy arrow with a solid head is an assault. OBJ marks the objective of a bounding drill. Dashed blue lines run from the shooters to a suppression target, a black cross in a circle. 40MM marks a grenade launcher target.</p>
         <h3>Map key</h3>
-        <p>The sheet covers 3 by 3 kilometers in nine 1-kilometer grid squares, in standard US military map colors. White is open ground. Light green with tufts is tall grass, which hides a man lying prone. Green is woods and hedgerows; rows of small green circles are orchards, green row lines are vineyards. Blue lines are streams, which run in shallow gullies that give cover; blue areas are ponds and cannot be crossed. A broad blue band is a river: it can be crossed only at a bridge (two black lines across the road) or at a ford, marked FORD in a dashed blue circle, where men wade slowly in the open. Pale blue-green ground with small blue tufts is swamp: very slow going and no cover, but it hides a man. Red-brown lines are contours 5 meters apart, with a heavier, numbered index contour every 25 meters; numbers with a dot are hilltop heights. Black blocks are buildings. A black line with ticks is a stone wall, which gives hard cover to a kneeling or prone man. The red road is a paved road; the dashed double lines are dirt tracks. Point at the map to read the 8-digit grid reference. Measure (key M) lays a tape between two taps and marks the distance, grid bearing and mils on the map; tap a label to remove it. Point at a formation button to see the selected team or squad ghosted in that formation. Zoomed out, your men gather into one counter per fire team, then one for the squad, in the standard unit symbol: a rectangle with an infantry X for friendly, a diamond for enemy.</p>
+        <p>The sheet covers 3 by 3 kilometers in nine 1-kilometer grid squares, in standard US military map colors. White is open ground. Light green with tufts is tall grass, which hides a man lying prone. Green is woods and hedgerows; rows of small green circles are orchards, green row lines are vineyards. Blue lines are streams, which run in shallow gullies that give cover; blue areas are ponds and cannot be crossed. A broad blue band is a river: it can be crossed only at a bridge (two black lines across the road) or at a ford, marked FORD in a dashed blue circle, where men wade slowly in the open. Pale blue-green ground with small blue tufts is swamp: very slow going and no cover, but it hides a man. Red-brown lines are contours 5 meters apart, with a heavier, numbered index contour every 25 meters; numbers with a dot are hilltop heights. Black blocks are buildings. A black line with ticks is a stone wall, which gives hard cover to a kneeling or prone man. The red road is a paved road; the dashed double lines are dirt tracks. Each mission is set in one of six regions, chosen in the New mission dialog or at random: rolling farmland; the Southern California coast (Pacific Ocean on the west edge, sand beach, chaparral); South Texas brush country (mesquite thickets, pasture, stock tanks); North Carolina pine woods and blackwater swamp; the Arizona desert and mountains (open creosote flats, rock outcrops, dry washes shown as dashed blue lines); and the Montana mountains in winter (deep snow, lodgepole pine, frozen ponds). The ground changes the fight: snow, sand, chaparral and rock are slow; brush and grass hide a man lying down; rock gives cover; open desert gives long fields of fire. Point at the map to read the 8-digit grid reference. Measure (key M) lays a tape between two taps and marks the distance, grid bearing and mils on the map; tap a label to remove it. Point at a formation button to see the selected team or squad ghosted in that formation. Zoomed out, your men gather into one counter per fire team, then one for the squad, in the standard unit symbol: a rectangle with an infantry X for friendly, a diamond for enemy.</p>
         <h3>Camera</h3>
         <p>Drag to pan. Use the wheel or pinch to zoom. <kbd>Space</kbd> pauses; you can give orders while paused.</p>
       </div>
@@ -540,6 +540,7 @@ const GW = MAP_W / CELL, GH = MAP_H / CELL;
 const TER = {
   OPEN: 0, GRASS: 1, WOODS: 2, ROAD: 3, BUILDING: 4, WALL: 5, PLOWED: 6,
   ORCHARD: 7, VINEYARD: 8, STREAM: 9, POND: 10, PAVED: 11, SWAMP: 12, RIVER: 13, FORD: 14,
+  OCEAN: 15, BEACH: 16, CHAPARRAL: 17, BRUSH: 18, DESERT: 19, ROCK: 20, SNOW: 21, ICE: 22, WASH: 23,
 };
 
 // losH: height above ground the feature blocks sight to.
@@ -561,6 +562,15 @@ const TERRAIN = [
   { name: 'Swamp',        speed: 0.3,  losH: 1.6, density: 0.05,  cover: 0,   conceal: 0.5 },
   { name: 'River',        speed: 0,    losH: 0,   density: 0,     cover: 0,   conceal: 0 },
   { name: 'Ford',         speed: 0.25, losH: 0,   density: 0,     cover: 0,   conceal: 0 },
+  { name: 'Ocean',        speed: 0,    losH: 0,   density: 0,     cover: 0,   conceal: 0 },
+  { name: 'Beach sand',   speed: 0.7,  losH: 0,   density: 0,     cover: 0,   conceal: 0 },
+  { name: 'Chaparral',    speed: 0.45, losH: 2.2, density: 0.09,  cover: 0.05, conceal: 0.55 },
+  { name: 'Mesquite brush', speed: 0.65, losH: 2.8, density: 0.06, cover: 0.05, conceal: 0.5 },
+  { name: 'Desert scrub', speed: 0.95, losH: 1.0, density: 0.008, cover: 0,   conceal: 0.1 },
+  { name: 'Rock outcrop', speed: 0.4,  losH: 1.6, density: 0.25,  cover: 0.6, conceal: 0.45 },
+  { name: 'Deep snow',    speed: 0.55, losH: 0,   density: 0,     cover: 0,   conceal: 0 },
+  { name: 'Frozen pond',  speed: 0.5,  losH: 0,   density: 0,     cover: 0,   conceal: 0 },
+  { name: 'Dry wash',     speed: 0.85, losH: 0,   density: 0,     cover: 0,   conceal: 0.25 },
 ];
 
 // eye: sight height. center: center of mass. size: relative target size.
@@ -686,16 +696,110 @@ function squadLeaderSlot(form) {
   }
 }
 
+// ---- src/regions.js
+'use strict';
+// Map regions: the ground, vegetation, water, settlement and place names of each kind
+// of country. The generator in map.js reads these settings; nothing here draws.
+
+// Names are put together from parts typical of the region: a first part and an ending,
+// or a whole name. Rivers have their own lists.
+const REGIONS = {
+  farmland: {
+    label: 'Rolling farmland',
+    brief: 'Rolling farmland, woods and villages.',
+    relief: [60, 110], base: [6, 40], ci: 5, index: 5,
+    fields: [[TER.OPEN, 3], [TER.PLOWED, 2.2], [TER.GRASS, 2.4], [TER.ORCHARD, 0.6], [TER.VINEYARD, 0.5]],
+    hedges: 0.45, walls: 0.2, woods: 0.74, riverChance: 0.75,
+    swamp: { reach: 10, low: 0.3, noise: 0.5 },
+    villages: [2, 4], farms: [6, 10], farmWord: 'Farm', yardWalls: [0.3, 0.4],
+    nameA: ['Bran', 'Hol', 'Mer', 'Ash', 'Kel', 'Dun', 'Fair', 'Stan', 'Wex', 'Oak', 'Mill', 'Thorn', 'Rock', 'Hal', 'Elm', 'Bram', 'Cold', 'Red'],
+    nameB: ['ford', 'by', 'ton', 'wick', 'ham', 'field', 'dale', 'stead', 'bury', 'well', 'moor', 'ridge', 'cote', 'leigh'],
+    rivers: ['Bran', 'Hol', 'Mer', 'Ash', 'Kel', 'Dun', 'Wex', 'Thorn', 'Red', 'Cold'].map(n => n.toUpperCase() + ' RIVER'),
+  },
+
+  socal: {
+    label: 'Southern California coast',
+    brief: 'Coastal hills: Pacific beach on the west, chaparral on the slopes, orchards and small towns.',
+    relief: [120, 200], base: [0, 0], ci: 10, index: 5,
+    coast: true,
+    fields: [[TER.CHAPARRAL, 4], [TER.GRASS, 2], [TER.OPEN, 1.5], [TER.ORCHARD, 1.2], [TER.PLOWED, 0.8]],
+    hedges: 0.12, walls: 0.05, woods: 0.82, riverChance: 0.15, dryStreams: true, ponds: 'dry',
+    swamp: null,
+    villages: [2, 3], farms: [4, 7], farmWord: 'Ranch', yardWalls: [0.25, 0.3],
+    whole: ['San Onofre', 'San Clemente', 'Santa Margarita', 'Las Pulgas', 'San Luis Rey', 'San Mateo', 'Las Flores', 'Los Robles',
+      'Cristianitos', 'Los Alamos', 'Los Pinos', 'Las Encinas', 'Oceanside', 'Horno', 'De Luz', 'Talega', 'Aliso', 'Fallbrook',
+      'Trabuco', 'Mesa Verde', 'Laguna Seca', 'Arroyo Seco', 'Vista del Mar', 'Pendleton', 'Stuart Mesa', 'Ysidora', 'Margarita Peak'],
+    rivers: ['SANTA MARGARITA RIVER', 'SAN LUIS REY RIVER', 'SAN MATEO CREEK', 'LAS FLORES CREEK'],
+  },
+
+  texas: {
+    label: 'South Texas brush country',
+    brief: 'Flat brush country: mesquite thickets, pasture and cotton fields, stock tanks and ranch roads.',
+    relief: [18, 40], base: [10, 30], ci: 5, index: 5,
+    fields: [[TER.OPEN, 3], [TER.BRUSH, 3.5], [TER.PLOWED, 2], [TER.GRASS, 1.6], [TER.ORCHARD, 0.3]],
+    hedges: 0.3, walls: 0, woods: 0.8, riverChance: 0.5, riparian: 5,
+    swamp: { reach: 4, low: 0.15, noise: 0.62 },
+    villages: [1, 3], farms: [6, 10], farmWord: 'Ranch', yardWalls: [0, 0],
+    nameA: ['Mesquite', 'Live Oak', 'Encino', 'Dry', 'Caddo', 'Comanche', 'Sandy', 'Turkey', 'Javelina', 'Cibolo', 'Black Jack', 'Prickly Pear'],
+    nameB: [' Flat', ' Springs', ' Grove', ' Creek', ' Wells', ' Corners', ' Draw', ' Crossing', ' Hollow', ' Tank'],
+    whole: ['Tilden', 'Encinal', 'Dilley', 'Pearsall', 'Charlotte', 'Freer', 'Benavides', 'Hebbronville', 'Concan', 'Los Fresnos',
+      'Agua Dulce', 'San Diego', 'Rancho Viejo', 'Fowlerton', 'Christine', 'Whitsett', 'Campbellton'],
+    rivers: ['NUECES RIVER', 'FRIO RIVER', 'ATASCOSA RIVER', 'SAN MIGUEL CREEK', 'LEONA RIVER'],
+  },
+
+  carolina: {
+    label: 'North Carolina woods and swamp',
+    brief: 'Low pine woods and blackwater swamp, tobacco fields and crossroads settlements.',
+    relief: [20, 45], base: [3, 12], ci: 5, index: 5,
+    fields: [[TER.WOODS, 3.2], [TER.PLOWED, 2], [TER.OPEN, 1.4], [TER.GRASS, 1.2]],
+    hedges: 0.6, walls: 0, woods: 0.6, riverChance: 0.85, riparian: 8,
+    swamp: { reach: 32, low: 0.5, noise: 0.36, slope: 0.07 },
+    villages: [2, 3], farms: [5, 8], farmWord: 'Farm', yardWalls: [0, 0],
+    nameA: ['Pine', 'Holly', 'Cedar', 'Gum', 'Spring', 'Rock', 'Lumber', 'Bladen', 'Long', 'Hope', 'Black', 'White Oak'],
+    nameB: [' Springs', ' Grove', ' Hill', ' Mills', 'ton', 'ville', ' Crossroads', ' Bridge', ' Church', ' Landing'],
+    whole: ['Vass', 'Linden', 'Wade', 'Godwin', 'Tar Heel', 'Lillington', 'Spout Springs', 'Manchester', 'Overhills'],
+    rivers: ['CAPE FEAR RIVER', 'LUMBER RIVER', 'BLACK RIVER', 'LITTLE RIVER', 'NEW RIVER', 'SOUTH RIVER'],
+  },
+
+  arizona: {
+    label: 'Arizona desert and mountains',
+    brief: 'Sonoran desert flats under rocky mountains: creosote and saguaro, dry washes, long fields of fire.',
+    relief: [380, 560], base: [70, 120], ci: 10, index: 5,
+    ridged: true, floor: 0.08, base0: TER.DESERT, rock: 0.65, desertPatches: [[TER.CHAPARRAL, 0.12]],
+    fields: null, hedges: 0, walls: 0, woods: 2, riverChance: 0.12, dryStreams: true, ponds: 'dry', riparian: 3,
+    swamp: null,
+    villages: [1, 2], farms: [2, 4], farmWord: 'Ranch', yardWalls: [0.4, 0.4],
+    whole: ['Ajo', 'Sells', 'Quijotoa', 'Sasabe', 'Arivaca', 'Amado', 'Sonoita', 'Gila Bend', 'Why', 'Gu Vo', 'Santa Rita',
+      'Agua Fria', 'Agua Caliente', 'Tres Alamos', 'Cerro Prieto', 'Cerro Colorado', 'Sierra Blanca', 'Ojo Caliente', 'Casa Grande',
+      'Rio Seco', 'Tubac', 'Patagonia', 'Pozo Verde', 'Tinaja', 'Palo Verde', 'Charco'],
+    rivers: ['SANTA CRUZ RIVER', 'SAN PEDRO RIVER', 'GILA RIVER', 'AGUA FRIA RIVER'],
+  },
+
+  montana: {
+    label: 'Montana frozen mountains',
+    brief: 'Snow-covered mountains: deep snow in the open, lodgepole pine on the slopes, frozen ponds and creeks.',
+    relief: [300, 460], base: [130, 180], ci: 10, index: 5,
+    ridged: true, floor: 0.25, base0: TER.SNOW, rock: 0.95, treeline: 0.75,
+    fields: [[TER.SNOW, 5], [TER.WOODS, 0.5]],
+    hedges: 0.1, walls: 0, woods: 0.78, riverChance: 0.6, ponds: 'ice', snow: true,
+    swamp: null,
+    villages: [1, 2], farms: [3, 5], farmWord: 'Ranch', yardWalls: [0, 0],
+    nameA: ['Elk', 'Bear', 'Wolf', 'Bighorn', 'Granite', 'Cold', 'Eagle', 'Crazy', 'Lodgepole', 'Grizzly', 'Antelope', 'Silver'],
+    nameB: [' Creek', ' Butte', ' Gulch', ' Basin', ' Springs', ' Flats', ' Ridge', ' Bow', ' Hollow'],
+    whole: ['Wisdom', 'Jackson', 'Big Timber', 'Two Dot', 'Lima', 'Melrose', 'Wise River', 'Polaris', 'Martinsdale'],
+    rivers: ['BIG HOLE RIVER', 'BITTERROOT RIVER', 'MUSSELSHELL RIVER', 'BOULDER RIVER', 'SMITH RIVER', 'RUBY RIVER'],
+  },
+};
+const REGION_KEYS = Object.keys(REGIONS);
+
 // ---- src/map.js
 'use strict';
 // Terrain grid for a 3 x 3 km sheet: procedural generation (relief, streams and ponds,
 // fields, woods, roads, villages, farms), line of sight, pathfinding and cover search.
 
-const PLACE_A = ['Bran', 'Hol', 'Mer', 'Ash', 'Kel', 'Dun', 'Fair', 'Stan', 'Wex', 'Oak', 'Mill', 'Thorn', 'Rock', 'Hal', 'Elm', 'Bram', 'Cold', 'Red'];
-const PLACE_B = ['ford', 'by', 'ton', 'wick', 'ham', 'field', 'dale', 'stead', 'bury', 'well', 'moor', 'ridge', 'cote', 'leigh'];
 
 class GameMap {
-  constructor(seed) {
+  constructor(seed, region) {
     this.ter = new Uint8Array(GW * GH);
     this.elev = new Float32Array(GW * GH);
     this.buildings = [];
@@ -703,6 +807,11 @@ class GameMap {
     this.streams = [];   // { pts, width }
     this.places = [];    // { name, x, y }
     setSeed(seed);
+    // The region is drawn from the seed when not chosen, so a map number always gives the same sheet.
+    const pickR = pick(REGION_KEYS);
+    this.region = REGIONS[region] ? region : pickR;
+    this.R = REGIONS[this.region];
+    this.ci = this.R.ci; this.index = this.R.index;
     this.generate();
   }
 
@@ -728,15 +837,19 @@ class GameMap {
   // ---------------------------------------------------------------- generation
   generate() {
     this.genElevation();
+    if (this.R.coast) this.genCoast();
     this.genHydrology();
     this.genSwamps();
     this.genFields();
     this.genWoods();
+    this.genRock();
     this.genRoads();
     this.genFords();
     this.genVillages();
     this.genFarms();
-    this.elevBase = randInt(6, 40) * 10; // height above sea level of the lowest ground
+    // Height above sea level of the lowest ground, on an index contour.
+    const step = this.ci * this.index;
+    this.elevBase = Math.round(randInt(this.R.base[0], this.R.base[1]) * 10 / step) * step;
     this.gmAngle = randRange(-6, 6);     // grid-magnetic angle for the declination diagram
     this.findPeaks();
   }
@@ -752,19 +865,57 @@ class GameMap {
     };
   }
 
-  // Rolling hill country: broad hills, spurs and small folds, 60 to 120 m of relief.
+  // Relief by region: rolling hills, flat brush country, or ridged mountains with steep
+  // spurs and broad desert flats below them. On the coast the land rises from the sea.
   genElevation() {
-    const relief = randRange(60, 110);
-    const oct = [[3, 0.55], [7, 0.26], [15, 0.12], [38, 0.05], [90, 0.015]].map(([n, a]) => ({ f: this.noise(n, n), a }));
+    const R = this.R, relief = randRange(R.relief[0], R.relief[1]);
+    // In high country the small folds stay small: the fine octaves are damped so the flats stay flat.
+    const damp = Math.min(1, 150 / relief);
+    const oct = [[3, 0.55], [7, 0.26], [15, 0.12 * damp], [38, 0.05 * damp], [90, 0.015 * damp]].map(([n, a]) => ({ f: this.noise(n, n), a }));
+    const coastX = R.coast ? this.noise(1, 6) : null, range = R.ridged ? this.noise(2, 2) : null;
+    if (R.coast) this.coastAt = (v) => 220 + coastX(0.5, v) * 260;
     let lo = Infinity, hi = -Infinity;
     for (let cy = 0; cy < GH; cy++) for (let cx = 0; cx < GW; cx++) {
       const u = (cx + 0.5) / GW, v = (cy + 0.5) / GH;
       let e = 0;
-      for (const o of oct) e += o.f(u, v) * o.a;
+      oct.forEach((o, k) => {
+        let n = o.f(u, v);
+        // Ridged noise for mountains: sharp crests, then raised to a power so the low ground spreads flat.
+        if (R.ridged && k < 3) n = 1 - Math.abs(2 * n - 1);
+        e += n * o.a;
+      });
       this.elev[cy * GW + cx] = e;
       if (e < lo) lo = e; if (e > hi) hi = e;
     }
-    for (let i = 0; i < this.elev.length; i++) this.elev[i] = (this.elev[i] - lo) / (hi - lo) * relief;
+    for (let i = 0; i < this.elev.length; i++) {
+      let t = (this.elev[i] - lo) / (hi - lo);
+      if (R.ridged) {
+        // Mountain ranges over part of the sheet, broad valley or basin floor over the rest.
+        const u = (i % GW + 0.5) / GW, v = (Math.floor(i / GW) + 0.5) / GH;
+        t = Math.pow(t, 1.8) * (R.floor + (1 - R.floor) * smooth(clamp((range(u, v) - 0.3) / 0.4, 0, 1)));
+      }
+      if (R.coast) {
+        const x = (i % GW + 0.5) * CELL, c = this.coastAt((Math.floor(i / GW) + 0.5) / GH);
+        t *= 0.12 + 0.88 * smooth(clamp((x - c) / 1500, 0, 1));
+      }
+      this.elev[i] = t * relief;
+    }
+  }
+
+  // The sea along the west edge, with a sand beach between it and the coastal bluffs.
+  genCoast() {
+    const nb = this.noise(4, 30);
+    for (let cy = 0; cy < GH; cy++) {
+      const v = (cy + 0.5) / GH, c = this.coastAt(v), beach = 25 + nb(0.5, v) * 45;
+      for (let cx = 0; cx < GW; cx++) {
+        const x = (cx + 0.5) * CELL, i = cy * GW + cx;
+        if (x < c) { this.ter[i] = TER.OCEAN; this.elev[i] = 0; }
+        else {
+          this.elev[i] += 1.5;
+          if (x < c + beach) { this.ter[i] = TER.BEACH; this.elev[i] = Math.min(this.elev[i], 1.5 + (x - c) * 0.05); }
+        }
+      }
+    }
   }
 
   // Water runs downhill: each cell drains to its lowest neighbor. Cells draining a large
@@ -813,7 +964,7 @@ class GameMap {
     // Ponds: the deeper parts of small filled hollows.
     const pondSeen = new Uint8Array(N);
     for (let i = 0; i < N; i++) {
-      if (pondSeen[i] || fill[i] - e[i] < 1.2) continue;
+      if (pondSeen[i] || fill[i] - e[i] < 1.2 || this.ter[i] === TER.OCEAN) continue;
       const region = [i], q = [i];
       pondSeen[i] = 1;
       while (q.length) {
@@ -824,7 +975,8 @@ class GameMap {
           if (!pondSeen[n] && fill[n] - e[n] >= 0.6) { pondSeen[n] = 1; region.push(n); q.push(n); }
         }
       }
-      if (region.length >= 40 && region.length <= 2500) for (const c of region) this.ter[c] = TER.POND;
+      // Desert hollows are dry; in the mountains in winter the ponds are frozen.
+      if (region.length >= 40 && region.length <= 2500 && this.R.ponds !== 'dry') for (const c of region) this.ter[c] = this.R.ponds === 'ice' ? TER.ICE : TER.POND;
     }
 
     const T = 7000; // cells (about 0.11 km² of catchment) before water runs as a stream
@@ -843,17 +995,19 @@ class GameMap {
         pts.push({ x: (c % GW + 0.5) * CELL, y: (Math.floor(c / GW) + 0.5) * CELL });
         width = Math.max(width, 1.5 + 3 * clamp(Math.log(acc[c] / T) / Math.log(30), 0, 1));
         flow = Math.max(flow, acc[c]);
-        if (traced[c]) break;
+        if (traced[c] || this.ter[c] === TER.OCEAN) break;
         traced[c] = 1;
         c = down[c];
       }
-      if (pts.length > 3) this.streams.push({ pts: simplifyLine(pts, 3), width, flow, len: pts.length * CELL });
+      if (pts.length > 3) this.streams.push({ pts: simplifyLine(pts, 3), width, flow, len: pts.length * CELL, dry: !!this.R.dryStreams });
     }
     // Streams cut small gullies: a meter or so below the banks.
     const cut = new Float32Array(N);
     for (let i = 0; i < N; i++) {
-      if (!traced[i] || this.ter[i] === TER.POND) continue;
-      this.ter[i] = TER.STREAM;
+      const k0 = this.ter[i];
+      if (!traced[i] || k0 === TER.POND || k0 === TER.ICE || k0 === TER.OCEAN || k0 === TER.BEACH) continue;
+      // Dry country: the watercourses are sandy washes that run only after rain.
+      this.ter[i] = this.R.dryStreams ? TER.WASH : TER.STREAM;
       const cx = i % GW, cy = Math.floor(i / GW);
       for (let j = -1; j <= 1; j++) for (let k = -1; k <= 1; k++) {
         if (!this.inGrid(cx + k, cy + j)) continue;
@@ -864,7 +1018,7 @@ class GameMap {
     for (let i = 0; i < N; i++) this.elev[i] -= cut[i];
     // On most sheets the biggest watercourse, if long enough, is a river.
     const main = this.streams.filter(s => s.len > 1200).sort((a, b) => b.flow - a.flow)[0];
-    if (main && chance(0.75)) this.makeRiver(main);
+    if (main && chance(this.R.riverChance)) this.makeRiver(main);
   }
 
   // A river 12-18 m wide down the main valley: impassable on foot except at bridges and fords.
@@ -885,17 +1039,19 @@ class GameMap {
         if (d <= half && this.ter[i] !== TER.RIVER) { this.ter[i] = TER.RIVER; this.elev[i] -= 1.5; }
       }
     }
-    this.river = { pts: st.pts, width, name: pick(PLACE_A).toUpperCase() + ' RIVER', bridges: [], fords: [] };
+    this.river = { pts: st.pts, width, name: pick(this.R.rivers), bridges: [], fords: [] };
   }
 
   // Marsh in the flat low ground beside water: passable, very slow, reeds give concealment.
   genSwamps() {
+    const S = this.R.swamp;
+    if (!S) return;
     const N = GW * GH, water = (k) => k === TER.STREAM || k === TER.POND || k === TER.RIVER;
     const d = new Uint8Array(N).fill(255), q = [];
     for (let i = 0; i < N; i++) if (water(this.ter[i])) { d[i] = 0; q.push(i); }
     for (let h = 0; h < q.length; h++) {
       const c = q[h], x = c % GW, y = Math.floor(c / GW);
-      if (d[c] >= 10) continue;
+      if (d[c] >= S.reach) continue;
       for (const [dx, dy] of [[1, 0], [-1, 0], [0, 1], [0, -1]]) {
         const nx = x + dx, ny = y + dy, j = ny * GW + nx;
         if (this.inGrid(nx, ny) && d[j] === 255) { d[j] = d[c] + 1; q.push(j); }
@@ -904,13 +1060,13 @@ class GameMap {
     const sample = [];
     for (let i = 0; i < N; i += 97) sample.push(this.elev[i]);
     sample.sort((a, b) => a - b);
-    const low = sample[Math.floor(sample.length * 0.3)];
+    const low = sample[Math.floor(sample.length * S.low)];
     const n1 = this.noise(16, 16);
     for (let cy = 1; cy < GH - 1; cy++) for (let cx = 1; cx < GW - 1; cx++) {
       const i = cy * GW + cx;
-      if (d[i] === 0 || d[i] > 10 || this.elev[i] > low) continue;
+      if (d[i] === 0 || d[i] > S.reach || this.elev[i] > low) continue;
       const slope = Math.hypot(this.elev[i + 1] - this.elev[i - 1], this.elev[i + GW] - this.elev[i - GW]) / (2 * CELL);
-      if (slope < 0.04 && n1((cx + 0.5) / GW, (cy + 0.5) / GH) > 0.5) this.ter[i] = TER.SWAMP;
+      if (slope < (S.slope || 0.04) && n1((cx + 0.5) / GW, (cy + 0.5) / GH) > S.noise) this.ter[i] = TER.SWAMP;
     }
   }
 
@@ -933,12 +1089,28 @@ class GameMap {
     }
   }
 
-  isWet(i) { const k = this.ter[i]; return k === TER.STREAM || k === TER.POND || k === TER.SWAMP || k === TER.RIVER || k === TER.FORD; }
+  isWet(i) {
+    const k = this.ter[i];
+    return k === TER.STREAM || k === TER.POND || k === TER.SWAMP || k === TER.RIVER || k === TER.FORD ||
+      k === TER.OCEAN || k === TER.BEACH || k === TER.ICE || k === TER.WASH;
+  }
 
   // Farm fields as Voronoi patches on a jittered lattice, bounded by hedgerows, stone walls or nothing.
   genFields() {
+    const R = this.R;
+    if (!R.fields) {
+      // Open country with no fields: the region's ground cover, with patches of something else.
+      const pats = (R.desertPatches || []).map(([k, f]) => ({ k, f, n: this.noise(14, 14) }));
+      for (let cy = 0; cy < GH; cy++) for (let cx = 0; cx < GW; cx++) {
+        const i = cy * GW + cx;
+        if (this.isWet(i)) continue;
+        this.ter[i] = R.base0;
+        for (const p of pats) if (p.n((cx + 0.5) / GW, (cy + 0.5) / GH) > 1 - p.f * 2.2) this.ter[i] = p.k;
+      }
+      return;
+    }
     const S = 200, nx = Math.ceil(MAP_W / S) + 1, ny = Math.ceil(MAP_H / S) + 1;
-    const kinds = [[TER.OPEN, 3], [TER.PLOWED, 2.2], [TER.GRASS, 2.4], [TER.ORCHARD, 0.6], [TER.VINEYARD, 0.5]];
+    const kinds = R.fields;
     const total = kinds.reduce((n, k) => n + k[1], 0);
     const pickKind = () => { let r = rand() * total; for (const [k, w] of kinds) { if ((r -= w) <= 0) return k; } return TER.OPEN; };
     const seeds = [];
@@ -959,7 +1131,7 @@ class GameMap {
     const edgeKind = new Map();
     const edgeFor = (a, b) => {
       const key = Math.min(a, b) * 100000 + Math.max(a, b);
-      if (!edgeKind.has(key)) { const r = rand(); edgeKind.set(key, { kind: r < 0.45 ? TER.WOODS : r < 0.65 ? TER.WALL : -1, phase: randInt(0, 30) }); }
+      if (!edgeKind.has(key)) { const r = rand(); edgeKind.set(key, { kind: r < R.hedges ? TER.WOODS : r < R.hedges + R.walls ? TER.WALL : -1, phase: randInt(0, 30) }); }
       return edgeKind.get(key);
     };
     for (let cy = 0; cy < GH - 1; cy++) for (let cx = 0; cx < GW - 1; cx++) {
@@ -986,7 +1158,40 @@ class GameMap {
       const u = (cx + 0.5) / GW, v = (cy + 0.5) / GH;
       const slope = Math.hypot(this.elev[c + 1] - this.elev[c - 1], this.elev[c + GW] - this.elev[c - GW]) / (2 * CELL);
       const f = n1(u, v) * 0.7 + n2(u, v) * 0.3 + Math.min(0.18, slope * 1.5) + this.elev[c] / maxE * 0.08;
-      if (f > 0.74) this.ter[c] = TER.WOODS;
+      if (f > this.R.woods && !(this.R.treeline && this.elev[c] / maxE > this.R.treeline)) this.ter[c] = TER.WOODS;
+    }
+    // Trees along the watercourses: live oak and pecan, gum and cypress, cottonwood.
+    const rip = this.R.riparian;
+    if (rip) {
+      const N = GW * GH, d = new Uint8Array(N).fill(255), q = [];
+      for (let i = 0; i < N; i++) { const k = this.ter[i]; if (k === TER.STREAM || k === TER.WASH || k === TER.RIVER) { d[i] = 0; q.push(i); } }
+      for (let h = 0; h < q.length; h++) {
+        const c = q[h], x = c % GW, y = Math.floor(c / GW);
+        if (d[c] >= rip) continue;
+        for (const [dx, dy] of [[1, 0], [-1, 0], [0, 1], [0, -1]]) {
+          const nx = x + dx, ny = y + dy, j = ny * GW + nx;
+          if (this.inGrid(nx, ny) && d[j] === 255) { d[j] = d[c] + 1; q.push(j); }
+        }
+      }
+      for (let i = 0; i < N; i++) if (d[i] > 0 && d[i] <= rip && !this.isWet(i) && n2((i % GW + 0.5) / GW, (Math.floor(i / GW) + 0.5) / GH) > 0.42) this.ter[i] = TER.WOODS;
+    }
+    // In snow country the open ground lies under deep snow.
+    if (this.R.snow) for (let i = 0; i < GW * GH; i++) { const k = this.ter[i]; if (k === TER.OPEN || k === TER.GRASS || k === TER.PLOWED) this.ter[i] = TER.SNOW; }
+  }
+
+  // Rock outcrops and talus on the steep slopes and crests of mountain country.
+  genRock() {
+    const lim = this.R.rock;
+    if (!lim) return;
+    const n = this.noise(24, 24);
+    let maxE = 0;
+    for (const v of this.elev) if (v > maxE) maxE = v;
+    for (let cy = 1; cy < GH - 1; cy++) for (let cx = 1; cx < GW - 1; cx++) {
+      const c = cy * GW + cx;
+      if (this.isWet(c)) continue;
+      const slope = Math.hypot(this.elev[c + 1] - this.elev[c - 1], this.elev[c + GW] - this.elev[c - GW]) / (2 * CELL);
+      const nv = n((cx + 0.5) / GW, (cy + 0.5) / GH);
+      if ((slope > lim && nv > 0.3) || (this.elev[c] / maxE > 0.9 && nv > 0.45)) this.ter[c] = TER.ROCK;
     }
   }
 
@@ -1007,13 +1212,16 @@ class GameMap {
         const nx = cx + dx, ny = cy + dy;
         if (!this.inGrid(nx, ny)) continue;
         const ni = ny * GW + nx, k = this.ter[ni];
-        if (closed[ni] || k === TER.POND || k === TER.BUILDING) continue;
+        if (closed[ni] || k === TER.POND || k === TER.BUILDING || k === TER.OCEAN || k === TER.ICE) continue;
         const grade = Math.abs(this.elev[ni] - this.elev[cur]) / CELL;
         let cost = (dx && dy ? 1.414 : 1) * (1 + grade * grade * 400);
         if (k === TER.WOODS) cost *= 2;
         if (k === TER.STREAM) cost += 12;
         if (k === TER.RIVER) cost += 60;
         if (k === TER.SWAMP) cost *= 3;
+        if (k === TER.ROCK) cost *= 4;
+        if (k === TER.CHAPARRAL || k === TER.BEACH) cost *= 1.6;
+        if (k === TER.WASH) cost += 4;
         if (k === TER.ROAD || k === TER.PAVED) cost *= 0.4;
         const ng = g[cur] + cost;
         if (ng < g[ni]) { g[ni] = ng; came[ni] = cur; heap.push(ni, ng + h(ni)); }
@@ -1051,6 +1259,16 @@ class GameMap {
   }
 
   genRoads() {
+    if (this.R.coast) {
+      // The coast highway runs north and south a little inland; a canyon road climbs east.
+      const off = (v) => Math.floor((this.coastAt(v) + randRange(250, 600)) / CELL);
+      const hw = this.routeRoad(off(0), 0, off(1), GH - 1);
+      if (hw) this.layRoad(hw, 'paved');
+      const y = randInt(Math.floor(GH * 0.25), Math.floor(GH * 0.75)), x0 = off((y + 0.5) / GH);
+      const tr = this.routeRoad(x0, y, GW - 1, randInt(Math.floor(GH * 0.2), Math.floor(GH * 0.8)));
+      if (tr) this.layRoad(tr, 'track');
+      return;
+    }
     const ew = chance(0.5);
     const [a, b] = ew ? [this.edgePoint('w'), this.edgePoint('e')] : [this.edgePoint('n'), this.edgePoint('s')];
     const main = this.routeRoad(a[0], a[1], b[0], b[1]);
@@ -1098,17 +1316,18 @@ class GameMap {
   }
 
   placeName() {
-    for (let i = 0; i < 20; i++) {
-      const n = pick(PLACE_A) + pick(PLACE_B);
-      if (!this.places.some(p => p.name === n)) return n;
+    const R = this.R, one = () => R.whole && (!R.nameA || chance(0.35)) ? pick(R.whole) : pick(R.nameA) + pick(R.nameB);
+    for (let i = 0; i < 30; i++) {
+      const n = one();
+      if (!this.places.some(p => p.name.startsWith(n))) return n;
     }
-    return pick(PLACE_A) + pick(PLACE_B);
+    return one();
   }
 
   // Villages strung along the roads, houses facing the road with yards and walls.
   genVillages() {
     const along = this.roads.flatMap(r => r.cells.map(c => ({ c, kind: r.kind })));
-    const want = randInt(2, 4);
+    const want = randInt(this.R.villages[0], this.R.villages[1]);
     for (let tries = 0; tries < 60 && this.places.length < want; tries++) {
       const pick0 = along[randInt(0, along.length - 1)];
       if (!pick0) break;
@@ -1126,7 +1345,7 @@ class GameMap {
         const b = this.placeBuilding(cx, cy, w, h);
         if (!b) continue;
         built++;
-        if (chance(0.3)) this.yardWall(b);
+        if (chance(this.R.yardWalls[0])) this.yardWall(b);
       }
       if (built >= 5) this.places.push({ name: this.placeName(), x: vx, y: vy, kind: 'village' });
     }
@@ -1135,7 +1354,7 @@ class GameMap {
   // Outlying farms, each with a track to the nearest road.
   genFarms() {
     const roadCells = this.roads.flatMap(r => r.cells);
-    const want = randInt(6, 10);
+    const want = randInt(this.R.farms[0], this.R.farms[1]);
     let made = 0;
     for (let tries = 0; tries < 80 && made < want; tries++) {
       const x = randRange(150, MAP_W - 150), y = randRange(150, MAP_H - 150);
@@ -1145,9 +1364,9 @@ class GameMap {
       const b = this.placeBuilding(c.cx, c.cy, randInt(3, 5), randInt(2, 3));
       if (!b) continue;
       for (let k = 0; k < randInt(0, 2); k++) this.placeBuilding(c.cx + randInt(-6, 6), c.cy + randInt(4, 7) * (chance(0.5) ? 1 : -1), randInt(2, 3), 2);
-      if (chance(0.4)) this.yardWall(b);
+      if (chance(this.R.yardWalls[1])) this.yardWall(b);
       made++;
-      this.places.push({ name: this.placeName() + ' Farm', x: b.x1 + 6, y: b.y0, kind: 'farm' });
+      this.places.push({ name: this.placeName() + ' ' + this.R.farmWord, x: b.x1 + 6, y: b.y0, kind: 'farm' });
       // Track to the nearest road cell.
       let best = -1, bd = Infinity;
       for (let i = 0; i < roadCells.length; i += 3) {
@@ -1179,7 +1398,7 @@ class GameMap {
     this.peak = this.peaks.length ? Math.round(this.elevBase + this.peaks[0].e) : this.elevBase;
     this.contourLabels = [];
     for (let y = 60; y < MAP_H - 60; y += 24) for (let x = 60; x < MAP_W - 60; x += 24) {
-      const e = this.elevAt(x, y), lv = Math.round(e / 25) * 25;
+      const step = this.ci * this.index, e = this.elevAt(x, y), lv = Math.round(e / step) * step;
       if (lv <= 0 || Math.abs(e - lv) > 0.3) continue;
       if (this.contourLabels.some(l => dist(l.x, l.y, x, y) < 380)) continue;
       const k = this.terAt(x, y);
@@ -2532,7 +2751,7 @@ function runTask(t, m, enemyC) {
       let cover = 0;
       for (let i = 1; i <= 8; i++) {
         const k = G.map.terAt(lerp(c.x, x, i / 8), lerp(c.y, y, i / 8));
-        if (k === TER.WOODS || k === TER.GRASS || k === TER.WALL || k === TER.BUILDING) cover++;
+        if (TERRAIN[k].conceal >= 0.45 || TERRAIN[k].cover >= 0.3) cover++;
       }
       return { x, y, score: cover + rand() * 2 };
     });
@@ -2712,22 +2931,37 @@ const MAPC = {
   orchard: [214, 233, 194],
   vineyard: [218, 234, 198],
   swamp: [226, 238, 236],
+  beach: [246, 236, 202],
+  chaparral: [212, 228, 188],
+  brush: [214, 224, 184],
+  desert: [247, 240, 222],
+  rock: [228, 220, 206],
+  snow: [241, 245, 249],
+  ice: [222, 238, 248],
+  wash: [242, 232, 206],
   water: [176, 220, 244],
   waterEdge: [40, 140, 205],
   contour: [168, 84, 50],
 };
-const CONTOUR_INTERVAL = 5, INDEX_EVERY = 5;
 const MAP_INK = '#161616', BLUE_LINE = 'rgb(40,140,205)', RED_BROWN = 'rgb(168,84,50)';
-const CLASS_COLOR = (k) => k === TER.WOODS ? MAPC.woods : k === TER.GRASS ? MAPC.grass : k === TER.PLOWED ? MAPC.plowed
-  : k === TER.ORCHARD ? MAPC.orchard : k === TER.VINEYARD ? MAPC.vineyard : k === TER.POND ? MAPC.water : k === TER.SWAMP ? MAPC.swamp : MAPC.paper;
+const CLASS_COLORS = {
+  [TER.WOODS]: MAPC.woods, [TER.GRASS]: MAPC.grass, [TER.PLOWED]: MAPC.plowed, [TER.ORCHARD]: MAPC.orchard,
+  [TER.VINEYARD]: MAPC.vineyard, [TER.POND]: MAPC.water, [TER.SWAMP]: MAPC.swamp, [TER.BEACH]: MAPC.beach,
+  [TER.CHAPARRAL]: MAPC.chaparral, [TER.BRUSH]: MAPC.brush, [TER.DESERT]: MAPC.desert, [TER.ROCK]: MAPC.rock,
+  [TER.SNOW]: MAPC.snow, [TER.ICE]: MAPC.ice, [TER.WASH]: MAPC.wash,
+};
+const CLASS_COLOR = (k) => CLASS_COLORS[k] || MAPC.paper;
+// Ground that draws as a tinted area; river, ford and sea water draw like a pond.
+const AREA_CLASS = new Uint8Array(32);
+for (const k of Object.keys(CLASS_COLORS)) AREA_CLASS[k] = +k;
+AREA_CLASS[TER.RIVER] = AREA_CLASS[TER.FORD] = AREA_CLASS[TER.OCEAN] = TER.POND;
 
 // Ground class at a point: the class with the most weight among the four nearest
 // cells, which gives smooth edges to woods, fields and water at any zoom.
 function groundClass(map, x, y) {
   const fx = clamp(x / CELL - 0.5, 0, GW - 1.001), fy = clamp(y / CELL - 0.5, 0, GH - 1.001);
   const x0 = Math.floor(fx), y0 = Math.floor(fy), tx = fx - x0, ty = fy - y0, i = y0 * GW + x0;
-  // River and ford water draw like pond water.
-  const cls = (k) => k === TER.RIVER || k === TER.FORD ? TER.POND : k === TER.WOODS || k === TER.GRASS || k === TER.PLOWED || k === TER.ORCHARD || k === TER.VINEYARD || k === TER.POND || k === TER.SWAMP ? k : 0;
+  const cls = (k) => AREA_CLASS[k];
   const a = cls(map.ter[i]), b = cls(map.ter[i + 1]), c = cls(map.ter[i + GW]), d = cls(map.ter[i + GW + 1]);
   if (a === b && b === c && c === d) return a;
   const w = new Map();
@@ -2782,18 +3016,18 @@ function drawMapRegion(ctx, map, x0, y0, w, h, ppm, level) {
   const elev = new Float32Array((W + 2) * (H + 2)), cls = new Uint8Array(W * H);
   for (let y = 0; y < H + 2; y++) for (let x = 0; x < W + 2; x++) elev[y * (W + 2) + x] = map.elevAt(x0 + (x - 0.5) / ppm, y0 + (y - 0.5) / ppm);
   for (let y = 0; y < H; y++) for (let x = 0; x < W; x++) cls[y * W + x] = groundClass(map, x0 + (x + 0.5) / ppm, y0 + (y + 0.5) / ppm);
-  const ci = CONTOUR_INTERVAL, ii = CONTOUR_INTERVAL * INDEX_EVERY;
+  const ci = map.ci, ii = map.ci * map.index;
   for (let y = 0; y < H; y++) {
     for (let x = 0; x < W; x++) {
       const i = y * W + x, k = cls[i];
       let col = CLASS_COLOR(k);
       // Outline woods and water where they meet other ground.
-      if (k === TER.WOODS || k === TER.POND) {
+      if (k === TER.WOODS || k === TER.POND || k === TER.ICE) {
         const edge = (x > 0 && cls[i - 1] !== k) || (x < W - 1 && cls[i + 1] !== k) || (y > 0 && cls[i - W] !== k) || (y < H - 1 && cls[i + W] !== k);
-        if (edge && (k === TER.POND || level > 0)) col = k === TER.POND ? MAPC.waterEdge : MAPC.woodsEdge;
+        if (edge && (k !== TER.WOODS || level > 0)) col = k === TER.WOODS ? MAPC.woodsEdge : MAPC.waterEdge;
       }
       let [r, g, b] = col;
-      if (k !== TER.POND) {
+      if (k !== TER.POND && k !== TER.ICE) {
         const e = elev[(y + 1) * (W + 2) + x + 1], er = elev[(y + 1) * (W + 2) + x + 2], ed = elev[(y + 2) * (W + 2) + x + 1];
         const onIndex = Math.floor(e / ii) !== Math.floor(er / ii) || Math.floor(e / ii) !== Math.floor(ed / ii);
         const onLine = Math.floor(e / ci) !== Math.floor(er / ci) || Math.floor(e / ci) !== Math.floor(ed / ci);
@@ -2845,6 +3079,24 @@ function drawMapRegion(ctx, map, x0, y0, w, h, ppm, level) {
         ctx.moveTo(x - s * 0.7, y); ctx.lineTo(x - s * 0.9, y - s * 0.7);
         ctx.moveTo(x + s * 0.7, y); ctx.lineTo(x + s * 0.9, y - s * 0.7);
         ctx.stroke();
+      } else if ((k === TER.CHAPARRAL || k === TER.BRUSH) && (cx * 3 + cy * 7) % (k === TER.CHAPARRAL ? 2 : 3) === 0) {
+        // Scrub: small green dots in clumps.
+        ctx.fillStyle = '#4f8a3a';
+        const s = level === 2 ? 0.9 : 1.8, o = ((cx * 13 + cy * 5) % 5 - 2) * 0.6;
+        ctx.beginPath(); ctx.arc(x + o, y, s, 0, Math.PI * 2); ctx.arc(x + o + s * 2.2, y + s, s * 0.8, 0, Math.PI * 2); ctx.fill();
+      } else if (k === TER.DESERT && (cx * 7 + cy * 3) % 9 === 0) {
+        // Sparse creosote: a single small green dot.
+        ctx.fillStyle = '#6f9a52';
+        ctx.beginPath(); ctx.arc(x + ((cy * 7) % 5 - 2), y, level === 2 ? 0.7 : 1.4, 0, Math.PI * 2); ctx.fill();
+      } else if (k === TER.ROCK && (cx + cy * 3) % 2 === 0) {
+        // Rock: small brown angular marks.
+        ctx.fillStyle = '#7a5a3c';
+        const s = level === 2 ? 1.1 : 2.2;
+        ctx.beginPath(); ctx.moveTo(x - s, y + s * 0.6); ctx.lineTo(x, y - s * 0.8); ctx.lineTo(x + s, y + s * 0.6); ctx.closePath(); ctx.fill();
+      } else if ((k === TER.BEACH || k === TER.WASH) && (cx * 5 + cy * 11) % 3 === 0) {
+        // Sand: brown stipple.
+        ctx.fillStyle = '#a07a4a';
+        ctx.beginPath(); ctx.arc(x + ((cx * 3) % 3 - 1), y + ((cy * 5) % 3 - 1), level === 2 ? 0.45 : 0.9, 0, Math.PI * 2); ctx.fill();
       } else if (k === TER.GRASS && level === 2 && (cx * 7 + cy * 13) % 5 === 0) {
         ctx.strokeStyle = '#6f9a52';
         const s = 1.4;
@@ -2861,7 +3113,22 @@ function drawMapRegion(ctx, map, x0, y0, w, h, ppm, level) {
   for (const s of map.streams) {
     if (!lineIn(s.pts, 0)) continue;
     ctx.lineWidth = Math.max(s.width, 1.3 * pxm);
+    // An intermittent stream (dry wash): blue dashes and dots.
+    if (s.dry) ctx.setLineDash([14, 5, 2, 5]);
     stroke(s.pts);
+    ctx.setLineDash([]);
+  }
+  // The sea's name, along the coast.
+  if (map.R.coast && x0 < 600) {
+    const fs = (level === 0 ? 34 : 22) / ppm;
+    for (const yy of [800, 2200]) {
+      if (!inBox(110, yy, 600)) continue;
+      ctx.save(); ctx.translate(map.coastAt(yy / MAP_H) / 2, yy); ctx.rotate(-Math.PI / 2);
+      ctx.font = 'italic 700 ' + fs + 'px "Saira Condensed", "Arial Narrow", sans-serif';
+      ctx.textAlign = 'center'; ctx.textBaseline = 'middle'; ctx.fillStyle = BLUE_LINE;
+      ctx.fillText('P A C I F I C   O C E A N', 0, 0);
+      ctx.restore();
+    }
   }
 
   // River: a smooth band over the cell fill, blue banks and water tint between them.
@@ -3051,7 +3318,7 @@ function buildTerrain(map) {
 
   // Title block.
   text('STEX: RIFLE SQUAD', 0, -140, 34, { weight: 700 });
-  text('SERIES T25 · EDITION 1', 0, -104, 22, { weight: 500 });
+  text('SERIES T25 · EDITION 1 · ' + map.R.label.toUpperCase(), 0, -104, 22, { weight: 500 });
   text(('HILL ' + map.peak).toUpperCase(), MAP_W / 2, -118, 76, { weight: 700, serif: true, align: 'center' });
   text('SHEET ' + String(G.settings ? G.settings.seed : 0).padStart(5, '0'), MAP_W, -140, 34, { weight: 700, align: 'right' });
   text('1:25 000 · 3 × 3 KM', MAP_W, -104, 22, { weight: 500, align: 'right' });
@@ -3059,12 +3326,20 @@ function buildTerrain(map) {
   // Legend, bottom left.
   const ly = MAP_H + 160;
   text('LEGEND', 0, ly, 26, { weight: 700 });
+  // Only what is on this sheet goes in the legend.
+  const has = new Uint8Array(32);
+  for (let i = 0; i < map.ter.length; i += 7) has[map.ter[i]] = 1;
+  const ii = map.ci * map.index, wet = map.streams.some(s => !s.dry), dry = map.streams.some(s => s.dry);
   const rows = [
-    ['woods', 'Woods, hedgerow'], ['grass', 'Tall grass, scrub'], ['orchard', 'Orchard'], ['vineyard', 'Vineyard'],
-    ['paved', 'Hard surface road'], ['road', 'Unimproved road'], ['wall', 'Stone wall'], ['building', 'Building'],
-    ['stream', 'Stream'], ['pond', 'Pond'], ['index', 'Index contour (25 m)'], ['contour', 'Contour (5 m)'],
-    ['river', 'River, bridge, ford'], ['swamp', 'Swamp, marsh'],
-  ];
+    ['woods', 'Woods, hedgerow', has[TER.WOODS]], ['grass', 'Tall grass', has[TER.GRASS]], ['orchard', 'Orchard', has[TER.ORCHARD]],
+    ['vineyard', 'Vineyard', has[TER.VINEYARD]], ['chaparral', 'Chaparral', has[TER.CHAPARRAL]], ['brush', 'Mesquite brush', has[TER.BRUSH]],
+    ['desert', 'Desert scrub', has[TER.DESERT]], ['rock', 'Rock outcrop, talus', has[TER.ROCK]], ['snow', 'Deep snow', has[TER.SNOW]],
+    ['beach', 'Sand beach', has[TER.BEACH]],
+    ['paved', 'Hard surface road', 1], ['road', 'Unimproved road', 1], ['wall', 'Stone wall', has[TER.WALL]], ['building', 'Building', 1],
+    ['stream', 'Stream', wet], ['wash', 'Dry wash', dry], ['pond', map.R.ponds === 'ice' ? 'Frozen pond' : map.R.coast ? 'Pond, ocean' : 'Pond', has[TER.POND] || has[TER.ICE] || has[TER.OCEAN]],
+    ['index', 'Index contour (' + ii + ' m)', 1], ['contour', 'Contour (' + map.ci + ' m)', 1],
+    ['river', 'River, bridge, ford', !!map.river], ['swamp', 'Swamp, marsh', has[TER.SWAMP]],
+  ].filter(r => r[2]);
   rows.forEach(([k, label], i) => {
     const col = Math.floor(i / 4), row = i % 4;
     const x = col * 560, y = ly + 50 + row * 56;
@@ -3073,6 +3348,18 @@ function buildTerrain(map) {
     ctx.lineCap = 'round';
     if (k === 'woods') sw(MAPC.woods);
     else if (k === 'grass') sw(MAPC.grass);
+    else if (k === 'chaparral' || k === 'brush' || k === 'desert') {
+      sw(MAPC[k]); ctx.fillStyle = k === 'desert' ? '#6f9a52' : '#4f8a3a';
+      const n = k === 'desert' ? 3 : 8;
+      for (let t = 0; t < n; t++) { ctx.beginPath(); ctx.arc(x + 10 + t * (72 / Math.max(1, n - 1)), y + (t % 2 ? 6 : -6), 3, 0, Math.PI * 2); ctx.fill(); }
+    }
+    else if (k === 'rock') { sw(MAPC.rock); ctx.fillStyle = '#7a5a3c'; for (let t = 10; t < 90; t += 16) { ctx.beginPath(); ctx.moveTo(x + t - 5, y + 5 - (t % 3) * 3); ctx.lineTo(x + t, y - 6 - (t % 3) * 3); ctx.lineTo(x + t + 5, y + 5 - (t % 3) * 3); ctx.fill(); } }
+    else if (k === 'snow') { sw(MAPC.snow); ctx.strokeStyle = '#999'; ctx.lineWidth = 1; ctx.strokeRect(x, y - 16, 90, 32); }
+    else if (k === 'beach' || k === 'wash') {
+      sw(MAPC[k]); ctx.fillStyle = '#a07a4a';
+      for (let t = 0; t < 24; t++) { ctx.beginPath(); ctx.arc(x + 5 + (t * 37) % 80, y - 12 + (t * 23) % 24, 1.6, 0, Math.PI * 2); ctx.fill(); }
+      if (k === 'wash') { ctx.strokeStyle = BLUE_LINE; ctx.lineWidth = 4; ctx.setLineDash([14, 5, 2, 5]); ctx.beginPath(); ctx.moveTo(x, y); ctx.lineTo(x + 90, y); ctx.stroke(); ctx.setLineDash([]); }
+    }
     else if (k === 'orchard') { sw(MAPC.orchard); ctx.strokeStyle = '#4f8a3a'; ctx.lineWidth = 2; for (let t = 12; t < 90; t += 22) { ctx.beginPath(); ctx.arc(x + t, y, 5, 0, Math.PI * 2); ctx.stroke(); } }
     else if (k === 'vineyard') { sw(MAPC.vineyard); ctx.strokeStyle = '#4f8a3a'; ctx.lineWidth = 2; for (const dy of [-8, 0, 8]) { ctx.beginPath(); ctx.moveTo(x + 6, y + dy); ctx.lineTo(x + 84, y + dy); ctx.stroke(); } }
     else if (k === 'paved') { ctx.strokeStyle = MAP_INK; ctx.lineWidth = 16; ctx.beginPath(); ctx.moveTo(x, y); ctx.lineTo(x + 90, y); ctx.stroke(); ctx.strokeStyle = '#d0362a'; ctx.lineWidth = 10; ctx.stroke(); }
@@ -3089,7 +3376,7 @@ function buildTerrain(map) {
       sw(MAPC.swamp); ctx.strokeStyle = BLUE_LINE; ctx.lineWidth = 2;
       for (const tx of [18, 45, 72]) { ctx.beginPath(); ctx.moveTo(tx - 10, y + 6); ctx.lineTo(tx + 10, y + 6); ctx.moveTo(tx, y + 6); ctx.lineTo(tx, y - 6); ctx.moveTo(tx - 5, y + 6); ctx.lineTo(tx - 7, y - 2); ctx.moveTo(tx + 5, y + 6); ctx.lineTo(tx + 7, y - 2); ctx.stroke(); }
     }
-    else if (k === 'pond') { ctx.fillStyle = 'rgb(' + MAPC.water.join(',') + ')'; ctx.strokeStyle = BLUE_LINE; ctx.lineWidth = 3; ctx.beginPath(); ctx.ellipse(x + 45, y, 40, 15, 0, 0, Math.PI * 2); ctx.fill(); ctx.stroke(); }
+    else if (k === 'pond') { ctx.fillStyle = 'rgb(' + (map.R.ponds === 'ice' ? MAPC.ice : MAPC.water).join(',') + ')'; ctx.strokeStyle = BLUE_LINE; ctx.lineWidth = 3; ctx.beginPath(); ctx.ellipse(x + 45, y, 40, 15, 0, 0, Math.PI * 2); ctx.fill(); ctx.stroke(); }
     else if (k === 'index' || k === 'contour') { ctx.strokeStyle = RED_BROWN; ctx.lineWidth = k === 'index' ? 5 : 2.5; ctx.beginPath(); ctx.moveTo(x, y + 8); ctx.bezierCurveTo(x + 30, y - 16, x + 60, y + 16, x + 90, y - 6); ctx.stroke(); }
     ctx.restore();
     text(label, x + 110, y + 9, 26, { weight: 500, serif: true });
@@ -3107,7 +3394,7 @@ function buildTerrain(map) {
   text('METERS', sx + 1030, sy + 14, 22, { weight: 700 });
   // The declination diagram and notes sit at the bottom right.
   const nx = MAP_W - 520;
-  text('CONTOUR INTERVAL 5 METERS', nx, MAP_H + 200, 24, { weight: 700 });
+  text('CONTOUR INTERVAL ' + map.ci + ' METERS', nx, MAP_H + 200, 24, { weight: 700 });
   text('ELEVATIONS IN METERS ABOVE MEAN SEA LEVEL', nx, MAP_H + 234, 19, { weight: 500 });
   text('GRID: 1000 METER SQUARES', nx, MAP_H + 262, 19, { weight: 500 });
   text('TO GIVE A GRID REFERENCE: READ RIGHT, THEN UP', nx, MAP_H + 290, 19, { weight: 500 });
@@ -4385,6 +4672,16 @@ const UI = {
     modeSel.addEventListener('change', () => { set.mode = modeSel.value; desc.textContent = modes[set.mode]; });
     mp.appendChild(modeSel); mp.appendChild(desc);
     sit.appendChild(mp);
+    const rp = el('p');
+    const regSel = el('select'); regSel.id = 'missionRegion';
+    for (const [k, t] of [['random', 'Random region'], ...REGION_KEYS.map(k => [k, REGIONS[k].label])]) {
+      const o = el('option', null, t); o.value = k; if (set.region === k) o.selected = true; regSel.appendChild(o);
+    }
+    const rdesc = el('span', 'bdesc', set.region === 'random' ? 'Any of the regions, drawn from the map number.' : REGIONS[set.region].brief);
+    regSel.addEventListener('change', () => { set.region = regSel.value; rdesc.textContent = set.region === 'random' ? 'Any of the regions, drawn from the map number.' : REGIONS[set.region].brief; });
+    sit.appendChild(el('h3', null, 'Region'));
+    rp.appendChild(regSel); rp.appendChild(rdesc);
+    sit.appendChild(rp);
     const seedRow = el('p', 'bseed');
     seedRow.appendChild(el('span', null, 'Map number '));
     const seedIn = el('input'); seedIn.id = 'missionSeed'; seedIn.type = 'number'; seedIn.value = set.seed;
@@ -4590,10 +4887,13 @@ const Plan = {
   aoFacts() {
     const m = G.map, N = GW * GH;
     let lo = Infinity, hi = -Infinity, woods = 0, steep = 0, worst = { s: 0 }, swamp = 0, sx0 = 0, sy0 = 0;
+    const count = new Float64Array(32);
     for (let cy = 1; cy < GH - 1; cy++) for (let cx = 1; cx < GW - 1; cx++) {
       const i = cy * GW + cx, e = m.elev[i];
-      if (e < lo) lo = e; if (e > hi) hi = e;
       const k = m.ter[i];
+      count[k]++;
+      if (k === TER.OCEAN) continue;
+      if (e < lo) lo = e; if (e > hi) hi = e;
       if (k === TER.WOODS || k === TER.ORCHARD) woods++;
       if (k === TER.SWAMP) { swamp++; sx0 += cx; sy0 += cy; }
       const s = Math.hypot(m.elev[i + 1] - m.elev[i - 1], m.elev[i + GW] - m.elev[i - GW]) / (2 * CELL);
@@ -4627,7 +4927,7 @@ const Plan = {
     }
     return {
       e0: G.grid.e, n0: G.grid.n, lo: Math.round(m.elevBase + lo), hi: Math.round(m.elevBase + hi),
-      woodsPct: Math.round(woods / N * 100), river: m.river,
+      woodsPct: Math.round(woods / N * 100), river: m.river, pct: (k) => count[k] / N * 100,
       swampPct: swamp / N * 100, swampAt: swamp ? { x: (sx0 / swamp + 0.5) * CELL, y: (sy0 / swamp + 0.5) * CELL } : null, steepPct: steep / N * 100, worst, ponds,
       streams: m.streams.length, road, tracks: m.roads.filter(r => r.kind === 'track').length,
       villages: m.places.filter(p => p.kind === 'village'), farms: m.places.filter(p => p.kind === 'farm').length,
@@ -4647,7 +4947,7 @@ const Plan = {
       out.push({ kind: 'hill', name: 'HIGH GROUND ' + Math.round(m.elevBase + f.hi.e), x: f.hi.x, y: f.hi.y, note: 'Highest point on the direct line' });
     }
     for (const p of m.places.filter(p => dist(p.x, p.y, mid.x, mid.y) < reach).slice(0, 4)) {
-      out.push({ kind: 'town', name: p.name.toUpperCase(), x: p.x, y: p.y, note: p.kind === 'village' ? 'Village' : 'Farm' });
+      out.push({ kind: 'town', name: p.name.toUpperCase(), x: p.x, y: p.y, note: p.kind === 'village' ? 'Village' : G.map.R.farmWord });
     }
     return out;
   },
@@ -5132,7 +5432,7 @@ const Plan = {
       const x = lerp(b.x, e.x, i / n), y = lerp(b.y, e.y, i / n), k = G.map.terAt(x, y), el = G.map.elevAt(x, y);
       if (k === TER.WOODS || k === TER.ORCHARD) woods++; else open++;
       if (el > hi.e) hi = { e: el, x, y };
-      const wet = k === TER.STREAM; if (wet && !lastWet) streams++; lastWet = wet;
+      const wet = k === TER.STREAM || k === TER.WASH; if (wet && !lastWet) streams++; lastWet = wet;
       const riv = k === TER.RIVER || k === TER.FORD; if (riv && !lastRiv) river++; lastRiv = riv;
       if (k === TER.SWAMP) swamp++;
       const rd = k === TER.ROAD || k === TER.PAVED; if (rd && !lastRoad) roads++; lastRoad = rd;
@@ -5158,7 +5458,7 @@ const Plan = {
         const c = G.map.nearestPassable(Math.floor(x / CELL), Math.floor(y / CELL));
         const px = (c.cx + 0.5) * CELL, py = (c.cy + 0.5) * CELL, ter = G.map.terAt(px, py);
         const los = G.map.los(px, py, 1.2, o.x, o.y, 1.0);
-        let s = (ter === TER.WOODS ? 2 : ter === TER.GRASS || ter === TER.ORCHARD ? 1 : 0);
+        let s = (ter === TER.WOODS || ter === TER.ROCK ? 2 : TERRAIN[ter].conceal >= 0.3 ? 1 : 0);
         s += wantLOS ? (los > 0 ? 4 : -4) : (los > 0 ? -2 : 2);
         if (s > bs) { bs = s; best = { x: px, y: py }; }
       }
@@ -5201,7 +5501,7 @@ const Plan = {
         const tx = px + Math.cos(ax) * d, ty = py + Math.sin(ax) * d;
         if (G.map.los(px, py, 1.2, tx, ty, 1.0) > 0) view++;
       }
-      const s = view * 2 + (ter === TER.WOODS ? 3 : ter === TER.GRASS || ter === TER.ORCHARD || ter === TER.VINEYARD ? 1.5 : 0) + G.map.elevAt(px, py) * 0.05;
+      const s = view * 2 + (ter === TER.WOODS || ter === TER.ROCK ? 3 : TERRAIN[ter].conceal >= 0.3 ? 1.5 : 0) + G.map.elevAt(px, py) * 0.05;
       if (s > bs) { bs = s; best = { x: px, y: py }; }
     }
     const cp = this.addGraphic('rel', [best]);
@@ -5423,7 +5723,7 @@ const OPORD = {
     const f = Plan.terrainFacts(), m = G.map;
     const ao = Plan.ao, two = (v) => String(v).padStart(2, '0');
     this.para(box, 'Orientation', 'AO is 3 × 3 km, grid ' + two(ao.e0) + '–' + two(ao.e0 + 3) + ' E, ' + two(ao.n0) + '–' + two(ao.n0 + 3) + ' N. ' +
-      'Rolling farmland, woods and villages. Elevation ' + ao.lo + '–' + ao.hi + ' m. North up. CI 5 m, index 25 m.');
+      m.R.brief + ' Elevation ' + ao.lo + '–' + ao.hi + ' m. North up. CI ' + m.ci + ' m, index ' + m.ci * m.index + ' m.');
 
     box.appendChild(el('h4', null, 'Obstacles and restrictive terrain'));
     if (ao.river) {
@@ -5436,15 +5736,25 @@ const OPORD = {
     }
     if (ao.swampPct > 0.1) this.factRow(box, 'Swamp', Math.max(0.1, ao.swampPct).toFixed(1) + '% of the AO, low ground by the water; largest vic grid ' + gridRef(ao.swampAt.x, ao.swampAt.y) +
       '. Very slow going, no cover, good concealment.' + (f.swampM ? ' About ' + Math.round(f.swampM / 10) * 10 + ' m of it on the direct line.' : ''), ao.swampAt, 1.4);
+    const pc = (k) => ao.pct(k), pf = (k) => (pc(k) < 1 ? pc(k).toFixed(1) : Math.round(pc(k))) + '% of the AO';
+    if (pc(TER.OCEAN) > 0.5) this.factRow(box, 'Pacific Ocean', 'The west edge of the AO. Impassable. The beach (' + pf(TER.BEACH).replace(' of the AO', '') + ') is soft sand, slow and wide open to the bluffs above it.', { x: G.map.coastAt(0.5) / 2, y: MAP_H / 2 }, 0.5);
+    if (pc(TER.CHAPARRAL) > 1) this.factRow(box, 'Chaparral', pf(TER.CHAPARRAL) + '. Dense, head-high brush on the slopes. Very slow going; hides men, stops no rounds.', null);
+    if (pc(TER.BRUSH) > 1) this.factRow(box, 'Mesquite brush', pf(TER.BRUSH) + '. Thorn thickets two to three meters high. Slow; good concealment, no cover, short fields of fire inside.', null);
+    if (pc(TER.DESERT) > 5) this.factRow(box, 'Desert', pf(TER.DESERT) + '. Open desert floor with scattered creosote. Fast going, long fields of fire, little concealment.', null);
+    if (pc(TER.ROCK) > 0.5) this.factRow(box, 'Rock', pf(TER.ROCK) + '. Outcrops and talus on the steep slopes and crests. Very slow going; boulders give real cover.', null);
+    if (pc(TER.SNOW) > 5) this.factRow(box, 'Deep snow', pf(TER.SNOW) + '. Snow over all open ground: about half walking speed and tiring. No concealment; tracks show.', null);
+    if (pc(TER.ICE) > 0.05) this.factRow(box, 'Frozen ponds', 'The ice bears a man: slow footing and wide open.', null);
     if (ao.ponds.length) {
       const big = ao.ponds[0];
       this.factRow(box, 'Ponds', ao.ponds.length + ' on the sheet. Impassable on foot; go around. Largest ' + big.ha.toFixed(1) + ' ha vic grid ' + gridRef(big.x, big.y) + '.', big, 1.4);
     }
-    this.factRow(box, 'Streams', ao.streams + ' on the sheet, ' + (f.streams ? f.streams + ' across your axis' : 'none across your axis') +
+    if (m.R.dryStreams) this.factRow(box, 'Dry washes', ao.streams + ' on the sheet, ' + (f.streams ? f.streams + ' across your axis' : 'none across your axis') +
+      '. Sandy beds cut below the ground around them: covered routes, but a flash flood after rain.', null);
+    else this.factRow(box, 'Streams', ao.streams + ' on the sheet, ' + (f.streams ? f.streams + ' across your axis' : 'none across your axis') +
       '. Fordable, at about a third of walking speed. The gullies give cover.', null);
-    this.factRow(box, 'Woods', ao.woodsPct + '% of the AO, with orchards. Slow going, short fields of fire, good concealment.', null);
+    if (ao.woodsPct >= 1) this.factRow(box, 'Woods', ao.woodsPct + '% of the AO' + (pc(TER.ORCHARD) > 0.5 ? ', with orchards' : '') + '. Slow going, short fields of fire, good concealment.', null);
     if (ao.steepPct > 0.5) this.factRow(box, 'Steep ground', 'Slopes over 30% on ' + ao.steepPct.toFixed(1) + '% of the AO; steepest vic grid ' + gridRef(ao.worst.x, ao.worst.y) + '. Slow to climb.', ao.worst, 1.6);
-    if (ao.villages.length) this.factRow(box, 'Built-up', ao.villages.map(v => v.name.toUpperCase() + ' (' + gridRef(v.x, v.y) + ')').join(', ') + (ao.farms ? '; ' + ao.farms + ' farms' : '') + '. Stone walls and buildings: hard cover for a defender.', ao.villages[0], 1.6);
+    if (ao.villages.length) this.factRow(box, 'Built-up', ao.villages.map(v => v.name.toUpperCase() + ' (' + gridRef(v.x, v.y) + ')').join(', ') + (ao.farms ? '; ' + ao.farms + ' ' + m.R.farmWord.toLowerCase() + (ao.farms > 1 ? (m.R.farmWord === 'Ranch' ? 'es' : 's') : '') : '') + '. ' + (pc(TER.WALL) > 0.05 ? 'Stone walls and buildings' : 'Buildings') + ': hard cover for a defender.', ao.villages[0], 1.6);
 
     box.appendChild(el('h4', null, 'Avenues of approach'));
     if (ao.road) this.factRow(box, 'Paved road', ao.road.text + ' Fastest going, open to observation.', ao.road.at, 1.4);
@@ -5930,25 +6240,26 @@ const G = {
 function loadSettings() {
   let saved = null;
   try { saved = JSON.parse(localStorage.getItem('squad.settings') || 'null'); } catch (e) { saved = null; }
-  const s = { seed: Math.floor(Math.random() * 99999) + 1, mode: 'random', loadout: defaultLoadout() };
+  const s = { seed: Math.floor(Math.random() * 99999) + 1, mode: 'random', region: 'random', loadout: defaultLoadout() };
   if (saved && saved.loadout) {
     for (const k of Object.keys(s.loadout)) {
       const l = saved.loadout[k];
       if (l && WEAPONS[l.weapon] && USMC_BILLETS[k].weapons.includes(l.weapon)) Object.assign(s.loadout[k], l);
     }
     if (saved.mode) s.mode = saved.mode;
+    if (saved.region && (saved.region === 'random' || REGIONS[saved.region])) s.region = saved.region;
   }
   return s;
 }
 function saveSettings() {
-  try { localStorage.setItem('squad.settings', JSON.stringify({ mode: G.settings.mode, loadout: G.settings.loadout })); } catch (e) { /* storage unavailable */ }
+  try { localStorage.setItem('squad.settings', JSON.stringify({ mode: G.settings.mode, region: G.settings.region, loadout: G.settings.loadout })); } catch (e) { /* storage unavailable */ }
 }
 
 function newMission() {
   const set = G.settings;
   saveSettings();
   NEXT_ID = 1;
-  G.map = new GameMap(set.seed);
+  G.map = new GameMap(set.seed, set.region);
   // Grid: a small 100 km digit and two principal digits for each kilometer line.
   G.grid = { e: randInt(10, 85), n: randInt(10, 85), le: randInt(1, 8), ln: randInt(1, 8) };
   const blue = buildUSMCSquad(set.loadout);
@@ -6090,13 +6401,14 @@ function updateTeams(dt) {
 
 function inCover(s) {
   const k = G.map.terAt(s.x, s.y);
-  if (k === TER.WOODS || k === TER.STREAM) return true;
+  if (k === TER.WOODS || k === TER.STREAM || k === TER.WASH || k === TER.ROCK) return true;
   const o = CELL * 0.8;
   for (const [dx, dy] of [[o, 0], [-o, 0], [0, o], [0, -o]]) {
     const n = G.map.terAt(s.x + dx, s.y + dy);
     if (n === TER.WALL || n === TER.BUILDING) return true;
   }
-  return k === TER.GRASS && s.posture === 'prone';
+  // Low vegetation (grass, scrub, reeds) hides a man who lies down in it.
+  return TERRAIN[k].conceal >= 0.45 && s.posture === 'prone';
 }
 
 function updateSuppression(s, dt) {
@@ -6190,7 +6502,7 @@ function boot() {
   requestAnimationFrame(frame);
   // Draw a map behind the briefing so the first view is the ground, not a blank table.
   withLoading('Drawing the map sheet…', () => {
-    G.map = new GameMap(G.settings.seed);
+    G.map = new GameMap(G.settings.seed, G.settings.region);
     buildTerrain(G.map);
     fitCamera(null, R.minZoom);
     UI.showBriefing();

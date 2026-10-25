@@ -71,22 +71,37 @@ const MAPC = {
   orchard: [214, 233, 194],
   vineyard: [218, 234, 198],
   swamp: [226, 238, 236],
+  beach: [246, 236, 202],
+  chaparral: [212, 228, 188],
+  brush: [214, 224, 184],
+  desert: [247, 240, 222],
+  rock: [228, 220, 206],
+  snow: [241, 245, 249],
+  ice: [222, 238, 248],
+  wash: [242, 232, 206],
   water: [176, 220, 244],
   waterEdge: [40, 140, 205],
   contour: [168, 84, 50],
 };
-const CONTOUR_INTERVAL = 5, INDEX_EVERY = 5;
 const MAP_INK = '#161616', BLUE_LINE = 'rgb(40,140,205)', RED_BROWN = 'rgb(168,84,50)';
-const CLASS_COLOR = (k) => k === TER.WOODS ? MAPC.woods : k === TER.GRASS ? MAPC.grass : k === TER.PLOWED ? MAPC.plowed
-  : k === TER.ORCHARD ? MAPC.orchard : k === TER.VINEYARD ? MAPC.vineyard : k === TER.POND ? MAPC.water : k === TER.SWAMP ? MAPC.swamp : MAPC.paper;
+const CLASS_COLORS = {
+  [TER.WOODS]: MAPC.woods, [TER.GRASS]: MAPC.grass, [TER.PLOWED]: MAPC.plowed, [TER.ORCHARD]: MAPC.orchard,
+  [TER.VINEYARD]: MAPC.vineyard, [TER.POND]: MAPC.water, [TER.SWAMP]: MAPC.swamp, [TER.BEACH]: MAPC.beach,
+  [TER.CHAPARRAL]: MAPC.chaparral, [TER.BRUSH]: MAPC.brush, [TER.DESERT]: MAPC.desert, [TER.ROCK]: MAPC.rock,
+  [TER.SNOW]: MAPC.snow, [TER.ICE]: MAPC.ice, [TER.WASH]: MAPC.wash,
+};
+const CLASS_COLOR = (k) => CLASS_COLORS[k] || MAPC.paper;
+// Ground that draws as a tinted area; river, ford and sea water draw like a pond.
+const AREA_CLASS = new Uint8Array(32);
+for (const k of Object.keys(CLASS_COLORS)) AREA_CLASS[k] = +k;
+AREA_CLASS[TER.RIVER] = AREA_CLASS[TER.FORD] = AREA_CLASS[TER.OCEAN] = TER.POND;
 
 // Ground class at a point: the class with the most weight among the four nearest
 // cells, which gives smooth edges to woods, fields and water at any zoom.
 function groundClass(map, x, y) {
   const fx = clamp(x / CELL - 0.5, 0, GW - 1.001), fy = clamp(y / CELL - 0.5, 0, GH - 1.001);
   const x0 = Math.floor(fx), y0 = Math.floor(fy), tx = fx - x0, ty = fy - y0, i = y0 * GW + x0;
-  // River and ford water draw like pond water.
-  const cls = (k) => k === TER.RIVER || k === TER.FORD ? TER.POND : k === TER.WOODS || k === TER.GRASS || k === TER.PLOWED || k === TER.ORCHARD || k === TER.VINEYARD || k === TER.POND || k === TER.SWAMP ? k : 0;
+  const cls = (k) => AREA_CLASS[k];
   const a = cls(map.ter[i]), b = cls(map.ter[i + 1]), c = cls(map.ter[i + GW]), d = cls(map.ter[i + GW + 1]);
   if (a === b && b === c && c === d) return a;
   const w = new Map();
@@ -141,18 +156,18 @@ function drawMapRegion(ctx, map, x0, y0, w, h, ppm, level) {
   const elev = new Float32Array((W + 2) * (H + 2)), cls = new Uint8Array(W * H);
   for (let y = 0; y < H + 2; y++) for (let x = 0; x < W + 2; x++) elev[y * (W + 2) + x] = map.elevAt(x0 + (x - 0.5) / ppm, y0 + (y - 0.5) / ppm);
   for (let y = 0; y < H; y++) for (let x = 0; x < W; x++) cls[y * W + x] = groundClass(map, x0 + (x + 0.5) / ppm, y0 + (y + 0.5) / ppm);
-  const ci = CONTOUR_INTERVAL, ii = CONTOUR_INTERVAL * INDEX_EVERY;
+  const ci = map.ci, ii = map.ci * map.index;
   for (let y = 0; y < H; y++) {
     for (let x = 0; x < W; x++) {
       const i = y * W + x, k = cls[i];
       let col = CLASS_COLOR(k);
       // Outline woods and water where they meet other ground.
-      if (k === TER.WOODS || k === TER.POND) {
+      if (k === TER.WOODS || k === TER.POND || k === TER.ICE) {
         const edge = (x > 0 && cls[i - 1] !== k) || (x < W - 1 && cls[i + 1] !== k) || (y > 0 && cls[i - W] !== k) || (y < H - 1 && cls[i + W] !== k);
-        if (edge && (k === TER.POND || level > 0)) col = k === TER.POND ? MAPC.waterEdge : MAPC.woodsEdge;
+        if (edge && (k !== TER.WOODS || level > 0)) col = k === TER.WOODS ? MAPC.woodsEdge : MAPC.waterEdge;
       }
       let [r, g, b] = col;
-      if (k !== TER.POND) {
+      if (k !== TER.POND && k !== TER.ICE) {
         const e = elev[(y + 1) * (W + 2) + x + 1], er = elev[(y + 1) * (W + 2) + x + 2], ed = elev[(y + 2) * (W + 2) + x + 1];
         const onIndex = Math.floor(e / ii) !== Math.floor(er / ii) || Math.floor(e / ii) !== Math.floor(ed / ii);
         const onLine = Math.floor(e / ci) !== Math.floor(er / ci) || Math.floor(e / ci) !== Math.floor(ed / ci);
@@ -204,6 +219,24 @@ function drawMapRegion(ctx, map, x0, y0, w, h, ppm, level) {
         ctx.moveTo(x - s * 0.7, y); ctx.lineTo(x - s * 0.9, y - s * 0.7);
         ctx.moveTo(x + s * 0.7, y); ctx.lineTo(x + s * 0.9, y - s * 0.7);
         ctx.stroke();
+      } else if ((k === TER.CHAPARRAL || k === TER.BRUSH) && (cx * 3 + cy * 7) % (k === TER.CHAPARRAL ? 2 : 3) === 0) {
+        // Scrub: small green dots in clumps.
+        ctx.fillStyle = '#4f8a3a';
+        const s = level === 2 ? 0.9 : 1.8, o = ((cx * 13 + cy * 5) % 5 - 2) * 0.6;
+        ctx.beginPath(); ctx.arc(x + o, y, s, 0, Math.PI * 2); ctx.arc(x + o + s * 2.2, y + s, s * 0.8, 0, Math.PI * 2); ctx.fill();
+      } else if (k === TER.DESERT && (cx * 7 + cy * 3) % 9 === 0) {
+        // Sparse creosote: a single small green dot.
+        ctx.fillStyle = '#6f9a52';
+        ctx.beginPath(); ctx.arc(x + ((cy * 7) % 5 - 2), y, level === 2 ? 0.7 : 1.4, 0, Math.PI * 2); ctx.fill();
+      } else if (k === TER.ROCK && (cx + cy * 3) % 2 === 0) {
+        // Rock: small brown angular marks.
+        ctx.fillStyle = '#7a5a3c';
+        const s = level === 2 ? 1.1 : 2.2;
+        ctx.beginPath(); ctx.moveTo(x - s, y + s * 0.6); ctx.lineTo(x, y - s * 0.8); ctx.lineTo(x + s, y + s * 0.6); ctx.closePath(); ctx.fill();
+      } else if ((k === TER.BEACH || k === TER.WASH) && (cx * 5 + cy * 11) % 3 === 0) {
+        // Sand: brown stipple.
+        ctx.fillStyle = '#a07a4a';
+        ctx.beginPath(); ctx.arc(x + ((cx * 3) % 3 - 1), y + ((cy * 5) % 3 - 1), level === 2 ? 0.45 : 0.9, 0, Math.PI * 2); ctx.fill();
       } else if (k === TER.GRASS && level === 2 && (cx * 7 + cy * 13) % 5 === 0) {
         ctx.strokeStyle = '#6f9a52';
         const s = 1.4;
@@ -220,7 +253,22 @@ function drawMapRegion(ctx, map, x0, y0, w, h, ppm, level) {
   for (const s of map.streams) {
     if (!lineIn(s.pts, 0)) continue;
     ctx.lineWidth = Math.max(s.width, 1.3 * pxm);
+    // An intermittent stream (dry wash): blue dashes and dots.
+    if (s.dry) ctx.setLineDash([14, 5, 2, 5]);
     stroke(s.pts);
+    ctx.setLineDash([]);
+  }
+  // The sea's name, along the coast.
+  if (map.R.coast && x0 < 600) {
+    const fs = (level === 0 ? 34 : 22) / ppm;
+    for (const yy of [800, 2200]) {
+      if (!inBox(110, yy, 600)) continue;
+      ctx.save(); ctx.translate(map.coastAt(yy / MAP_H) / 2, yy); ctx.rotate(-Math.PI / 2);
+      ctx.font = 'italic 700 ' + fs + 'px "Saira Condensed", "Arial Narrow", sans-serif';
+      ctx.textAlign = 'center'; ctx.textBaseline = 'middle'; ctx.fillStyle = BLUE_LINE;
+      ctx.fillText('P A C I F I C   O C E A N', 0, 0);
+      ctx.restore();
+    }
   }
 
   // River: a smooth band over the cell fill, blue banks and water tint between them.
@@ -410,7 +458,7 @@ function buildTerrain(map) {
 
   // Title block.
   text('STEX: RIFLE SQUAD', 0, -140, 34, { weight: 700 });
-  text('SERIES T25 · EDITION 1', 0, -104, 22, { weight: 500 });
+  text('SERIES T25 · EDITION 1 · ' + map.R.label.toUpperCase(), 0, -104, 22, { weight: 500 });
   text(('HILL ' + map.peak).toUpperCase(), MAP_W / 2, -118, 76, { weight: 700, serif: true, align: 'center' });
   text('SHEET ' + String(G.settings ? G.settings.seed : 0).padStart(5, '0'), MAP_W, -140, 34, { weight: 700, align: 'right' });
   text('1:25 000 · 3 × 3 KM', MAP_W, -104, 22, { weight: 500, align: 'right' });
@@ -418,12 +466,20 @@ function buildTerrain(map) {
   // Legend, bottom left.
   const ly = MAP_H + 160;
   text('LEGEND', 0, ly, 26, { weight: 700 });
+  // Only what is on this sheet goes in the legend.
+  const has = new Uint8Array(32);
+  for (let i = 0; i < map.ter.length; i += 7) has[map.ter[i]] = 1;
+  const ii = map.ci * map.index, wet = map.streams.some(s => !s.dry), dry = map.streams.some(s => s.dry);
   const rows = [
-    ['woods', 'Woods, hedgerow'], ['grass', 'Tall grass, scrub'], ['orchard', 'Orchard'], ['vineyard', 'Vineyard'],
-    ['paved', 'Hard surface road'], ['road', 'Unimproved road'], ['wall', 'Stone wall'], ['building', 'Building'],
-    ['stream', 'Stream'], ['pond', 'Pond'], ['index', 'Index contour (25 m)'], ['contour', 'Contour (5 m)'],
-    ['river', 'River, bridge, ford'], ['swamp', 'Swamp, marsh'],
-  ];
+    ['woods', 'Woods, hedgerow', has[TER.WOODS]], ['grass', 'Tall grass', has[TER.GRASS]], ['orchard', 'Orchard', has[TER.ORCHARD]],
+    ['vineyard', 'Vineyard', has[TER.VINEYARD]], ['chaparral', 'Chaparral', has[TER.CHAPARRAL]], ['brush', 'Mesquite brush', has[TER.BRUSH]],
+    ['desert', 'Desert scrub', has[TER.DESERT]], ['rock', 'Rock outcrop, talus', has[TER.ROCK]], ['snow', 'Deep snow', has[TER.SNOW]],
+    ['beach', 'Sand beach', has[TER.BEACH]],
+    ['paved', 'Hard surface road', 1], ['road', 'Unimproved road', 1], ['wall', 'Stone wall', has[TER.WALL]], ['building', 'Building', 1],
+    ['stream', 'Stream', wet], ['wash', 'Dry wash', dry], ['pond', map.R.ponds === 'ice' ? 'Frozen pond' : map.R.coast ? 'Pond, ocean' : 'Pond', has[TER.POND] || has[TER.ICE] || has[TER.OCEAN]],
+    ['index', 'Index contour (' + ii + ' m)', 1], ['contour', 'Contour (' + map.ci + ' m)', 1],
+    ['river', 'River, bridge, ford', !!map.river], ['swamp', 'Swamp, marsh', has[TER.SWAMP]],
+  ].filter(r => r[2]);
   rows.forEach(([k, label], i) => {
     const col = Math.floor(i / 4), row = i % 4;
     const x = col * 560, y = ly + 50 + row * 56;
@@ -432,6 +488,18 @@ function buildTerrain(map) {
     ctx.lineCap = 'round';
     if (k === 'woods') sw(MAPC.woods);
     else if (k === 'grass') sw(MAPC.grass);
+    else if (k === 'chaparral' || k === 'brush' || k === 'desert') {
+      sw(MAPC[k]); ctx.fillStyle = k === 'desert' ? '#6f9a52' : '#4f8a3a';
+      const n = k === 'desert' ? 3 : 8;
+      for (let t = 0; t < n; t++) { ctx.beginPath(); ctx.arc(x + 10 + t * (72 / Math.max(1, n - 1)), y + (t % 2 ? 6 : -6), 3, 0, Math.PI * 2); ctx.fill(); }
+    }
+    else if (k === 'rock') { sw(MAPC.rock); ctx.fillStyle = '#7a5a3c'; for (let t = 10; t < 90; t += 16) { ctx.beginPath(); ctx.moveTo(x + t - 5, y + 5 - (t % 3) * 3); ctx.lineTo(x + t, y - 6 - (t % 3) * 3); ctx.lineTo(x + t + 5, y + 5 - (t % 3) * 3); ctx.fill(); } }
+    else if (k === 'snow') { sw(MAPC.snow); ctx.strokeStyle = '#999'; ctx.lineWidth = 1; ctx.strokeRect(x, y - 16, 90, 32); }
+    else if (k === 'beach' || k === 'wash') {
+      sw(MAPC[k]); ctx.fillStyle = '#a07a4a';
+      for (let t = 0; t < 24; t++) { ctx.beginPath(); ctx.arc(x + 5 + (t * 37) % 80, y - 12 + (t * 23) % 24, 1.6, 0, Math.PI * 2); ctx.fill(); }
+      if (k === 'wash') { ctx.strokeStyle = BLUE_LINE; ctx.lineWidth = 4; ctx.setLineDash([14, 5, 2, 5]); ctx.beginPath(); ctx.moveTo(x, y); ctx.lineTo(x + 90, y); ctx.stroke(); ctx.setLineDash([]); }
+    }
     else if (k === 'orchard') { sw(MAPC.orchard); ctx.strokeStyle = '#4f8a3a'; ctx.lineWidth = 2; for (let t = 12; t < 90; t += 22) { ctx.beginPath(); ctx.arc(x + t, y, 5, 0, Math.PI * 2); ctx.stroke(); } }
     else if (k === 'vineyard') { sw(MAPC.vineyard); ctx.strokeStyle = '#4f8a3a'; ctx.lineWidth = 2; for (const dy of [-8, 0, 8]) { ctx.beginPath(); ctx.moveTo(x + 6, y + dy); ctx.lineTo(x + 84, y + dy); ctx.stroke(); } }
     else if (k === 'paved') { ctx.strokeStyle = MAP_INK; ctx.lineWidth = 16; ctx.beginPath(); ctx.moveTo(x, y); ctx.lineTo(x + 90, y); ctx.stroke(); ctx.strokeStyle = '#d0362a'; ctx.lineWidth = 10; ctx.stroke(); }
@@ -448,7 +516,7 @@ function buildTerrain(map) {
       sw(MAPC.swamp); ctx.strokeStyle = BLUE_LINE; ctx.lineWidth = 2;
       for (const tx of [18, 45, 72]) { ctx.beginPath(); ctx.moveTo(tx - 10, y + 6); ctx.lineTo(tx + 10, y + 6); ctx.moveTo(tx, y + 6); ctx.lineTo(tx, y - 6); ctx.moveTo(tx - 5, y + 6); ctx.lineTo(tx - 7, y - 2); ctx.moveTo(tx + 5, y + 6); ctx.lineTo(tx + 7, y - 2); ctx.stroke(); }
     }
-    else if (k === 'pond') { ctx.fillStyle = 'rgb(' + MAPC.water.join(',') + ')'; ctx.strokeStyle = BLUE_LINE; ctx.lineWidth = 3; ctx.beginPath(); ctx.ellipse(x + 45, y, 40, 15, 0, 0, Math.PI * 2); ctx.fill(); ctx.stroke(); }
+    else if (k === 'pond') { ctx.fillStyle = 'rgb(' + (map.R.ponds === 'ice' ? MAPC.ice : MAPC.water).join(',') + ')'; ctx.strokeStyle = BLUE_LINE; ctx.lineWidth = 3; ctx.beginPath(); ctx.ellipse(x + 45, y, 40, 15, 0, 0, Math.PI * 2); ctx.fill(); ctx.stroke(); }
     else if (k === 'index' || k === 'contour') { ctx.strokeStyle = RED_BROWN; ctx.lineWidth = k === 'index' ? 5 : 2.5; ctx.beginPath(); ctx.moveTo(x, y + 8); ctx.bezierCurveTo(x + 30, y - 16, x + 60, y + 16, x + 90, y - 6); ctx.stroke(); }
     ctx.restore();
     text(label, x + 110, y + 9, 26, { weight: 500, serif: true });
@@ -466,7 +534,7 @@ function buildTerrain(map) {
   text('METERS', sx + 1030, sy + 14, 22, { weight: 700 });
   // The declination diagram and notes sit at the bottom right.
   const nx = MAP_W - 520;
-  text('CONTOUR INTERVAL 5 METERS', nx, MAP_H + 200, 24, { weight: 700 });
+  text('CONTOUR INTERVAL ' + map.ci + ' METERS', nx, MAP_H + 200, 24, { weight: 700 });
   text('ELEVATIONS IN METERS ABOVE MEAN SEA LEVEL', nx, MAP_H + 234, 19, { weight: 500 });
   text('GRID: 1000 METER SQUARES', nx, MAP_H + 262, 19, { weight: 500 });
   text('TO GIVE A GRID REFERENCE: READ RIGHT, THEN UP', nx, MAP_H + 290, 19, { weight: 500 });

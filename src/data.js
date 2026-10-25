@@ -10,6 +10,7 @@ const GW = MAP_W / CELL, GH = MAP_H / CELL;
 const TER = {
   OPEN: 0, GRASS: 1, WOODS: 2, ROAD: 3, BUILDING: 4, WALL: 5, PLOWED: 6,
   ORCHARD: 7, VINEYARD: 8, STREAM: 9, POND: 10, PAVED: 11, SWAMP: 12, RIVER: 13, FORD: 14,
+  OCEAN: 15, BEACH: 16, CHAPARRAL: 17, BRUSH: 18, DESERT: 19, ROCK: 20, SNOW: 21, ICE: 22, WASH: 23,
 };
 
 // losH: height above ground the feature blocks sight to.
@@ -31,6 +32,15 @@ const TERRAIN = [
   { name: 'Swamp',        speed: 0.3,  losH: 1.6, density: 0.05,  cover: 0,   conceal: 0.5 },
   { name: 'River',        speed: 0,    losH: 0,   density: 0,     cover: 0,   conceal: 0 },
   { name: 'Ford',         speed: 0.25, losH: 0,   density: 0,     cover: 0,   conceal: 0 },
+  { name: 'Ocean',        speed: 0,    losH: 0,   density: 0,     cover: 0,   conceal: 0 },
+  { name: 'Beach sand',   speed: 0.7,  losH: 0,   density: 0,     cover: 0,   conceal: 0 },
+  { name: 'Chaparral',    speed: 0.45, losH: 2.2, density: 0.09,  cover: 0.05, conceal: 0.55 },
+  { name: 'Mesquite brush', speed: 0.65, losH: 2.8, density: 0.06, cover: 0.05, conceal: 0.5 },
+  { name: 'Desert scrub', speed: 0.95, losH: 1.0, density: 0.008, cover: 0,   conceal: 0.1 },
+  { name: 'Rock outcrop', speed: 0.4,  losH: 1.6, density: 0.25,  cover: 0.6, conceal: 0.45 },
+  { name: 'Deep snow',    speed: 0.55, losH: 0,   density: 0,     cover: 0,   conceal: 0 },
+  { name: 'Frozen pond',  speed: 0.5,  losH: 0,   density: 0,     cover: 0,   conceal: 0 },
+  { name: 'Dry wash',     speed: 0.85, losH: 0,   density: 0,     cover: 0,   conceal: 0.25 },
 ];
 
 // eye: sight height. center: center of mass. size: relative target size.

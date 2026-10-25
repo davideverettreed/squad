@@ -366,6 +366,16 @@ const UI = {
     modeSel.addEventListener('change', () => { set.mode = modeSel.value; desc.textContent = modes[set.mode]; });
     mp.appendChild(modeSel); mp.appendChild(desc);
     sit.appendChild(mp);
+    const rp = el('p');
+    const regSel = el('select'); regSel.id = 'missionRegion';
+    for (const [k, t] of [['random', 'Random region'], ...REGION_KEYS.map(k => [k, REGIONS[k].label])]) {
+      const o = el('option', null, t); o.value = k; if (set.region === k) o.selected = true; regSel.appendChild(o);
+    }
+    const rdesc = el('span', 'bdesc', set.region === 'random' ? 'Any of the regions, drawn from the map number.' : REGIONS[set.region].brief);
+    regSel.addEventListener('change', () => { set.region = regSel.value; rdesc.textContent = set.region === 'random' ? 'Any of the regions, drawn from the map number.' : REGIONS[set.region].brief; });
+    sit.appendChild(el('h3', null, 'Region'));
+    rp.appendChild(regSel); rp.appendChild(rdesc);
+    sit.appendChild(rp);
     const seedRow = el('p', 'bseed');
     seedRow.appendChild(el('span', null, 'Map number '));
     const seedIn = el('input'); seedIn.id = 'missionSeed'; seedIn.type = 'number'; seedIn.value = set.seed;
