@@ -140,6 +140,7 @@ const UI = {
   // ------------------------------------------------------------ map taps
   handleTap(sx, sy, secondary) {
     if (!G.running || G.over) return;
+    if ($('planMenu')) { this.closePlanMenu(); return; }
     const w = toWorld(sx, sy);
     if (Plan.tool && !secondary) { Plan.place(w); return; }
     const piece = pieceAt(sx, sy);
@@ -147,6 +148,19 @@ const UI = {
     // An enemy piece stands for its nearest visible, effective man.
     const enemy = piece && piece.side === 'red' ? (piece.kind === 'man' ? (piece.soldier.active ? piece.soldier : null)
       : piece.live.filter(s => enemyVisible(s)).sort((a, b) => dist(a.x, a.y, w.x, w.y) - dist(b.x, b.y, w.x, w.y))[0] || null) : null;
+    // While planning, nothing moves: a tap on the map with a unit selected offers the
+    // control measures and plan lines that can be set at that spot.
+    if (Plan.planning && !(piece && piece.side === 'blue' && !secondary)) {
+      if (sel && G.ui.pending) {
+        const p = G.ui.pending, step = { bound: 'bound', assault: 'obj', suppress: 'trp' }[p];
+        G.ui.pending = null; this.refreshOrders();
+        if (step) Plan.addStep(sel, w, step);
+        else this.toast('That order is given by radio after step-off.');
+        return;
+      }
+      if (sel) { this.planMenu(sx, sy, w, sel); return; }
+      if (secondary) return;
+    }
     if (secondary) {
       G.ui.pending = null;
       if (sel) issueOrder(sel, enemy ? 'engage' : 'move', enemy || w);
@@ -169,6 +183,33 @@ const UI = {
     if (enemy && sel) { issueOrder(sel, 'engage', enemy); return; }
     if (sel) issueOrder(sel, 'move', w);
   },
+
+  planMenu(sx, sy, w, sel) {
+    this.closePlanMenu();
+    const unit = Plan.planUnit(sel), m = el('div', 'planmenu');
+    m.id = 'planMenu';
+    m.appendChild(el('div', 'pmhead', PLAN_UNITS[unit] + ' · ' + gridRef(w.x, w.y)));
+    const items = [
+      ['cp', 'Checkpoint', 'move here'], ['bound', 'Bound here', 'bounding overwatch'],
+      ['rte', 'Route from here', 'tap waypoints'], ['fp', 'Fighting position', 'occupy and defend'],
+      ['sbf', 'Support by fire', 'fire onto the objective'], ['aslt', 'Assault position', 'last cover before the assault'],
+      ['obj', 'Objective', 'assault here'], ['trp', 'Target ref. point', 'suppress here'],
+    ];
+    for (const [k, label, note] of items) {
+      const b = el('button', 'pmitem');
+      b.appendChild(el('b', null, label)); b.appendChild(el('span', null, note));
+      b.addEventListener('click', () => { this.closePlanMenu(); Plan.addStep(sel, w, k); });
+      m.appendChild(b);
+    }
+    const c = el('button', 'pmitem pmcancel', 'Cancel');
+    c.addEventListener('click', () => this.closePlanMenu());
+    m.appendChild(c);
+    document.body.appendChild(m);
+    const r = m.getBoundingClientRect(), vw = window.innerWidth, vh = window.innerHeight;
+    m.style.left = clamp(sx + 10, 8, vw - r.width - 8) + 'px';
+    m.style.top = clamp(sy - r.height / 2, 8, vh - r.height - 8) + 'px';
+  },
+  closePlanMenu() { const m = $('planMenu'); if (m) m.remove(); },
 
   // ------------------------------------------------------------ roster
   buildRoster() {

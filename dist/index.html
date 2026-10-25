@@ -326,6 +326,17 @@ kbd { font: 600 12px/1 var(--mono); border: 1px solid var(--line); border-bottom
   .dtable { font-size: 12px; padding: 10px; }
 }
 @media (prefers-reduced-motion: reduce) { * { scroll-behavior: auto !important; } }
+
+/* Planning: the menu that opens where the map is tapped. */
+.planmenu { position: fixed; z-index: 60; min-width: 210px; background: #f7f5f0; color: #1c2b3a;
+  border: 1px solid #b08d57; border-radius: 6px; box-shadow: 0 6px 20px rgba(0,0,0,.35); padding: 4px; }
+.planmenu .pmhead { font: 700 12px "Saira Condensed", sans-serif; letter-spacing: .06em; text-transform: uppercase;
+  padding: 4px 8px 6px; border-bottom: 1px solid #b08d57; margin-bottom: 2px; }
+.planmenu .pmitem { display: flex; justify-content: space-between; gap: 10px; width: 100%; background: none; border: 0;
+  padding: 7px 8px; font-size: 14px; color: inherit; text-align: left; border-radius: 4px; cursor: pointer; }
+.planmenu .pmitem span { color: #6b7380; font-size: 12px; }
+.planmenu .pmitem:hover { background: rgba(176,141,87,.18); }
+.planmenu .pmcancel { justify-content: center; color: #8a2d2d; border-top: 1px solid rgba(176,141,87,.5); margin-top: 2px; }
 </style>
 </head>
 <body>
@@ -406,15 +417,15 @@ kbd { font: 600 12px/1 var(--mono); border: 1px solid var(--line); border-bottom
         <h3>Selecting</h3>
         <p>Tap a Marine to select that Marine. Tap again to select the fire team, and again for the whole squad. The Squad and fire team buttons above the orders do the same. Keys: <kbd>1</kbd> <kbd>2</kbd> <kbd>3</kbd> fire teams, <kbd>0</kbd> squad, <kbd>Esc</kbd> cancel.</p>
         <h3>Moving</h3>
-        <p>Pick Walk, Rush or Crawl, then tap the ground. Right-click also moves. Teams and the squad move in their formation. A walking team that takes fire, or sees a new enemy within 250 m, halts on its own, gets down and returns fire; rush, assault or bound to keep moving under fire. Rushing is fast but tiring and easy to spot. Crawling is slow but men can crawl while pinned.</p>
+        <p>While planning, nothing moves: select a unit and tap the map to open a menu that sets a checkpoint, a bound, a route, a fighting position, a support-by-fire position, an assault position, an objective or a target reference point at that spot and adds the line to the plan. After step-off, orders go by radio: pick Walk, Rush or Crawl, then tap the ground. Right-click also moves. Teams and the squad move in their formation. A walking team that takes fire, or sees a new enemy within 250 m, halts on its own, gets down and returns fire; rush, assault or bound to keep moving under fire. Rushing is fast but tiring and easy to spot. Crawling is slow but men can crawl while pinned.</p>
         <h3>Fire and maneuver</h3>
         <p><b>Suppress</b> puts fire on an area, seen enemy or not. <b>Bound</b> sends the squad forward one fire team at a time while the others cover it (a fire team bounds in buddy pairs). <b>Assault</b> walks forward firing and throwing grenades. Tap a visible enemy to make the selection engage that target.</p>
         <h3>Reading the pieces</h3>
-        <p>Blue pieces are your Marines; red pieces are enemy you can see. A selected piece is lifted off the map and circled in blue. The shaded cone shows where a man is looking: he sweeps it left and right, wide and slow when calm, tighter and quicker when the enemy is near, fast and jerky under fire, and holds it on his target while firing. He is far more likely to spot an enemy inside his cone. The numeral beside him is his fire team. Cones toggles them (key V). Chits stacked on a piece show posture (STD, KNL, PRN), suppression (SUP, or PIN when pinned; a pinned man moves only by crawling), a wound (WIA) and no ammunition (AMO). A slash through a piece is a casualty; an X is killed. A red symbol in a dashed frame is where an enemy was last seen.</p>
+        <p>Blue pieces are your Marines; red pieces are enemy you can see. A selected piece is lifted off the map in a gold halo. The shaded cone shows where a man is looking: he sweeps it left and right, wide and slow when calm, tighter and quicker when the enemy is near, fast and jerky under fire, and holds it on his target while firing. He is far more likely to spot an enemy inside his cone. The numeral beside him is his fire team. Cones toggles them (key V). Chits stacked on a piece show posture (STD, KNL, PRN), suppression (SUP, or PIN when pinned; a pinned man moves only by crawling), a wound (WIA) and no ammunition (AMO). A slash through a piece is a casualty; an X is killed. A red symbol in a dashed frame is where an enemy was last seen.</p>
         <h3>Overlay</h3>
         <p>Orders are drawn as on an acetate overlay: blue for friendly, red for enemy, black for targets. Blue lines with arrowheads are routes (long dashes for a rush, dots for a crawl); a heavy arrow with a solid head is an assault. OBJ marks the objective of a bounding drill. Dashed blue lines run from the shooters to a suppression target, a black cross in a circle. 40MM marks a grenade launcher target.</p>
         <h3>Map key</h3>
-        <p>The sheet covers 3 by 3 kilometers in nine 1-kilometer grid squares, in standard US military map colors. White is open ground. Light green with tufts is tall grass, which hides a man lying prone. Green is woods and hedgerows; rows of small green circles are orchards, green row lines are vineyards. Blue lines are streams, which run in shallow gullies that give cover; blue areas are ponds and cannot be crossed. Red-brown lines are contours 5 meters apart, with a heavier, numbered index contour every 25 meters; numbers with a dot are hilltop heights. Black blocks are buildings. A black line with ticks is a stone wall, which gives hard cover to a kneeling or prone man. The red road is a paved road; the dashed double lines are dirt tracks. Point at the map to read the 8-digit grid reference. Zoomed out, your men gather into one counter per fire team, then one for the squad, in the standard unit symbol: a rectangle with an infantry X for friendly, a diamond for enemy.</p>
+        <p>The sheet covers 3 by 3 kilometers in nine 1-kilometer grid squares, in standard US military map colors. White is open ground. Light green with tufts is tall grass, which hides a man lying prone. Green is woods and hedgerows; rows of small green circles are orchards, green row lines are vineyards. Blue lines are streams, which run in shallow gullies that give cover; blue areas are ponds and cannot be crossed. A broad blue band is a river: it can be crossed only at a bridge (two black lines across the road) or at a ford, marked FORD in a dashed blue circle, where men wade slowly in the open. Pale blue-green ground with small blue tufts is swamp: very slow going and no cover, but it hides a man. Red-brown lines are contours 5 meters apart, with a heavier, numbered index contour every 25 meters; numbers with a dot are hilltop heights. Black blocks are buildings. A black line with ticks is a stone wall, which gives hard cover to a kneeling or prone man. The red road is a paved road; the dashed double lines are dirt tracks. Point at the map to read the 8-digit grid reference. Zoomed out, your men gather into one counter per fire team, then one for the squad, in the standard unit symbol: a rectangle with an infantry X for friendly, a diamond for enemy.</p>
         <h3>Camera</h3>
         <p>Drag to pan. Use the wheel or pinch to zoom. <kbd>Space</kbd> pauses; you can give orders while paused.</p>
       </div>
@@ -509,7 +520,7 @@ const GW = MAP_W / CELL, GH = MAP_H / CELL;
 
 const TER = {
   OPEN: 0, GRASS: 1, WOODS: 2, ROAD: 3, BUILDING: 4, WALL: 5, PLOWED: 6,
-  ORCHARD: 7, VINEYARD: 8, STREAM: 9, POND: 10, PAVED: 11,
+  ORCHARD: 7, VINEYARD: 8, STREAM: 9, POND: 10, PAVED: 11, SWAMP: 12, RIVER: 13, FORD: 14,
 };
 
 // losH: height above ground the feature blocks sight to.
@@ -528,6 +539,9 @@ const TERRAIN = [
   { name: 'Stream',       speed: 0.35, losH: 0,   density: 0,     cover: 0,   conceal: 0.2 },
   { name: 'Pond',         speed: 0,    losH: 0,   density: 0,     cover: 0,   conceal: 0 },
   { name: 'Paved road',   speed: 1.2,  losH: 0,   density: 0,     cover: 0,   conceal: 0 },
+  { name: 'Swamp',        speed: 0.3,  losH: 1.6, density: 0.05,  cover: 0,   conceal: 0.5 },
+  { name: 'River',        speed: 0,    losH: 0,   density: 0,     cover: 0,   conceal: 0 },
+  { name: 'Ford',         speed: 0.25, losH: 0,   density: 0,     cover: 0,   conceal: 0 },
 ];
 
 // eye: sight height. center: center of mass. size: relative target size.
@@ -696,9 +710,11 @@ class GameMap {
   generate() {
     this.genElevation();
     this.genHydrology();
+    this.genSwamps();
     this.genFields();
     this.genWoods();
     this.genRoads();
+    this.genFords();
     this.genVillages();
     this.genFarms();
     this.elevBase = randInt(6, 40) * 10; // height above sea level of the lowest ground
@@ -803,15 +819,16 @@ class GameMap {
     for (let i = 0; i < N; i++) {
       if (!isStream[i] || feeds[i]) continue;
       const pts = [];
-      let c = i, width = 1.5;
+      let c = i, width = 1.5, flow = 0;
       while (c >= 0) {
         pts.push({ x: (c % GW + 0.5) * CELL, y: (Math.floor(c / GW) + 0.5) * CELL });
         width = Math.max(width, 1.5 + 3 * clamp(Math.log(acc[c] / T) / Math.log(30), 0, 1));
+        flow = Math.max(flow, acc[c]);
         if (traced[c]) break;
         traced[c] = 1;
         c = down[c];
       }
-      if (pts.length > 3) this.streams.push({ pts: simplifyLine(pts, 3), width });
+      if (pts.length > 3) this.streams.push({ pts: simplifyLine(pts, 3), width, flow, len: pts.length * CELL });
     }
     // Streams cut small gullies: a meter or so below the banks.
     const cut = new Float32Array(N);
@@ -826,9 +843,78 @@ class GameMap {
       }
     }
     for (let i = 0; i < N; i++) this.elev[i] -= cut[i];
+    // On most sheets the biggest watercourse, if long enough, is a river.
+    const main = this.streams.filter(s => s.len > 1200).sort((a, b) => b.flow - a.flow)[0];
+    if (main && chance(0.75)) this.makeRiver(main);
   }
 
-  isWet(i) { return this.ter[i] === TER.STREAM || this.ter[i] === TER.POND; }
+  // A river 12-18 m wide down the main valley: impassable on foot except at bridges and fords.
+  makeRiver(st) {
+    const width = randRange(12, 18), half = width / 2;
+    this.streams = this.streams.filter(s => s !== st);
+    for (let k = 1; k < st.pts.length; k++) {
+      const a = st.pts[k - 1], b = st.pts[k];
+      const x0 = Math.floor((Math.min(a.x, b.x) - half) / CELL) - 1, x1 = Math.ceil((Math.max(a.x, b.x) + half) / CELL) + 1;
+      const y0 = Math.floor((Math.min(a.y, b.y) - half) / CELL) - 1, y1 = Math.ceil((Math.max(a.y, b.y) + half) / CELL) + 1;
+      const L2 = Math.max(1e-6, (b.x - a.x) ** 2 + (b.y - a.y) ** 2);
+      for (let cy = y0; cy <= y1; cy++) for (let cx = x0; cx <= x1; cx++) {
+        if (!this.inGrid(cx, cy)) continue;
+        const px = (cx + 0.5) * CELL, py = (cy + 0.5) * CELL;
+        const t = clamp(((px - a.x) * (b.x - a.x) + (py - a.y) * (b.y - a.y)) / L2, 0, 1);
+        const d = dist(px, py, a.x + (b.x - a.x) * t, a.y + (b.y - a.y) * t);
+        const i = cy * GW + cx;
+        if (d <= half && this.ter[i] !== TER.RIVER) { this.ter[i] = TER.RIVER; this.elev[i] -= 1.5; }
+      }
+    }
+    this.river = { pts: st.pts, width, name: pick(PLACE_A).toUpperCase() + ' RIVER', bridges: [], fords: [] };
+  }
+
+  // Marsh in the flat low ground beside water: passable, very slow, reeds give concealment.
+  genSwamps() {
+    const N = GW * GH, water = (k) => k === TER.STREAM || k === TER.POND || k === TER.RIVER;
+    const d = new Uint8Array(N).fill(255), q = [];
+    for (let i = 0; i < N; i++) if (water(this.ter[i])) { d[i] = 0; q.push(i); }
+    for (let h = 0; h < q.length; h++) {
+      const c = q[h], x = c % GW, y = Math.floor(c / GW);
+      if (d[c] >= 10) continue;
+      for (const [dx, dy] of [[1, 0], [-1, 0], [0, 1], [0, -1]]) {
+        const nx = x + dx, ny = y + dy, j = ny * GW + nx;
+        if (this.inGrid(nx, ny) && d[j] === 255) { d[j] = d[c] + 1; q.push(j); }
+      }
+    }
+    const sample = [];
+    for (let i = 0; i < N; i += 97) sample.push(this.elev[i]);
+    sample.sort((a, b) => a - b);
+    const low = sample[Math.floor(sample.length * 0.3)];
+    const n1 = this.noise(16, 16);
+    for (let cy = 1; cy < GH - 1; cy++) for (let cx = 1; cx < GW - 1; cx++) {
+      const i = cy * GW + cx;
+      if (d[i] === 0 || d[i] > 10 || this.elev[i] > low) continue;
+      const slope = Math.hypot(this.elev[i + 1] - this.elev[i - 1], this.elev[i + GW] - this.elev[i - GW]) / (2 * CELL);
+      if (slope < 0.04 && n1((cx + 0.5) / GW, (cy + 0.5) / GH) > 0.5) this.ter[i] = TER.SWAMP;
+    }
+  }
+
+  // One or two fords across the river, away from the bridges.
+  genFords() {
+    const r = this.river;
+    if (!r) return;
+    const want = randInt(1, 2), pts = r.pts;
+    for (const f of shuffle([0.25, 0.45, 0.65, 0.8])) {
+      if (r.fords.length >= want) break;
+      const p = pts[Math.floor(f * (pts.length - 1))];
+      if (p.x < 100 || p.y < 100 || p.x > MAP_W - 100 || p.y > MAP_H - 100) continue;
+      if (r.bridges.some(b => dist(b.x, b.y, p.x, p.y) < 350) || r.fords.some(b => dist(b.x, b.y, p.x, p.y) < 350)) continue;
+      const c = this.cellOf(p.x, p.y), rr = Math.ceil((r.width / 2 + 6) / CELL);
+      for (let j = -rr; j <= rr; j++) for (let i = -rr; i <= rr; i++) {
+        const x = c.cx + i, y = c.cy + j;
+        if (this.inGrid(x, y) && this.ter[y * GW + x] === TER.RIVER && Math.hypot(i, j) * CELL <= 10) this.ter[y * GW + x] = TER.FORD;
+      }
+      r.fords.push({ x: p.x, y: p.y });
+    }
+  }
+
+  isWet(i) { const k = this.ter[i]; return k === TER.STREAM || k === TER.POND || k === TER.SWAMP || k === TER.RIVER || k === TER.FORD; }
 
   // Farm fields as Voronoi patches on a jittered lattice, bounded by hedgerows, stone walls or nothing.
   genFields() {
@@ -907,6 +993,8 @@ class GameMap {
         let cost = (dx && dy ? 1.414 : 1) * (1 + grade * grade * 400);
         if (k === TER.WOODS) cost *= 2;
         if (k === TER.STREAM) cost += 12;
+        if (k === TER.RIVER) cost += 60;
+        if (k === TER.SWAMP) cost *= 3;
         if (k === TER.ROAD || k === TER.PAVED) cost *= 0.4;
         const ng = g[cur] + cost;
         if (ng < g[ni]) { g[ni] = ng; came[ni] = cur; heap.push(ni, ng + h(ni)); }
@@ -920,6 +1008,19 @@ class GameMap {
 
   layRoad(cells, kind) {
     const t = kind === 'paved' ? TER.PAVED : TER.ROAD;
+    // Where the road crosses the river, a bridge: one per run of river cells.
+    let run = [];
+    const endRun = () => {
+      if (!run.length) return;
+      const a = run[0], b = run[run.length - 1];
+      const ax = (a % GW + 0.5) * CELL, ay = (Math.floor(a / GW) + 0.5) * CELL, bx = (b % GW + 0.5) * CELL, by = (Math.floor(b / GW) + 0.5) * CELL;
+      const ia = cells.indexOf(a), pa = cells[Math.max(0, ia - 1)], pb = cells[Math.min(cells.length - 1, cells.indexOf(b) + 1)];
+      const ang = Math.atan2(Math.floor(pb / GW) - Math.floor(pa / GW), pb % GW - pa % GW);
+      if (this.river) this.river.bridges.push({ x: (ax + bx) / 2, y: (ay + by) / 2, a: ang, len: dist(ax, ay, bx, by) + CELL, kind });
+      run = [];
+    };
+    for (const c of cells) { if (this.ter[c] === TER.RIVER) run.push(c); else endRun(); }
+    endRun();
     for (const c of cells) if (this.ter[c] !== TER.PAVED) this.ter[c] = t;
     const pts = cells.map(c => ({ x: (c % GW + 0.5) * CELL, y: (Math.floor(c / GW) + 0.5) * CELL }));
     this.roads.push({ kind, pts: simplifyLine(pts, 2.5), cells });
@@ -944,7 +1045,7 @@ class GameMap {
     for (let j = 0; j < h; j++) for (let i = 0; i < w; i++) {
       if (!this.inGrid(cx + i, cy + j)) return false;
       const t = this.ter[(cy + j) * GW + cx + i];
-      if (t === TER.BUILDING || t === TER.ROAD || t === TER.PAVED || t === TER.STREAM || t === TER.POND) return false;
+      if (t === TER.BUILDING || t === TER.ROAD || t === TER.PAVED || this.isWet((cy + j) * GW + cx + i)) return false;
     }
     return true;
   }
@@ -1154,7 +1255,7 @@ class GameMap {
     g[start] = 0;
     heap.push(start, h(start));
     let found = false, expanded = 0;
-    while (heap.size && expanded < 250000) {
+    while (heap.size && expanded < 600000) {
       const cur = heap.pop();
       if (cur === end) { found = true; break; }
       if (closed[cur]) continue;
@@ -1232,6 +1333,7 @@ class GameMap {
       else if (k === TER.GRASS || k === TER.VINEYARD) score += 1.2;
       else if (k === TER.ORCHARD) score += 0.8;
       else if (k === TER.STREAM) score += 1.6; // the gully
+      else if (k === TER.SWAMP) score += 1.0;  // reeds
       // Defilade: ground rising toward the threat.
       if (this.elevAt(px + ca * 6, py + sa * 6) - this.elevAt(px, py) > 0.45) score += 1.5;
       score -= d * 0.12;
@@ -2595,6 +2697,7 @@ const MAPC = {
   woodsEdge: [132, 176, 108],
   orchard: [214, 233, 194],
   vineyard: [218, 234, 198],
+  swamp: [226, 238, 236],
   water: [176, 220, 244],
   waterEdge: [40, 140, 205],
   contour: [168, 84, 50],
@@ -2602,14 +2705,15 @@ const MAPC = {
 const CONTOUR_INTERVAL = 5, INDEX_EVERY = 5;
 const MAP_INK = '#161616', BLUE_LINE = 'rgb(40,140,205)', RED_BROWN = 'rgb(168,84,50)';
 const CLASS_COLOR = (k) => k === TER.WOODS ? MAPC.woods : k === TER.GRASS ? MAPC.grass : k === TER.PLOWED ? MAPC.plowed
-  : k === TER.ORCHARD ? MAPC.orchard : k === TER.VINEYARD ? MAPC.vineyard : k === TER.POND ? MAPC.water : MAPC.paper;
+  : k === TER.ORCHARD ? MAPC.orchard : k === TER.VINEYARD ? MAPC.vineyard : k === TER.POND ? MAPC.water : k === TER.SWAMP ? MAPC.swamp : MAPC.paper;
 
 // Ground class at a point: the class with the most weight among the four nearest
 // cells, which gives smooth edges to woods, fields and water at any zoom.
 function groundClass(map, x, y) {
   const fx = clamp(x / CELL - 0.5, 0, GW - 1.001), fy = clamp(y / CELL - 0.5, 0, GH - 1.001);
   const x0 = Math.floor(fx), y0 = Math.floor(fy), tx = fx - x0, ty = fy - y0, i = y0 * GW + x0;
-  const cls = (k) => k === TER.WOODS || k === TER.GRASS || k === TER.PLOWED || k === TER.ORCHARD || k === TER.VINEYARD || k === TER.POND ? k : 0;
+  // River and ford water draw like pond water.
+  const cls = (k) => k === TER.RIVER || k === TER.FORD ? TER.POND : k === TER.WOODS || k === TER.GRASS || k === TER.PLOWED || k === TER.ORCHARD || k === TER.VINEYARD || k === TER.POND || k === TER.SWAMP ? k : 0;
   const a = cls(map.ter[i]), b = cls(map.ter[i + 1]), c = cls(map.ter[i + GW]), d = cls(map.ter[i + GW + 1]);
   if (a === b && b === c && c === d) return a;
   const w = new Map();
@@ -2717,6 +2821,16 @@ function drawMapRegion(ctx, map, x0, y0, w, h, ppm, level) {
       } else if (k === TER.VINEYARD) {
         ctx.strokeStyle = '#4f8a3a';
         ctx.beginPath(); ctx.moveTo(x - CELL * step * 0.35, y); ctx.lineTo(x + CELL * step * 0.35, y); ctx.stroke();
+      } else if (k === TER.SWAMP && (cx * 5 + cy * 3) % 3 === 0) {
+        // Marsh: a short blue dash with tufts rising from it.
+        ctx.strokeStyle = BLUE_LINE;
+        const s = level === 2 ? 1.6 : 3.2;
+        ctx.beginPath();
+        ctx.moveTo(x - s * 1.4, y); ctx.lineTo(x + s * 1.4, y);
+        ctx.moveTo(x, y); ctx.lineTo(x, y - s);
+        ctx.moveTo(x - s * 0.7, y); ctx.lineTo(x - s * 0.9, y - s * 0.7);
+        ctx.moveTo(x + s * 0.7, y); ctx.lineTo(x + s * 0.9, y - s * 0.7);
+        ctx.stroke();
       } else if (k === TER.GRASS && level === 2 && (cx * 7 + cy * 13) % 5 === 0) {
         ctx.strokeStyle = '#6f9a52';
         const s = 1.4;
@@ -2736,6 +2850,15 @@ function drawMapRegion(ctx, map, x0, y0, w, h, ppm, level) {
     stroke(s.pts);
   }
 
+  // River: a smooth band over the cell fill, blue banks and water tint between them.
+  if (map.river && lineIn(map.river.pts, map.river.width)) {
+    const rv = map.river;
+    ctx.save(); ctx.lineJoin = 'round'; ctx.lineCap = 'round';
+    ctx.strokeStyle = BLUE_LINE; ctx.lineWidth = rv.width + 2.4 * pxm; stroke(rv.pts);
+    ctx.strokeStyle = 'rgb(' + MAPC.water.join(',') + ')'; ctx.lineWidth = rv.width; stroke(rv.pts);
+    ctx.restore();
+  }
+
   // Roads: the paved road red with black casing; dirt tracks a dashed black double line.
   for (const r of map.roads) {
     if (!lineIn(r.pts, 0)) continue;
@@ -2746,6 +2869,50 @@ function drawMapRegion(ctx, map, x0, y0, w, h, ppm, level) {
       ctx.strokeStyle = MAP_INK; ctx.lineWidth = Math.max(6, 3.4 * pxm);
       ctx.setLineDash([Math.max(8, 6 * pxm), Math.max(4, 3 * pxm)]); stroke(r.pts); ctx.setLineDash([]);
       ctx.strokeStyle = 'rgb(' + MAPC.paper.join(',') + ')'; ctx.lineWidth = Math.max(4.4, 1.8 * pxm); stroke(r.pts);
+    }
+  }
+
+  // River: bridges (two black lines with flared ends along the road), fords, and the name.
+  const rv = map.river;
+  if (rv) {
+    ctx.strokeStyle = MAP_INK; ctx.lineWidth = Math.max(1.2, 1.4 * pxm);
+    for (const b of rv.bridges) {
+      if (!inBox(b.x, b.y, 60)) continue;
+      const ca = Math.cos(b.a), sa = Math.sin(b.a), nx = -sa, ny = ca;
+      const half = b.len / 2 + 3, off = (b.kind === 'paved' ? 6 : 4.5);
+      for (const sgn of [-1, 1]) {
+        const ox = nx * off * sgn, oy = ny * off * sgn;
+        ctx.beginPath();
+        ctx.moveTo(b.x - ca * half + ox + nx * 2.5 * sgn - ca * 2.5, b.y - sa * half + oy + ny * 2.5 * sgn - sa * 2.5);
+        ctx.lineTo(b.x - ca * half + ox, b.y - sa * half + oy);
+        ctx.lineTo(b.x + ca * half + ox, b.y + sa * half + oy);
+        ctx.lineTo(b.x + ca * half + ox + nx * 2.5 * sgn + ca * 2.5, b.y + sa * half + oy + ny * 2.5 * sgn + sa * 2.5);
+        ctx.stroke();
+      }
+    }
+    const fs0 = (level === 0 ? 10 : LEVELS[level].label) / ppm;
+    for (const f of rv.fords) {
+      if (!inBox(f.x, f.y, 80)) continue;
+      ctx.font = 'italic 700 ' + fs0 + 'px "Saira Condensed", "Arial Narrow", sans-serif';
+      ctx.textAlign = 'left'; ctx.textBaseline = 'middle';
+      ctx.lineWidth = fs0 * 0.3; ctx.strokeStyle = 'rgba(247,245,236,0.95)'; ctx.strokeText('FORD', f.x + rv.width, f.y);
+      ctx.fillStyle = BLUE_LINE; ctx.fillText('FORD', f.x + rv.width, f.y);
+      ctx.strokeStyle = BLUE_LINE; ctx.lineWidth = Math.max(0.8, 1 * pxm); ctx.setLineDash([3, 2]);
+      ctx.beginPath(); ctx.arc(f.x, f.y, 10, 0, Math.PI * 2); ctx.stroke(); ctx.setLineDash([]);
+    }
+    // The river's name along a long straight reach.
+    let best = null, bl = 0;
+    for (let k = 1; k < rv.pts.length; k++) { const a = rv.pts[k - 1], b = rv.pts[k], L = dist(a.x, a.y, b.x, b.y); if (L > bl) { bl = L; best = [a, b]; } }
+    if (best && inBox((best[0].x + best[1].x) / 2, (best[0].y + best[1].y) / 2, 300)) {
+      let ang = Math.atan2(best[1].y - best[0].y, best[1].x - best[0].x);
+      if (ang > Math.PI / 2) ang -= Math.PI; if (ang < -Math.PI / 2) ang += Math.PI;
+      const mx = (best[0].x + best[1].x) / 2, my = (best[0].y + best[1].y) / 2, fs1 = fs0 * 1.3;
+      ctx.save(); ctx.translate(mx - Math.sin(ang) * (rv.width / 2 + fs1), my + Math.cos(ang) * (rv.width / 2 + fs1)); ctx.rotate(ang);
+      ctx.font = 'italic 700 ' + fs1 + 'px "Saira Condensed", "Arial Narrow", sans-serif';
+      ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+      ctx.lineWidth = fs1 * 0.3; ctx.strokeStyle = 'rgba(247,245,236,0.95)'; ctx.strokeText(rv.name, 0, 0);
+      ctx.fillStyle = BLUE_LINE; ctx.fillText(rv.name, 0, 0);
+      ctx.restore();
     }
   }
 
@@ -2882,6 +3049,7 @@ function buildTerrain(map) {
     ['woods', 'Woods, hedgerow'], ['grass', 'Tall grass, scrub'], ['orchard', 'Orchard'], ['vineyard', 'Vineyard'],
     ['paved', 'Hard surface road'], ['road', 'Unimproved road'], ['wall', 'Stone wall'], ['building', 'Building'],
     ['stream', 'Stream'], ['pond', 'Pond'], ['index', 'Index contour (25 m)'], ['contour', 'Contour (5 m)'],
+    ['river', 'River, bridge, ford'], ['swamp', 'Swamp, marsh'],
   ];
   rows.forEach(([k, label], i) => {
     const col = Math.floor(i / 4), row = i % 4;
@@ -2898,6 +3066,15 @@ function buildTerrain(map) {
     else if (k === 'wall') { ctx.strokeStyle = MAP_INK; ctx.lineWidth = 3; ctx.beginPath(); ctx.moveTo(x, y); ctx.lineTo(x + 90, y); ctx.stroke(); ctx.lineWidth = 2; ctx.beginPath(); for (let t = 6; t < 90; t += 12) { ctx.moveTo(x + t, y); ctx.lineTo(x + t, y + 8); } ctx.stroke(); }
     else if (k === 'building') { ctx.fillStyle = MAP_INK; ctx.fillRect(x + 30, y - 14, 30, 28); }
     else if (k === 'stream') { ctx.strokeStyle = BLUE_LINE; ctx.lineWidth = 5; ctx.beginPath(); ctx.moveTo(x, y + 8); ctx.bezierCurveTo(x + 30, y - 16, x + 60, y + 16, x + 90, y - 6); ctx.stroke(); }
+    else if (k === 'river') {
+      ctx.fillStyle = 'rgb(' + MAPC.water.join(',') + ')'; ctx.fillRect(x, y - 9, 90, 18);
+      ctx.strokeStyle = BLUE_LINE; ctx.lineWidth = 2; ctx.beginPath(); ctx.moveTo(x, y - 9); ctx.lineTo(x + 90, y - 9); ctx.moveTo(x, y + 9); ctx.lineTo(x + 90, y + 9); ctx.stroke();
+      ctx.strokeStyle = MAP_INK; ctx.lineWidth = 3; ctx.beginPath(); ctx.moveTo(x + 36, y - 16); ctx.lineTo(x + 36, y + 16); ctx.moveTo(x + 54, y - 16); ctx.lineTo(x + 54, y + 16); ctx.stroke();
+    }
+    else if (k === 'swamp') {
+      sw(MAPC.swamp); ctx.strokeStyle = BLUE_LINE; ctx.lineWidth = 2;
+      for (const tx of [18, 45, 72]) { ctx.beginPath(); ctx.moveTo(tx - 10, y + 6); ctx.lineTo(tx + 10, y + 6); ctx.moveTo(tx, y + 6); ctx.lineTo(tx, y - 6); ctx.moveTo(tx - 5, y + 6); ctx.lineTo(tx - 7, y - 2); ctx.moveTo(tx + 5, y + 6); ctx.lineTo(tx + 7, y - 2); ctx.stroke(); }
+    }
     else if (k === 'pond') { ctx.fillStyle = 'rgb(' + MAPC.water.join(',') + ')'; ctx.strokeStyle = BLUE_LINE; ctx.lineWidth = 3; ctx.beginPath(); ctx.ellipse(x + 45, y, 40, 15, 0, 0, Math.PI * 2); ctx.fill(); ctx.stroke(); }
     else if (k === 'index' || k === 'contour') { ctx.strokeStyle = RED_BROWN; ctx.lineWidth = k === 'index' ? 5 : 2.5; ctx.beginPath(); ctx.moveTo(x, y + 8); ctx.bezierCurveTo(x + 30, y - 16, x + 60, y + 16, x + 90, y - 6); ctx.stroke(); }
     ctx.restore();
@@ -3323,8 +3500,14 @@ function drawUnits(ctx) {
     }
     const lifted = isSel(p) && (p.kind !== 'man' || p.soldier.active);
     if (isSel(p)) {
-      ctx.strokeStyle = OVL.blue; ctx.lineWidth = 2.2;
-      ctx.beginPath(); ctx.arc(q.x + 0.5, q.y + 1, (p.kind === 'man' ? r : 24) + 6, 0, Math.PI * 2); ctx.stroke();
+      // A soft halo, centered on the piece as it is drawn (lifted 4 px when picked up).
+      const hy = q.y - (lifted ? 4 : 0), inner = p.kind === 'man' ? r : 22, outer = inner + 16;
+      const g = ctx.createRadialGradient(q.x, hy, inner * 0.6, q.x, hy, outer);
+      g.addColorStop(0, 'rgba(255,214,10,0.75)');
+      g.addColorStop(0.55, 'rgba(255,214,10,0.35)');
+      g.addColorStop(1, 'rgba(255,214,10,0)');
+      ctx.fillStyle = g;
+      ctx.beginPath(); ctx.arc(q.x, hy, outer, 0, Math.PI * 2); ctx.fill();
     }
     if (p.kind !== 'man') {
       const y = drawCounter(ctx, p, q.x, q.y, 14, lifted);
@@ -3879,6 +4062,7 @@ const UI = {
   // ------------------------------------------------------------ map taps
   handleTap(sx, sy, secondary) {
     if (!G.running || G.over) return;
+    if ($('planMenu')) { this.closePlanMenu(); return; }
     const w = toWorld(sx, sy);
     if (Plan.tool && !secondary) { Plan.place(w); return; }
     const piece = pieceAt(sx, sy);
@@ -3886,6 +4070,19 @@ const UI = {
     // An enemy piece stands for its nearest visible, effective man.
     const enemy = piece && piece.side === 'red' ? (piece.kind === 'man' ? (piece.soldier.active ? piece.soldier : null)
       : piece.live.filter(s => enemyVisible(s)).sort((a, b) => dist(a.x, a.y, w.x, w.y) - dist(b.x, b.y, w.x, w.y))[0] || null) : null;
+    // While planning, nothing moves: a tap on the map with a unit selected offers the
+    // control measures and plan lines that can be set at that spot.
+    if (Plan.planning && !(piece && piece.side === 'blue' && !secondary)) {
+      if (sel && G.ui.pending) {
+        const p = G.ui.pending, step = { bound: 'bound', assault: 'obj', suppress: 'trp' }[p];
+        G.ui.pending = null; this.refreshOrders();
+        if (step) Plan.addStep(sel, w, step);
+        else this.toast('That order is given by radio after step-off.');
+        return;
+      }
+      if (sel) { this.planMenu(sx, sy, w, sel); return; }
+      if (secondary) return;
+    }
     if (secondary) {
       G.ui.pending = null;
       if (sel) issueOrder(sel, enemy ? 'engage' : 'move', enemy || w);
@@ -3908,6 +4105,33 @@ const UI = {
     if (enemy && sel) { issueOrder(sel, 'engage', enemy); return; }
     if (sel) issueOrder(sel, 'move', w);
   },
+
+  planMenu(sx, sy, w, sel) {
+    this.closePlanMenu();
+    const unit = Plan.planUnit(sel), m = el('div', 'planmenu');
+    m.id = 'planMenu';
+    m.appendChild(el('div', 'pmhead', PLAN_UNITS[unit] + ' · ' + gridRef(w.x, w.y)));
+    const items = [
+      ['cp', 'Checkpoint', 'move here'], ['bound', 'Bound here', 'bounding overwatch'],
+      ['rte', 'Route from here', 'tap waypoints'], ['fp', 'Fighting position', 'occupy and defend'],
+      ['sbf', 'Support by fire', 'fire onto the objective'], ['aslt', 'Assault position', 'last cover before the assault'],
+      ['obj', 'Objective', 'assault here'], ['trp', 'Target ref. point', 'suppress here'],
+    ];
+    for (const [k, label, note] of items) {
+      const b = el('button', 'pmitem');
+      b.appendChild(el('b', null, label)); b.appendChild(el('span', null, note));
+      b.addEventListener('click', () => { this.closePlanMenu(); Plan.addStep(sel, w, k); });
+      m.appendChild(b);
+    }
+    const c = el('button', 'pmitem pmcancel', 'Cancel');
+    c.addEventListener('click', () => this.closePlanMenu());
+    m.appendChild(c);
+    document.body.appendChild(m);
+    const r = m.getBoundingClientRect(), vw = window.innerWidth, vh = window.innerHeight;
+    m.style.left = clamp(sx + 10, 8, vw - r.width - 8) + 'px';
+    m.style.top = clamp(sy - r.height / 2, 8, vh - r.height - 8) + 'px';
+  },
+  closePlanMenu() { const m = $('planMenu'); if (m) m.remove(); },
 
   // ------------------------------------------------------------ roster
   buildRoster() {
@@ -4245,12 +4469,13 @@ const Plan = {
   // restrictive terrain (ponds, streams, woods, steep ground, villages), avenues of approach.
   aoFacts() {
     const m = G.map, N = GW * GH;
-    let lo = Infinity, hi = -Infinity, woods = 0, steep = 0, worst = { s: 0 };
+    let lo = Infinity, hi = -Infinity, woods = 0, steep = 0, worst = { s: 0 }, swamp = 0, sx0 = 0, sy0 = 0;
     for (let cy = 1; cy < GH - 1; cy++) for (let cx = 1; cx < GW - 1; cx++) {
       const i = cy * GW + cx, e = m.elev[i];
       if (e < lo) lo = e; if (e > hi) hi = e;
       const k = m.ter[i];
       if (k === TER.WOODS || k === TER.ORCHARD) woods++;
+      if (k === TER.SWAMP) { swamp++; sx0 += cx; sy0 += cy; }
       const s = Math.hypot(m.elev[i + 1] - m.elev[i - 1], m.elev[i + GW] - m.elev[i - GW]) / (2 * CELL);
       if (s > 0.3) { steep++; if (s > worst.s) worst = { s, x: (cx + 0.5) * CELL, y: (cy + 0.5) * CELL }; }
     }
@@ -4282,7 +4507,8 @@ const Plan = {
     }
     return {
       e0: G.grid.e, n0: G.grid.n, lo: Math.round(m.elevBase + lo), hi: Math.round(m.elevBase + hi),
-      woodsPct: Math.round(woods / N * 100), steepPct: steep / N * 100, worst, ponds,
+      woodsPct: Math.round(woods / N * 100), river: m.river,
+      swampPct: swamp / N * 100, swampAt: swamp ? { x: (sx0 / swamp + 0.5) * CELL, y: (sy0 / swamp + 0.5) * CELL } : null, steepPct: steep / N * 100, worst, ponds,
       streams: m.streams.length, road, tracks: m.roads.filter(r => r.kind === 'track').length,
       villages: m.places.filter(p => p.kind === 'village'), farms: m.places.filter(p => p.kind === 'farm').length,
     };
@@ -4351,21 +4577,66 @@ const Plan = {
     if (K.line) {
       if (!this.plStart) { this.plStart = { x: w.x, y: w.y }; G.toast('Tap the other end of the ' + K.label.toLowerCase() + '.'); return true; }
       const g = this.addGraphic(kind, [this.plStart, w]);
-      this.plStart = null; this.tool = null; this.selected = g.id;
+      this.plStart = null; this.selected = g.id;
+      if (K.single) this.tool = null;
     } else {
+      // The tool stays on, so each tap places another; tap its button again (or Esc) to stop.
       const g = this.addGraphic(kind, [w]);
-      this.tool = null; this.selected = g.id;
+      this.selected = g.id;
+      G.toast(g.name + ' placed. Tap again for another, or tap ' + K.short + ' to stop.');
     }
     OPORD.refresh();
     return true;
   },
   finishRoute() {
     const pts = this.routeDraft || [];
-    if (pts.length >= 2) { const g = this.addGraphic('rte', pts); this.selected = g.id; }
+    if (pts.length >= 2) {
+      const g = this.addGraphic('rte', pts); this.selected = g.id;
+      // A route begun from the map menu also becomes a line of the plan for that unit.
+      if (this.routeUnit) {
+        this.addLine({ unit: this.routeUnit, task: 'route', where: g.id, mode: G.ui.moveMode || 'walk' });
+        G.toast(PLAN_UNITS[this.routeUnit] + ' moves along ' + g.name + '. Added to the plan.');
+      }
+    }
     else G.toast('A route needs at least two waypoints.');
-    this.routeDraft = null; this.tool = null;
+    this.routeDraft = null; this.tool = null; this.routeUnit = null;
     OPORD.refresh();
     return true;
+  },
+  // The plan unit for a selection: a Marine plans with his fire team, the SL with the squad.
+  planUnit(sel) {
+    if (!sel) return null;
+    const t = sel.level === 'squad' ? null : sel.team;
+    return t && t.num ? 't' + t.num : 'squad';
+  },
+  // A step chosen from the map menu while planning: a control measure at the spot and a
+  // line of the plan that sends the unit to it.
+  addStep(sel, w, step) {
+    const unit = this.planUnit(sel), mode = G.ui.moveMode || 'walk';
+    if (!unit) return;
+    let g = null, l = null;
+    switch (step) {
+      case 'cp': g = this.addGraphic('cp', [w]); l = this.addLine({ unit, task: 'move', where: g.id, mode }); break;
+      case 'bound': g = this.addGraphic('cp', [w]); l = this.addLine({ unit, task: 'bound', where: g.id }); break;
+      case 'fp': g = this.addGraphic('fp', [w]); l = this.addLine({ unit, task: 'occupy', where: g.id }); break;
+      case 'sbf': {
+        g = this.addGraphic('sbf', [w]);
+        const obj = this.graphics.find(o => o.kind === 'obj');
+        l = this.addLine({ unit, task: 'sbf', where: g.id, target: obj ? obj.id : null, mode });
+        break;
+      }
+      case 'obj': g = this.addGraphic('obj', [w]); l = this.addLine({ unit, task: 'assault', target: g.id }); break;
+      case 'trp': g = this.addGraphic('trp', [w]); l = this.addLine({ unit, task: 'suppress', target: g.id }); break;
+      case 'aslt': g = this.addGraphic('aslt', [w]); l = this.addLine({ unit, task: 'move', where: g.id, mode }); break;
+      case 'rte':
+        this.tool = 'rte'; this.routeUnit = unit; this.routeDraft = [{ x: w.x, y: w.y }];
+        G.toast('Route for ' + PLAN_UNITS[unit] + ': tap each waypoint, then Finish route.');
+        OPORD.refresh();
+        return;
+    }
+    if (g) this.selected = g.id;
+    if (l) G.toast('Line ' + this.lines.length + ': ' + this.lineText(l));
+    OPORD.refresh();
   },
   anchor(g) {
     if (g.kind === 'rte') return g.pts[g.pts.length - 1];
@@ -4735,16 +5006,18 @@ const Plan = {
   // Terrain facts along the line from the squad to the reported enemy, for the orientation.
   terrainFacts() {
     const b = centroid(G.squads.blue.all), e = this.reported, d = dist(b.x, b.y, e.x, e.y);
-    let woods = 0, open = 0, hi = { e: -Infinity }, streams = 0, lastWet = false, roads = 0, lastRoad = false;
+    let woods = 0, open = 0, hi = { e: -Infinity }, streams = 0, lastWet = false, roads = 0, lastRoad = false, river = 0, lastRiv = false, swamp = 0;
     const n = Math.ceil(d / 10);
     for (let i = 0; i <= n; i++) {
       const x = lerp(b.x, e.x, i / n), y = lerp(b.y, e.y, i / n), k = G.map.terAt(x, y), el = G.map.elevAt(x, y);
       if (k === TER.WOODS || k === TER.ORCHARD) woods++; else open++;
       if (el > hi.e) hi = { e: el, x, y };
       const wet = k === TER.STREAM; if (wet && !lastWet) streams++; lastWet = wet;
+      const riv = k === TER.RIVER || k === TER.FORD; if (riv && !lastRiv) river++; lastRiv = riv;
+      if (k === TER.SWAMP) swamp++;
       const rd = k === TER.ROAD || k === TER.PAVED; if (rd && !lastRoad) roads++; lastRoad = rd;
     }
-    return { b, e, d, woodsPct: Math.round(woods / (n + 1) * 100), hi, streams, roads };
+    return { b, e, d, woodsPct: Math.round(woods / (n + 1) * 100), hi, streams, roads, river, swampM: swamp * CELL };
   },
 
   // ---------------------------------------------------------------- a draft plan
@@ -4890,8 +5163,8 @@ const OPORD = {
       const b = el('button', 'obtn' + (Plan.tool === k ? ' on' : ''), K.short);
       b.title = 'Place a ' + K.label.toLowerCase();
       b.addEventListener('click', () => {
-        Plan.tool = Plan.tool === k ? null : k; Plan.plStart = null; Plan.routeDraft = null;
-        if (Plan.tool) G.toast(K.multi ? 'Tap each waypoint of the route, then Finish route.' : K.line ? 'Tap one end of the ' + K.label.toLowerCase() + ' on the map.' : 'Tap the map to place the ' + K.label.toLowerCase() + '.');
+        Plan.tool = Plan.tool === k ? null : k; Plan.plStart = null; Plan.routeDraft = null; Plan.routeUnit = null;
+        if (Plan.tool) G.toast(K.multi ? 'Tap each waypoint of the route, then Finish route.' : K.line ? 'Tap one end of the ' + K.label.toLowerCase() + ' on the map.' : 'Tap the map to place the ' + K.label.toLowerCase() + '. Each tap places another; tap ' + K.short + ' again to stop.');
         this.refresh();
       });
       tools.appendChild(b);
@@ -4902,7 +5175,7 @@ const OPORD = {
       const fin = el('button', 'obtn primary', 'Finish route (' + (Plan.routeDraft ? Plan.routeDraft.length : 0) + ' points)');
       fin.addEventListener('click', () => Plan.finishRoute());
       const cancel = el('button', 'obtn', 'Cancel');
-      cancel.addEventListener('click', () => { Plan.routeDraft = null; Plan.tool = null; this.refresh(); });
+      cancel.addEventListener('click', () => { Plan.routeDraft = null; Plan.tool = null; Plan.routeUnit = null; this.refresh(); });
       r.appendChild(fin); r.appendChild(cancel);
       box.appendChild(r);
     }
@@ -5033,6 +5306,16 @@ const OPORD = {
       'Rolling farmland, woods and villages. Elevation ' + ao.lo + '–' + ao.hi + ' m. North up. CI 5 m, index 25 m.');
 
     box.appendChild(el('h4', null, 'Obstacles and restrictive terrain'));
+    if (ao.river) {
+      const rv = ao.river, xs = [...rv.bridges.map(b => 'bridge ' + gridRef(b.x, b.y)), ...rv.fords.map(fd => 'ford ' + gridRef(fd.x, fd.y))];
+      const a = rv.pts[0], b = rv.pts[rv.pts.length - 1], brg = bearing(a.x, a.y, b.x, b.y);
+      const dirs = ['north', 'northeast', 'east', 'southeast', 'south', 'southwest', 'west', 'northwest'];
+      this.factRow(box, rv.name, 'Flows ' + dirs[Math.round(brg / 45) % 8] + ' across the AO, ' + Math.round(rv.width) + ' m wide. Unfordable on foot except at the fords. ' +
+        (xs.length ? 'Crossings: ' + xs.join(', ') + '.' : 'No crossings on the sheet.') +
+        (f.river ? ' The direct line crosses it.' : ' It does not cross the direct line.'), rv.bridges[0] || rv.fords[0] || rv.pts[Math.floor(rv.pts.length / 2)], 1.4);
+    }
+    if (ao.swampPct > 0.1) this.factRow(box, 'Swamp', Math.max(0.1, ao.swampPct).toFixed(1) + '% of the AO, low ground by the water; largest vic grid ' + gridRef(ao.swampAt.x, ao.swampAt.y) +
+      '. Very slow going, no cover, good concealment.' + (f.swampM ? ' About ' + Math.round(f.swampM / 10) * 10 + ' m of it on the direct line.' : ''), ao.swampAt, 1.4);
     if (ao.ponds.length) {
       const big = ao.ponds[0];
       this.factRow(box, 'Ponds', ao.ponds.length + ' on the sheet. Impassable on foot; go around. Largest ' + big.ha.toFixed(1) + ' ha vic grid ' + gridRef(big.x, big.y) + '.', big, 1.4);
@@ -5046,7 +5329,7 @@ const OPORD = {
     box.appendChild(el('h4', null, 'Avenues of approach'));
     if (ao.road) this.factRow(box, 'Paved road', ao.road.text + ' Fastest going, open to observation.', ao.road.at, 1.4);
     if (ao.tracks) this.factRow(box, 'Tracks', ao.tracks + ' dirt tracks link the farms and villages to the road.', null);
-    this.factRow(box, 'Direct line', f.woodsPct + '% woods or orchard, ' + (f.streams ? f.streams + ' stream crossing' + (f.streams > 1 ? 's' : '') : 'no streams') + (f.roads ? ', ' + f.roads + ' road crossing' + (f.roads > 1 ? 's' : '') : '') + '.', null);
+    this.factRow(box, 'Direct line', f.woodsPct + '% woods or orchard, ' + (f.streams ? f.streams + ' stream crossing' + (f.streams > 1 ? 's' : '') : 'no streams') + (f.river ? ', the river' : '') + (f.roads ? ', ' + f.roads + ' road crossing' + (f.roads > 1 ? 's' : '') : '') + '.', null);
 
     box.appendChild(el('h4', null, 'Positions'));
     this.factRow(box, 'You', 'Grid ' + gridRef(f.b.x, f.b.y) + ', elevation ' + Math.round(m.elevBase + m.elevAt(f.b.x, f.b.y)) + ' m.', f.b, 2.2);
@@ -5439,7 +5722,9 @@ const Input = {
       else if (k === '1' || k === '2' || k === '3') UI.selectTeam(+k);
       else if (k === '0' || k === '`') UI.select({ level: 'squad', squad: G.squads.blue });
       else if (k === 'Escape') {
-        if (G.ui.pending) { G.ui.pending = null; UI.refreshOrders(); }
+        if ($('planMenu')) UI.closePlanMenu();
+        else if (Plan.tool) { Plan.tool = null; Plan.plStart = null; Plan.routeDraft = null; Plan.routeUnit = null; OPORD.refresh(); }
+        else if (G.ui.pending) { G.ui.pending = null; UI.refreshOrders(); }
         else UI.select(null);
       }
     });

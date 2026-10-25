@@ -9,7 +9,7 @@ const GW = MAP_W / CELL, GH = MAP_H / CELL;
 
 const TER = {
   OPEN: 0, GRASS: 1, WOODS: 2, ROAD: 3, BUILDING: 4, WALL: 5, PLOWED: 6,
-  ORCHARD: 7, VINEYARD: 8, STREAM: 9, POND: 10, PAVED: 11,
+  ORCHARD: 7, VINEYARD: 8, STREAM: 9, POND: 10, PAVED: 11, SWAMP: 12, RIVER: 13, FORD: 14,
 };
 
 // losH: height above ground the feature blocks sight to.
@@ -28,6 +28,9 @@ const TERRAIN = [
   { name: 'Stream',       speed: 0.35, losH: 0,   density: 0,     cover: 0,   conceal: 0.2 },
   { name: 'Pond',         speed: 0,    losH: 0,   density: 0,     cover: 0,   conceal: 0 },
   { name: 'Paved road',   speed: 1.2,  losH: 0,   density: 0,     cover: 0,   conceal: 0 },
+  { name: 'Swamp',        speed: 0.3,  losH: 1.6, density: 0.05,  cover: 0,   conceal: 0.5 },
+  { name: 'River',        speed: 0,    losH: 0,   density: 0,     cover: 0,   conceal: 0 },
+  { name: 'Ford',         speed: 0.25, losH: 0,   density: 0,     cover: 0,   conceal: 0 },
 ];
 
 // eye: sight height. center: center of mass. size: relative target size.

@@ -49,8 +49,8 @@ const OPORD = {
       const b = el('button', 'obtn' + (Plan.tool === k ? ' on' : ''), K.short);
       b.title = 'Place a ' + K.label.toLowerCase();
       b.addEventListener('click', () => {
-        Plan.tool = Plan.tool === k ? null : k; Plan.plStart = null; Plan.routeDraft = null;
-        if (Plan.tool) G.toast(K.multi ? 'Tap each waypoint of the route, then Finish route.' : K.line ? 'Tap one end of the ' + K.label.toLowerCase() + ' on the map.' : 'Tap the map to place the ' + K.label.toLowerCase() + '.');
+        Plan.tool = Plan.tool === k ? null : k; Plan.plStart = null; Plan.routeDraft = null; Plan.routeUnit = null;
+        if (Plan.tool) G.toast(K.multi ? 'Tap each waypoint of the route, then Finish route.' : K.line ? 'Tap one end of the ' + K.label.toLowerCase() + ' on the map.' : 'Tap the map to place the ' + K.label.toLowerCase() + '. Each tap places another; tap ' + K.short + ' again to stop.');
         this.refresh();
       });
       tools.appendChild(b);
@@ -61,7 +61,7 @@ const OPORD = {
       const fin = el('button', 'obtn primary', 'Finish route (' + (Plan.routeDraft ? Plan.routeDraft.length : 0) + ' points)');
       fin.addEventListener('click', () => Plan.finishRoute());
       const cancel = el('button', 'obtn', 'Cancel');
-      cancel.addEventListener('click', () => { Plan.routeDraft = null; Plan.tool = null; this.refresh(); });
+      cancel.addEventListener('click', () => { Plan.routeDraft = null; Plan.tool = null; Plan.routeUnit = null; this.refresh(); });
       r.appendChild(fin); r.appendChild(cancel);
       box.appendChild(r);
     }
@@ -192,6 +192,16 @@ const OPORD = {
       'Rolling farmland, woods and villages. Elevation ' + ao.lo + '–' + ao.hi + ' m. North up. CI 5 m, index 25 m.');
 
     box.appendChild(el('h4', null, 'Obstacles and restrictive terrain'));
+    if (ao.river) {
+      const rv = ao.river, xs = [...rv.bridges.map(b => 'bridge ' + gridRef(b.x, b.y)), ...rv.fords.map(fd => 'ford ' + gridRef(fd.x, fd.y))];
+      const a = rv.pts[0], b = rv.pts[rv.pts.length - 1], brg = bearing(a.x, a.y, b.x, b.y);
+      const dirs = ['north', 'northeast', 'east', 'southeast', 'south', 'southwest', 'west', 'northwest'];
+      this.factRow(box, rv.name, 'Flows ' + dirs[Math.round(brg / 45) % 8] + ' across the AO, ' + Math.round(rv.width) + ' m wide. Unfordable on foot except at the fords. ' +
+        (xs.length ? 'Crossings: ' + xs.join(', ') + '.' : 'No crossings on the sheet.') +
+        (f.river ? ' The direct line crosses it.' : ' It does not cross the direct line.'), rv.bridges[0] || rv.fords[0] || rv.pts[Math.floor(rv.pts.length / 2)], 1.4);
+    }
+    if (ao.swampPct > 0.1) this.factRow(box, 'Swamp', Math.max(0.1, ao.swampPct).toFixed(1) + '% of the AO, low ground by the water; largest vic grid ' + gridRef(ao.swampAt.x, ao.swampAt.y) +
+      '. Very slow going, no cover, good concealment.' + (f.swampM ? ' About ' + Math.round(f.swampM / 10) * 10 + ' m of it on the direct line.' : ''), ao.swampAt, 1.4);
     if (ao.ponds.length) {
       const big = ao.ponds[0];
       this.factRow(box, 'Ponds', ao.ponds.length + ' on the sheet. Impassable on foot; go around. Largest ' + big.ha.toFixed(1) + ' ha vic grid ' + gridRef(big.x, big.y) + '.', big, 1.4);
@@ -205,7 +215,7 @@ const OPORD = {
     box.appendChild(el('h4', null, 'Avenues of approach'));
     if (ao.road) this.factRow(box, 'Paved road', ao.road.text + ' Fastest going, open to observation.', ao.road.at, 1.4);
     if (ao.tracks) this.factRow(box, 'Tracks', ao.tracks + ' dirt tracks link the farms and villages to the road.', null);
-    this.factRow(box, 'Direct line', f.woodsPct + '% woods or orchard, ' + (f.streams ? f.streams + ' stream crossing' + (f.streams > 1 ? 's' : '') : 'no streams') + (f.roads ? ', ' + f.roads + ' road crossing' + (f.roads > 1 ? 's' : '') : '') + '.', null);
+    this.factRow(box, 'Direct line', f.woodsPct + '% woods or orchard, ' + (f.streams ? f.streams + ' stream crossing' + (f.streams > 1 ? 's' : '') : 'no streams') + (f.river ? ', the river' : '') + (f.roads ? ', ' + f.roads + ' road crossing' + (f.roads > 1 ? 's' : '') : '') + '.', null);
 
     box.appendChild(el('h4', null, 'Positions'));
     this.factRow(box, 'You', 'Grid ' + gridRef(f.b.x, f.b.y) + ', elevation ' + Math.round(m.elevBase + m.elevAt(f.b.x, f.b.y)) + ' m.', f.b, 2.2);

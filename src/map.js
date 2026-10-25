@@ -40,9 +40,11 @@ class GameMap {
   generate() {
     this.genElevation();
     this.genHydrology();
+    this.genSwamps();
     this.genFields();
     this.genWoods();
     this.genRoads();
+    this.genFords();
     this.genVillages();
     this.genFarms();
     this.elevBase = randInt(6, 40) * 10; // height above sea level of the lowest ground
@@ -147,15 +149,16 @@ class GameMap {
     for (let i = 0; i < N; i++) {
       if (!isStream[i] || feeds[i]) continue;
       const pts = [];
-      let c = i, width = 1.5;
+      let c = i, width = 1.5, flow = 0;
       while (c >= 0) {
         pts.push({ x: (c % GW + 0.5) * CELL, y: (Math.floor(c / GW) + 0.5) * CELL });
         width = Math.max(width, 1.5 + 3 * clamp(Math.log(acc[c] / T) / Math.log(30), 0, 1));
+        flow = Math.max(flow, acc[c]);
         if (traced[c]) break;
         traced[c] = 1;
         c = down[c];
       }
-      if (pts.length > 3) this.streams.push({ pts: simplifyLine(pts, 3), width });
+      if (pts.length > 3) this.streams.push({ pts: simplifyLine(pts, 3), width, flow, len: pts.length * CELL });
     }
     // Streams cut small gullies: a meter or so below the banks.
     const cut = new Float32Array(N);
@@ -170,9 +173,78 @@ class GameMap {
       }
     }
     for (let i = 0; i < N; i++) this.elev[i] -= cut[i];
+    // On most sheets the biggest watercourse, if long enough, is a river.
+    const main = this.streams.filter(s => s.len > 1200).sort((a, b) => b.flow - a.flow)[0];
+    if (main && chance(0.75)) this.makeRiver(main);
   }
 
-  isWet(i) { return this.ter[i] === TER.STREAM || this.ter[i] === TER.POND; }
+  // A river 12-18 m wide down the main valley: impassable on foot except at bridges and fords.
+  makeRiver(st) {
+    const width = randRange(12, 18), half = width / 2;
+    this.streams = this.streams.filter(s => s !== st);
+    for (let k = 1; k < st.pts.length; k++) {
+      const a = st.pts[k - 1], b = st.pts[k];
+      const x0 = Math.floor((Math.min(a.x, b.x) - half) / CELL) - 1, x1 = Math.ceil((Math.max(a.x, b.x) + half) / CELL) + 1;
+      const y0 = Math.floor((Math.min(a.y, b.y) - half) / CELL) - 1, y1 = Math.ceil((Math.max(a.y, b.y) + half) / CELL) + 1;
+      const L2 = Math.max(1e-6, (b.x - a.x) ** 2 + (b.y - a.y) ** 2);
+      for (let cy = y0; cy <= y1; cy++) for (let cx = x0; cx <= x1; cx++) {
+        if (!this.inGrid(cx, cy)) continue;
+        const px = (cx + 0.5) * CELL, py = (cy + 0.5) * CELL;
+        const t = clamp(((px - a.x) * (b.x - a.x) + (py - a.y) * (b.y - a.y)) / L2, 0, 1);
+        const d = dist(px, py, a.x + (b.x - a.x) * t, a.y + (b.y - a.y) * t);
+        const i = cy * GW + cx;
+        if (d <= half && this.ter[i] !== TER.RIVER) { this.ter[i] = TER.RIVER; this.elev[i] -= 1.5; }
+      }
+    }
+    this.river = { pts: st.pts, width, name: pick(PLACE_A).toUpperCase() + ' RIVER', bridges: [], fords: [] };
+  }
+
+  // Marsh in the flat low ground beside water: passable, very slow, reeds give concealment.
+  genSwamps() {
+    const N = GW * GH, water = (k) => k === TER.STREAM || k === TER.POND || k === TER.RIVER;
+    const d = new Uint8Array(N).fill(255), q = [];
+    for (let i = 0; i < N; i++) if (water(this.ter[i])) { d[i] = 0; q.push(i); }
+    for (let h = 0; h < q.length; h++) {
+      const c = q[h], x = c % GW, y = Math.floor(c / GW);
+      if (d[c] >= 10) continue;
+      for (const [dx, dy] of [[1, 0], [-1, 0], [0, 1], [0, -1]]) {
+        const nx = x + dx, ny = y + dy, j = ny * GW + nx;
+        if (this.inGrid(nx, ny) && d[j] === 255) { d[j] = d[c] + 1; q.push(j); }
+      }
+    }
+    const sample = [];
+    for (let i = 0; i < N; i += 97) sample.push(this.elev[i]);
+    sample.sort((a, b) => a - b);
+    const low = sample[Math.floor(sample.length * 0.3)];
+    const n1 = this.noise(16, 16);
+    for (let cy = 1; cy < GH - 1; cy++) for (let cx = 1; cx < GW - 1; cx++) {
+      const i = cy * GW + cx;
+      if (d[i] === 0 || d[i] > 10 || this.elev[i] > low) continue;
+      const slope = Math.hypot(this.elev[i + 1] - this.elev[i - 1], this.elev[i + GW] - this.elev[i - GW]) / (2 * CELL);
+      if (slope < 0.04 && n1((cx + 0.5) / GW, (cy + 0.5) / GH) > 0.5) this.ter[i] = TER.SWAMP;
+    }
+  }
+
+  // One or two fords across the river, away from the bridges.
+  genFords() {
+    const r = this.river;
+    if (!r) return;
+    const want = randInt(1, 2), pts = r.pts;
+    for (const f of shuffle([0.25, 0.45, 0.65, 0.8])) {
+      if (r.fords.length >= want) break;
+      const p = pts[Math.floor(f * (pts.length - 1))];
+      if (p.x < 100 || p.y < 100 || p.x > MAP_W - 100 || p.y > MAP_H - 100) continue;
+      if (r.bridges.some(b => dist(b.x, b.y, p.x, p.y) < 350) || r.fords.some(b => dist(b.x, b.y, p.x, p.y) < 350)) continue;
+      const c = this.cellOf(p.x, p.y), rr = Math.ceil((r.width / 2 + 6) / CELL);
+      for (let j = -rr; j <= rr; j++) for (let i = -rr; i <= rr; i++) {
+        const x = c.cx + i, y = c.cy + j;
+        if (this.inGrid(x, y) && this.ter[y * GW + x] === TER.RIVER && Math.hypot(i, j) * CELL <= 10) this.ter[y * GW + x] = TER.FORD;
+      }
+      r.fords.push({ x: p.x, y: p.y });
+    }
+  }
+
+  isWet(i) { const k = this.ter[i]; return k === TER.STREAM || k === TER.POND || k === TER.SWAMP || k === TER.RIVER || k === TER.FORD; }
 
   // Farm fields as Voronoi patches on a jittered lattice, bounded by hedgerows, stone walls or nothing.
   genFields() {
@@ -251,6 +323,8 @@ class GameMap {
         let cost = (dx && dy ? 1.414 : 1) * (1 + grade * grade * 400);
         if (k === TER.WOODS) cost *= 2;
         if (k === TER.STREAM) cost += 12;
+        if (k === TER.RIVER) cost += 60;
+        if (k === TER.SWAMP) cost *= 3;
         if (k === TER.ROAD || k === TER.PAVED) cost *= 0.4;
         const ng = g[cur] + cost;
         if (ng < g[ni]) { g[ni] = ng; came[ni] = cur; heap.push(ni, ng + h(ni)); }
@@ -264,6 +338,19 @@ class GameMap {
 
   layRoad(cells, kind) {
     const t = kind === 'paved' ? TER.PAVED : TER.ROAD;
+    // Where the road crosses the river, a bridge: one per run of river cells.
+    let run = [];
+    const endRun = () => {
+      if (!run.length) return;
+      const a = run[0], b = run[run.length - 1];
+      const ax = (a % GW + 0.5) * CELL, ay = (Math.floor(a / GW) + 0.5) * CELL, bx = (b % GW + 0.5) * CELL, by = (Math.floor(b / GW) + 0.5) * CELL;
+      const ia = cells.indexOf(a), pa = cells[Math.max(0, ia - 1)], pb = cells[Math.min(cells.length - 1, cells.indexOf(b) + 1)];
+      const ang = Math.atan2(Math.floor(pb / GW) - Math.floor(pa / GW), pb % GW - pa % GW);
+      if (this.river) this.river.bridges.push({ x: (ax + bx) / 2, y: (ay + by) / 2, a: ang, len: dist(ax, ay, bx, by) + CELL, kind });
+      run = [];
+    };
+    for (const c of cells) { if (this.ter[c] === TER.RIVER) run.push(c); else endRun(); }
+    endRun();
     for (const c of cells) if (this.ter[c] !== TER.PAVED) this.ter[c] = t;
     const pts = cells.map(c => ({ x: (c % GW + 0.5) * CELL, y: (Math.floor(c / GW) + 0.5) * CELL }));
     this.roads.push({ kind, pts: simplifyLine(pts, 2.5), cells });
@@ -288,7 +375,7 @@ class GameMap {
     for (let j = 0; j < h; j++) for (let i = 0; i < w; i++) {
       if (!this.inGrid(cx + i, cy + j)) return false;
       const t = this.ter[(cy + j) * GW + cx + i];
-      if (t === TER.BUILDING || t === TER.ROAD || t === TER.PAVED || t === TER.STREAM || t === TER.POND) return false;
+      if (t === TER.BUILDING || t === TER.ROAD || t === TER.PAVED || this.isWet((cy + j) * GW + cx + i)) return false;
     }
     return true;
   }
@@ -498,7 +585,7 @@ class GameMap {
     g[start] = 0;
     heap.push(start, h(start));
     let found = false, expanded = 0;
-    while (heap.size && expanded < 250000) {
+    while (heap.size && expanded < 600000) {
       const cur = heap.pop();
       if (cur === end) { found = true; break; }
       if (closed[cur]) continue;
@@ -576,6 +663,7 @@ class GameMap {
       else if (k === TER.GRASS || k === TER.VINEYARD) score += 1.2;
       else if (k === TER.ORCHARD) score += 0.8;
       else if (k === TER.STREAM) score += 1.6; // the gully
+      else if (k === TER.SWAMP) score += 1.0;  // reeds
       // Defilade: ground rising toward the threat.
       if (this.elevAt(px + ca * 6, py + sa * 6) - this.elevAt(px, py) > 0.45) score += 1.5;
       score -= d * 0.12;

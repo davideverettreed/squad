@@ -75,6 +75,7 @@ const MAPC = {
   woodsEdge: [132, 176, 108],
   orchard: [214, 233, 194],
   vineyard: [218, 234, 198],
+  swamp: [226, 238, 236],
   water: [176, 220, 244],
   waterEdge: [40, 140, 205],
   contour: [168, 84, 50],
@@ -82,14 +83,15 @@ const MAPC = {
 const CONTOUR_INTERVAL = 5, INDEX_EVERY = 5;
 const MAP_INK = '#161616', BLUE_LINE = 'rgb(40,140,205)', RED_BROWN = 'rgb(168,84,50)';
 const CLASS_COLOR = (k) => k === TER.WOODS ? MAPC.woods : k === TER.GRASS ? MAPC.grass : k === TER.PLOWED ? MAPC.plowed
-  : k === TER.ORCHARD ? MAPC.orchard : k === TER.VINEYARD ? MAPC.vineyard : k === TER.POND ? MAPC.water : MAPC.paper;
+  : k === TER.ORCHARD ? MAPC.orchard : k === TER.VINEYARD ? MAPC.vineyard : k === TER.POND ? MAPC.water : k === TER.SWAMP ? MAPC.swamp : MAPC.paper;
 
 // Ground class at a point: the class with the most weight among the four nearest
 // cells, which gives smooth edges to woods, fields and water at any zoom.
 function groundClass(map, x, y) {
   const fx = clamp(x / CELL - 0.5, 0, GW - 1.001), fy = clamp(y / CELL - 0.5, 0, GH - 1.001);
   const x0 = Math.floor(fx), y0 = Math.floor(fy), tx = fx - x0, ty = fy - y0, i = y0 * GW + x0;
-  const cls = (k) => k === TER.WOODS || k === TER.GRASS || k === TER.PLOWED || k === TER.ORCHARD || k === TER.VINEYARD || k === TER.POND ? k : 0;
+  // River and ford water draw like pond water.
+  const cls = (k) => k === TER.RIVER || k === TER.FORD ? TER.POND : k === TER.WOODS || k === TER.GRASS || k === TER.PLOWED || k === TER.ORCHARD || k === TER.VINEYARD || k === TER.POND || k === TER.SWAMP ? k : 0;
   const a = cls(map.ter[i]), b = cls(map.ter[i + 1]), c = cls(map.ter[i + GW]), d = cls(map.ter[i + GW + 1]);
   if (a === b && b === c && c === d) return a;
   const w = new Map();
@@ -197,6 +199,16 @@ function drawMapRegion(ctx, map, x0, y0, w, h, ppm, level) {
       } else if (k === TER.VINEYARD) {
         ctx.strokeStyle = '#4f8a3a';
         ctx.beginPath(); ctx.moveTo(x - CELL * step * 0.35, y); ctx.lineTo(x + CELL * step * 0.35, y); ctx.stroke();
+      } else if (k === TER.SWAMP && (cx * 5 + cy * 3) % 3 === 0) {
+        // Marsh: a short blue dash with tufts rising from it.
+        ctx.strokeStyle = BLUE_LINE;
+        const s = level === 2 ? 1.6 : 3.2;
+        ctx.beginPath();
+        ctx.moveTo(x - s * 1.4, y); ctx.lineTo(x + s * 1.4, y);
+        ctx.moveTo(x, y); ctx.lineTo(x, y - s);
+        ctx.moveTo(x - s * 0.7, y); ctx.lineTo(x - s * 0.9, y - s * 0.7);
+        ctx.moveTo(x + s * 0.7, y); ctx.lineTo(x + s * 0.9, y - s * 0.7);
+        ctx.stroke();
       } else if (k === TER.GRASS && level === 2 && (cx * 7 + cy * 13) % 5 === 0) {
         ctx.strokeStyle = '#6f9a52';
         const s = 1.4;
@@ -216,6 +228,15 @@ function drawMapRegion(ctx, map, x0, y0, w, h, ppm, level) {
     stroke(s.pts);
   }
 
+  // River: a smooth band over the cell fill, blue banks and water tint between them.
+  if (map.river && lineIn(map.river.pts, map.river.width)) {
+    const rv = map.river;
+    ctx.save(); ctx.lineJoin = 'round'; ctx.lineCap = 'round';
+    ctx.strokeStyle = BLUE_LINE; ctx.lineWidth = rv.width + 2.4 * pxm; stroke(rv.pts);
+    ctx.strokeStyle = 'rgb(' + MAPC.water.join(',') + ')'; ctx.lineWidth = rv.width; stroke(rv.pts);
+    ctx.restore();
+  }
+
   // Roads: the paved road red with black casing; dirt tracks a dashed black double line.
   for (const r of map.roads) {
     if (!lineIn(r.pts, 0)) continue;
@@ -226,6 +247,50 @@ function drawMapRegion(ctx, map, x0, y0, w, h, ppm, level) {
       ctx.strokeStyle = MAP_INK; ctx.lineWidth = Math.max(6, 3.4 * pxm);
       ctx.setLineDash([Math.max(8, 6 * pxm), Math.max(4, 3 * pxm)]); stroke(r.pts); ctx.setLineDash([]);
       ctx.strokeStyle = 'rgb(' + MAPC.paper.join(',') + ')'; ctx.lineWidth = Math.max(4.4, 1.8 * pxm); stroke(r.pts);
+    }
+  }
+
+  // River: bridges (two black lines with flared ends along the road), fords, and the name.
+  const rv = map.river;
+  if (rv) {
+    ctx.strokeStyle = MAP_INK; ctx.lineWidth = Math.max(1.2, 1.4 * pxm);
+    for (const b of rv.bridges) {
+      if (!inBox(b.x, b.y, 60)) continue;
+      const ca = Math.cos(b.a), sa = Math.sin(b.a), nx = -sa, ny = ca;
+      const half = b.len / 2 + 3, off = (b.kind === 'paved' ? 6 : 4.5);
+      for (const sgn of [-1, 1]) {
+        const ox = nx * off * sgn, oy = ny * off * sgn;
+        ctx.beginPath();
+        ctx.moveTo(b.x - ca * half + ox + nx * 2.5 * sgn - ca * 2.5, b.y - sa * half + oy + ny * 2.5 * sgn - sa * 2.5);
+        ctx.lineTo(b.x - ca * half + ox, b.y - sa * half + oy);
+        ctx.lineTo(b.x + ca * half + ox, b.y + sa * half + oy);
+        ctx.lineTo(b.x + ca * half + ox + nx * 2.5 * sgn + ca * 2.5, b.y + sa * half + oy + ny * 2.5 * sgn + sa * 2.5);
+        ctx.stroke();
+      }
+    }
+    const fs0 = (level === 0 ? 10 : LEVELS[level].label) / ppm;
+    for (const f of rv.fords) {
+      if (!inBox(f.x, f.y, 80)) continue;
+      ctx.font = 'italic 700 ' + fs0 + 'px "Saira Condensed", "Arial Narrow", sans-serif';
+      ctx.textAlign = 'left'; ctx.textBaseline = 'middle';
+      ctx.lineWidth = fs0 * 0.3; ctx.strokeStyle = 'rgba(247,245,236,0.95)'; ctx.strokeText('FORD', f.x + rv.width, f.y);
+      ctx.fillStyle = BLUE_LINE; ctx.fillText('FORD', f.x + rv.width, f.y);
+      ctx.strokeStyle = BLUE_LINE; ctx.lineWidth = Math.max(0.8, 1 * pxm); ctx.setLineDash([3, 2]);
+      ctx.beginPath(); ctx.arc(f.x, f.y, 10, 0, Math.PI * 2); ctx.stroke(); ctx.setLineDash([]);
+    }
+    // The river's name along a long straight reach.
+    let best = null, bl = 0;
+    for (let k = 1; k < rv.pts.length; k++) { const a = rv.pts[k - 1], b = rv.pts[k], L = dist(a.x, a.y, b.x, b.y); if (L > bl) { bl = L; best = [a, b]; } }
+    if (best && inBox((best[0].x + best[1].x) / 2, (best[0].y + best[1].y) / 2, 300)) {
+      let ang = Math.atan2(best[1].y - best[0].y, best[1].x - best[0].x);
+      if (ang > Math.PI / 2) ang -= Math.PI; if (ang < -Math.PI / 2) ang += Math.PI;
+      const mx = (best[0].x + best[1].x) / 2, my = (best[0].y + best[1].y) / 2, fs1 = fs0 * 1.3;
+      ctx.save(); ctx.translate(mx - Math.sin(ang) * (rv.width / 2 + fs1), my + Math.cos(ang) * (rv.width / 2 + fs1)); ctx.rotate(ang);
+      ctx.font = 'italic 700 ' + fs1 + 'px "Saira Condensed", "Arial Narrow", sans-serif';
+      ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+      ctx.lineWidth = fs1 * 0.3; ctx.strokeStyle = 'rgba(247,245,236,0.95)'; ctx.strokeText(rv.name, 0, 0);
+      ctx.fillStyle = BLUE_LINE; ctx.fillText(rv.name, 0, 0);
+      ctx.restore();
     }
   }
 
@@ -362,6 +427,7 @@ function buildTerrain(map) {
     ['woods', 'Woods, hedgerow'], ['grass', 'Tall grass, scrub'], ['orchard', 'Orchard'], ['vineyard', 'Vineyard'],
     ['paved', 'Hard surface road'], ['road', 'Unimproved road'], ['wall', 'Stone wall'], ['building', 'Building'],
     ['stream', 'Stream'], ['pond', 'Pond'], ['index', 'Index contour (25 m)'], ['contour', 'Contour (5 m)'],
+    ['river', 'River, bridge, ford'], ['swamp', 'Swamp, marsh'],
   ];
   rows.forEach(([k, label], i) => {
     const col = Math.floor(i / 4), row = i % 4;
@@ -378,6 +444,15 @@ function buildTerrain(map) {
     else if (k === 'wall') { ctx.strokeStyle = MAP_INK; ctx.lineWidth = 3; ctx.beginPath(); ctx.moveTo(x, y); ctx.lineTo(x + 90, y); ctx.stroke(); ctx.lineWidth = 2; ctx.beginPath(); for (let t = 6; t < 90; t += 12) { ctx.moveTo(x + t, y); ctx.lineTo(x + t, y + 8); } ctx.stroke(); }
     else if (k === 'building') { ctx.fillStyle = MAP_INK; ctx.fillRect(x + 30, y - 14, 30, 28); }
     else if (k === 'stream') { ctx.strokeStyle = BLUE_LINE; ctx.lineWidth = 5; ctx.beginPath(); ctx.moveTo(x, y + 8); ctx.bezierCurveTo(x + 30, y - 16, x + 60, y + 16, x + 90, y - 6); ctx.stroke(); }
+    else if (k === 'river') {
+      ctx.fillStyle = 'rgb(' + MAPC.water.join(',') + ')'; ctx.fillRect(x, y - 9, 90, 18);
+      ctx.strokeStyle = BLUE_LINE; ctx.lineWidth = 2; ctx.beginPath(); ctx.moveTo(x, y - 9); ctx.lineTo(x + 90, y - 9); ctx.moveTo(x, y + 9); ctx.lineTo(x + 90, y + 9); ctx.stroke();
+      ctx.strokeStyle = MAP_INK; ctx.lineWidth = 3; ctx.beginPath(); ctx.moveTo(x + 36, y - 16); ctx.lineTo(x + 36, y + 16); ctx.moveTo(x + 54, y - 16); ctx.lineTo(x + 54, y + 16); ctx.stroke();
+    }
+    else if (k === 'swamp') {
+      sw(MAPC.swamp); ctx.strokeStyle = BLUE_LINE; ctx.lineWidth = 2;
+      for (const tx of [18, 45, 72]) { ctx.beginPath(); ctx.moveTo(tx - 10, y + 6); ctx.lineTo(tx + 10, y + 6); ctx.moveTo(tx, y + 6); ctx.lineTo(tx, y - 6); ctx.moveTo(tx - 5, y + 6); ctx.lineTo(tx - 7, y - 2); ctx.moveTo(tx + 5, y + 6); ctx.lineTo(tx + 7, y - 2); ctx.stroke(); }
+    }
     else if (k === 'pond') { ctx.fillStyle = 'rgb(' + MAPC.water.join(',') + ')'; ctx.strokeStyle = BLUE_LINE; ctx.lineWidth = 3; ctx.beginPath(); ctx.ellipse(x + 45, y, 40, 15, 0, 0, Math.PI * 2); ctx.fill(); ctx.stroke(); }
     else if (k === 'index' || k === 'contour') { ctx.strokeStyle = RED_BROWN; ctx.lineWidth = k === 'index' ? 5 : 2.5; ctx.beginPath(); ctx.moveTo(x, y + 8); ctx.bezierCurveTo(x + 30, y - 16, x + 60, y + 16, x + 90, y - 6); ctx.stroke(); }
     ctx.restore();
@@ -803,8 +878,14 @@ function drawUnits(ctx) {
     }
     const lifted = isSel(p) && (p.kind !== 'man' || p.soldier.active);
     if (isSel(p)) {
-      ctx.strokeStyle = OVL.blue; ctx.lineWidth = 2.2;
-      ctx.beginPath(); ctx.arc(q.x + 0.5, q.y + 1, (p.kind === 'man' ? r : 24) + 6, 0, Math.PI * 2); ctx.stroke();
+      // A soft halo, centered on the piece as it is drawn (lifted 4 px when picked up).
+      const hy = q.y - (lifted ? 4 : 0), inner = p.kind === 'man' ? r : 22, outer = inner + 16;
+      const g = ctx.createRadialGradient(q.x, hy, inner * 0.6, q.x, hy, outer);
+      g.addColorStop(0, 'rgba(255,214,10,0.75)');
+      g.addColorStop(0.55, 'rgba(255,214,10,0.35)');
+      g.addColorStop(1, 'rgba(255,214,10,0)');
+      ctx.fillStyle = g;
+      ctx.beginPath(); ctx.arc(q.x, hy, outer, 0, Math.PI * 2); ctx.fill();
     }
     if (p.kind !== 'man') {
       const y = drawCounter(ctx, p, q.x, q.y, 14, lifted);

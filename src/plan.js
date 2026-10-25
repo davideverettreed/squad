@@ -69,12 +69,13 @@ const Plan = {
   // restrictive terrain (ponds, streams, woods, steep ground, villages), avenues of approach.
   aoFacts() {
     const m = G.map, N = GW * GH;
-    let lo = Infinity, hi = -Infinity, woods = 0, steep = 0, worst = { s: 0 };
+    let lo = Infinity, hi = -Infinity, woods = 0, steep = 0, worst = { s: 0 }, swamp = 0, sx0 = 0, sy0 = 0;
     for (let cy = 1; cy < GH - 1; cy++) for (let cx = 1; cx < GW - 1; cx++) {
       const i = cy * GW + cx, e = m.elev[i];
       if (e < lo) lo = e; if (e > hi) hi = e;
       const k = m.ter[i];
       if (k === TER.WOODS || k === TER.ORCHARD) woods++;
+      if (k === TER.SWAMP) { swamp++; sx0 += cx; sy0 += cy; }
       const s = Math.hypot(m.elev[i + 1] - m.elev[i - 1], m.elev[i + GW] - m.elev[i - GW]) / (2 * CELL);
       if (s > 0.3) { steep++; if (s > worst.s) worst = { s, x: (cx + 0.5) * CELL, y: (cy + 0.5) * CELL }; }
     }
@@ -106,7 +107,8 @@ const Plan = {
     }
     return {
       e0: G.grid.e, n0: G.grid.n, lo: Math.round(m.elevBase + lo), hi: Math.round(m.elevBase + hi),
-      woodsPct: Math.round(woods / N * 100), steepPct: steep / N * 100, worst, ponds,
+      woodsPct: Math.round(woods / N * 100), river: m.river,
+      swampPct: swamp / N * 100, swampAt: swamp ? { x: (sx0 / swamp + 0.5) * CELL, y: (sy0 / swamp + 0.5) * CELL } : null, steepPct: steep / N * 100, worst, ponds,
       streams: m.streams.length, road, tracks: m.roads.filter(r => r.kind === 'track').length,
       villages: m.places.filter(p => p.kind === 'village'), farms: m.places.filter(p => p.kind === 'farm').length,
     };
@@ -175,21 +177,66 @@ const Plan = {
     if (K.line) {
       if (!this.plStart) { this.plStart = { x: w.x, y: w.y }; G.toast('Tap the other end of the ' + K.label.toLowerCase() + '.'); return true; }
       const g = this.addGraphic(kind, [this.plStart, w]);
-      this.plStart = null; this.tool = null; this.selected = g.id;
+      this.plStart = null; this.selected = g.id;
+      if (K.single) this.tool = null;
     } else {
+      // The tool stays on, so each tap places another; tap its button again (or Esc) to stop.
       const g = this.addGraphic(kind, [w]);
-      this.tool = null; this.selected = g.id;
+      this.selected = g.id;
+      G.toast(g.name + ' placed. Tap again for another, or tap ' + K.short + ' to stop.');
     }
     OPORD.refresh();
     return true;
   },
   finishRoute() {
     const pts = this.routeDraft || [];
-    if (pts.length >= 2) { const g = this.addGraphic('rte', pts); this.selected = g.id; }
+    if (pts.length >= 2) {
+      const g = this.addGraphic('rte', pts); this.selected = g.id;
+      // A route begun from the map menu also becomes a line of the plan for that unit.
+      if (this.routeUnit) {
+        this.addLine({ unit: this.routeUnit, task: 'route', where: g.id, mode: G.ui.moveMode || 'walk' });
+        G.toast(PLAN_UNITS[this.routeUnit] + ' moves along ' + g.name + '. Added to the plan.');
+      }
+    }
     else G.toast('A route needs at least two waypoints.');
-    this.routeDraft = null; this.tool = null;
+    this.routeDraft = null; this.tool = null; this.routeUnit = null;
     OPORD.refresh();
     return true;
+  },
+  // The plan unit for a selection: a Marine plans with his fire team, the SL with the squad.
+  planUnit(sel) {
+    if (!sel) return null;
+    const t = sel.level === 'squad' ? null : sel.team;
+    return t && t.num ? 't' + t.num : 'squad';
+  },
+  // A step chosen from the map menu while planning: a control measure at the spot and a
+  // line of the plan that sends the unit to it.
+  addStep(sel, w, step) {
+    const unit = this.planUnit(sel), mode = G.ui.moveMode || 'walk';
+    if (!unit) return;
+    let g = null, l = null;
+    switch (step) {
+      case 'cp': g = this.addGraphic('cp', [w]); l = this.addLine({ unit, task: 'move', where: g.id, mode }); break;
+      case 'bound': g = this.addGraphic('cp', [w]); l = this.addLine({ unit, task: 'bound', where: g.id }); break;
+      case 'fp': g = this.addGraphic('fp', [w]); l = this.addLine({ unit, task: 'occupy', where: g.id }); break;
+      case 'sbf': {
+        g = this.addGraphic('sbf', [w]);
+        const obj = this.graphics.find(o => o.kind === 'obj');
+        l = this.addLine({ unit, task: 'sbf', where: g.id, target: obj ? obj.id : null, mode });
+        break;
+      }
+      case 'obj': g = this.addGraphic('obj', [w]); l = this.addLine({ unit, task: 'assault', target: g.id }); break;
+      case 'trp': g = this.addGraphic('trp', [w]); l = this.addLine({ unit, task: 'suppress', target: g.id }); break;
+      case 'aslt': g = this.addGraphic('aslt', [w]); l = this.addLine({ unit, task: 'move', where: g.id, mode }); break;
+      case 'rte':
+        this.tool = 'rte'; this.routeUnit = unit; this.routeDraft = [{ x: w.x, y: w.y }];
+        G.toast('Route for ' + PLAN_UNITS[unit] + ': tap each waypoint, then Finish route.');
+        OPORD.refresh();
+        return;
+    }
+    if (g) this.selected = g.id;
+    if (l) G.toast('Line ' + this.lines.length + ': ' + this.lineText(l));
+    OPORD.refresh();
   },
   anchor(g) {
     if (g.kind === 'rte') return g.pts[g.pts.length - 1];
@@ -559,16 +606,18 @@ const Plan = {
   // Terrain facts along the line from the squad to the reported enemy, for the orientation.
   terrainFacts() {
     const b = centroid(G.squads.blue.all), e = this.reported, d = dist(b.x, b.y, e.x, e.y);
-    let woods = 0, open = 0, hi = { e: -Infinity }, streams = 0, lastWet = false, roads = 0, lastRoad = false;
+    let woods = 0, open = 0, hi = { e: -Infinity }, streams = 0, lastWet = false, roads = 0, lastRoad = false, river = 0, lastRiv = false, swamp = 0;
     const n = Math.ceil(d / 10);
     for (let i = 0; i <= n; i++) {
       const x = lerp(b.x, e.x, i / n), y = lerp(b.y, e.y, i / n), k = G.map.terAt(x, y), el = G.map.elevAt(x, y);
       if (k === TER.WOODS || k === TER.ORCHARD) woods++; else open++;
       if (el > hi.e) hi = { e: el, x, y };
       const wet = k === TER.STREAM; if (wet && !lastWet) streams++; lastWet = wet;
+      const riv = k === TER.RIVER || k === TER.FORD; if (riv && !lastRiv) river++; lastRiv = riv;
+      if (k === TER.SWAMP) swamp++;
       const rd = k === TER.ROAD || k === TER.PAVED; if (rd && !lastRoad) roads++; lastRoad = rd;
     }
-    return { b, e, d, woodsPct: Math.round(woods / (n + 1) * 100), hi, streams, roads };
+    return { b, e, d, woodsPct: Math.round(woods / (n + 1) * 100), hi, streams, roads, river, swampM: swamp * CELL };
   },
 
   // ---------------------------------------------------------------- a draft plan

@@ -314,3 +314,14 @@ kbd { font: 600 12px/1 var(--mono); border: 1px solid var(--line); border-bottom
   .dtable { font-size: 12px; padding: 10px; }
 }
 @media (prefers-reduced-motion: reduce) { * { scroll-behavior: auto !important; } }
+
+/* Planning: the menu that opens where the map is tapped. */
+.planmenu { position: fixed; z-index: 60; min-width: 210px; background: #f7f5f0; color: #1c2b3a;
+  border: 1px solid #b08d57; border-radius: 6px; box-shadow: 0 6px 20px rgba(0,0,0,.35); padding: 4px; }
+.planmenu .pmhead { font: 700 12px "Saira Condensed", sans-serif; letter-spacing: .06em; text-transform: uppercase;
+  padding: 4px 8px 6px; border-bottom: 1px solid #b08d57; margin-bottom: 2px; }
+.planmenu .pmitem { display: flex; justify-content: space-between; gap: 10px; width: 100%; background: none; border: 0;
+  padding: 7px 8px; font-size: 14px; color: inherit; text-align: left; border-radius: 4px; cursor: pointer; }
+.planmenu .pmitem span { color: #6b7380; font-size: 12px; }
+.planmenu .pmitem:hover { background: rgba(176,141,87,.18); }
+.planmenu .pmcancel { justify-content: center; color: #8a2d2d; border-top: 1px solid rgba(176,141,87,.5); margin-top: 2px; }
