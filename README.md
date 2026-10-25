@@ -30,9 +30,11 @@ works with mouse or touch.
 
 `docs/` is the website, built for GitHub Pages at **stex-riflesquad.com**: the
 game at the root of the site, installable as an app on Android and desktop, and
-playable offline after the first visit. Hosting is not switched on yet.
+playable offline after the first visit. It is live at
+https://stex-riflesquad.com. Every push to `main` that updates `docs/`
+publishes a new version.
 
-To switch it on:
+How it was set up, for reference:
 
 1. **DNS at Namecheap.** Domain List → stex-riflesquad.com → Manage →
    Advanced DNS. Delete the parking records Namecheap adds (the CNAME for
