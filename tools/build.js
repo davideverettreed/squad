@@ -52,6 +52,8 @@ fs.writeFileSync(path.join(docs, 'sw.js'), read('web/sw.js').replace('__VERSION_
 fs.copyFileSync(path.join(root, 'web/manifest.webmanifest'), path.join(docs, 'manifest.webmanifest'));
 for (const f of fs.readdirSync(path.join(root, 'web/icons'))) fs.copyFileSync(path.join(root, 'web/icons', f), path.join(docs, 'icons', f));
 fs.writeFileSync(path.join(docs, '.nojekyll'), '');
+// GitHub Pages serves the site at this custom domain.
+fs.writeFileSync(path.join(docs, 'CNAME'), 'stex-riflesquad.com\n');
 
 console.log('Built dist/index.html, dist/artifact.html and docs/ (site version ' + version + ') from ' +
   scripts.length + ' scripts, ' + Math.round(html.length / 1024) + ' KB.');

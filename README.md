@@ -28,18 +28,36 @@ works with mouse or touch.
 
 ## Website and Android app
 
-`docs/` is the website, built for GitHub Pages: the game at the root of the
-site, installable as an app on Android and desktop, and playable offline after
-the first visit. Hosting is not switched on yet. To switch it on:
+`docs/` is the website, built for GitHub Pages at **stex-riflesquad.com**: the
+game at the root of the site, installable as an app on Android and desktop, and
+playable offline after the first visit. Hosting is not switched on yet.
 
-1. On GitHub, open the repository's **Settings → Pages**.
-2. Under **Build and deployment**, set **Source** to **Deploy from a branch**,
-   the branch to **main** and the folder to **/docs**, then **Save**.
-3. After a minute or two the game is at
-   `https://davideverettreed.github.io/squad/`.
+To switch it on:
 
-To install on Android, open that address in Chrome and choose **Install app**
-(or **Add to Home screen**) from the menu.
+1. **DNS at Namecheap.** Domain List → stex-riflesquad.com → Manage →
+   Advanced DNS. Delete the parking records Namecheap adds (the CNAME for
+   `www` pointing to parkingpage.namecheap.com and the URL Redirect record for
+   `@`). Then add:
+
+   | Type | Host | Value |
+   |---|---|---|
+   | A Record | @ | 185.199.108.153 |
+   | A Record | @ | 185.199.109.153 |
+   | A Record | @ | 185.199.110.153 |
+   | A Record | @ | 185.199.111.153 |
+   | CNAME Record | www | davideverettreed.github.io. |
+
+2. **GitHub Pages.** In the repository, Settings → Pages. Set Source to
+   *Deploy from a branch*, branch **main**, folder **/docs**, and Save. The
+   custom domain field should read `stex-riflesquad.com` (from `docs/CNAME`).
+3. When GitHub shows the DNS check has passed (DNS can take up to a day; often
+   minutes), tick **Enforce HTTPS**.
+4. Recommended: verify the domain under your GitHub account's Settings →
+   Pages → Add a domain. GitHub gives a TXT record to add at Namecheap; this
+   stops anyone else from pointing a GitHub site at your domain.
+
+To install on Android, open https://stex-riflesquad.com in Chrome and choose
+**Install app** (or **Add to Home screen**) from the menu.
 
 ## What is modeled
 
