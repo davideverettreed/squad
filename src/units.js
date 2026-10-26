@@ -74,7 +74,7 @@ class Soldier {
     return 'Ready';
   }
   // Rounds left: the magazine in the weapon and the spares.
-  get ammoLeft() { return this.inMag + this.mags * this.weapon.mag; }
+  get ammoLeft() { return (this.reloadT > 0 ? this.weapon.mag : this.inMag) + this.mags * this.weapon.mag; }
   get ammoFrac() { return this.ammoStart ? clamp(this.ammoLeft / this.ammoStart, 0, 1) : 0; }
   get ammoText() {
     if (this.ammoLeft === 0) return 'Out';

@@ -756,7 +756,13 @@ const UI = {
     const spent = (sq) => {
       const rds = sq.all.reduce((n, s) => n + s.shots, 0), hits = sq.all.reduce((n, s) => n + s.hits, 0);
       const fr = sq.all.reduce((n, s) => n + ((s.fragsStart || 0) - s.frags), 0), gl = sq.all.reduce((n, s) => n + ((s.lStart || 0) - s.lRounds), 0);
-      return lines([rds + ' rounds', hits + ' hits' + (rds ? ' (' + (hits / rds * 100).toFixed(1) + '%)' : ''), fr + ' hand grenades', gl ? gl + ' launcher rounds' : '']);
+      // What is left, against the basic load carried at the start.
+      const left = sq.all.reduce((n, s) => n + s.ammoLeft, 0), start = sq.all.reduce((n, s) => n + (s.ammoStart || 0), 0);
+      const frLeft = sq.all.reduce((n, s) => n + s.frags, 0), glLeft = sq.all.reduce((n, s) => n + s.lRounds, 0);
+      const used = start ? Math.round(clamp(1 - left / start, 0, 1) * 100) : 0;
+      return lines([rds + ' rounds fired', hits + ' hits' + (rds ? ' (' + (hits / rds * 100).toFixed(1) + '%)' : ''),
+        '<b>' + used + '%</b> of the basic load used; ' + left + ' of ' + start + ' rounds left',
+        fr + ' hand grenades thrown, ' + frLeft + ' left', gl || glLeft ? gl + ' launcher rounds fired, ' + glLeft + ' left' : '']);
     };
     pair(spent(blue), spent(red));
     return box;
