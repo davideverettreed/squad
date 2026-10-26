@@ -18,7 +18,7 @@ const GRAPHIC_KINDS = {
   trp:  { label: 'Target reference point', short: 'TRP', numbered: true },
 };
 // Plan lines whose teams can each be given their own spot by dragging their ghosts.
-const SPOT_TASKS = ['move', 'bound', 'assault'];
+const SPOT_TASKS = ['move', 'bound', 'assault', 'occupy', 'sbf'];
 // What placing a control measure means for a selected unit: its next step of the plan.
 const TOOL_STEPS = { cp: 'cp', rel: 'rel', aslt: 'aslt', fp: 'fp', sbf: 'sbf', obj: 'obj', trp: 'trp' };
 // Control measures grouped as the graphics manuals group them: points, lines and areas.
@@ -623,7 +623,7 @@ const Plan = {
           else groupMove(sel, this.anchor(where).x, this.anchor(where).y, l.mode);
           break;
         case 'route': routeMove(sel, where.pts, l.mode); break;
-        case 'occupy': occupyPosition(sel, where); l.stage = 'moving'; break;
+        case 'occupy': occupyPosition(sel, where, l.spots && Object.keys(l.spots).length ? this.teamSpots(l, sel, this.anchor(where)).spots : null); l.stage = 'moving'; break;
         case 'bound':
           if (l.spots && Object.keys(l.spots).length) this.boundToSpots(l, sel, this.anchor(where));
           else issueOrder(sel, 'bound', this.anchor(where));
@@ -632,7 +632,11 @@ const Plan = {
           if (l.spots && Object.keys(l.spots).length) this.assaultToSpots(l, sel, this.anchor(tgt));
           else issueOrder(sel, 'assault', this.anchor(tgt));
           break;
-        case 'sbf': groupMove(sel, this.anchor(where).x, this.anchor(where).y, l.mode); l.stage = 'moving'; break;
+        case 'sbf':
+          if (l.spots && Object.keys(l.spots).length) this.moveToSpots(l, sel, this.anchor(where));
+          else groupMove(sel, this.anchor(where).x, this.anchor(where).y, l.mode);
+          l.stage = 'moving';
+          break;
         case 'suppress': issueOrder(sel, 'suppress', this.anchor(tgt)); l.status = 'done'; break;
         case 'lift': issueOrder(sel, 'lift'); issueOrder(sel, 'halt'); l.status = 'done'; break;
         case 'hold': issueOrder(sel, 'halt'); issueOrder(sel, 'posture', 'prone'); issueOrder(sel, 'fire', 'free'); l.status = 'done'; break;

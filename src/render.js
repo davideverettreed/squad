@@ -1207,8 +1207,12 @@ function drawPlanGhosts(ctx) {
     const t = sq.teams[Number(gh.unit[1]) - 1];
     if (!t) continue;
     ctx.fillStyle = gh.final ? 'rgba(31,79,191,0.55)' : 'rgba(31,79,191,0.3)';
-    t.members.filter(s => s.active).forEach((s, i) => {
-      const o = scaled(teamSlot(t.formation, i), t.spacing), w = rotateOffset(o.x, o.y, gh.h), p = toScreen(gh.x + w.x, gh.y + w.y);
+    // In a fighting position the men line up across its sector; elsewhere, the team's formation.
+    const fp = gh.line.task === 'occupy' ? Plan.graphic(gh.line.where) : null, live = t.members.filter(s => s.active);
+    live.forEach((s, i) => {
+      const o = scaled(teamSlot(t.formation, i), t.spacing);
+      const w = fp ? { x: -Math.sin(fp.dir) * (i - (live.length - 1) / 2) * 6, y: Math.cos(fp.dir) * (i - (live.length - 1) / 2) * 6 } : rotateOffset(o.x, o.y, gh.h);
+      const p = toScreen(gh.x + w.x, gh.y + w.y);
       ctx.beginPath(); ctx.arc(p.x, p.y, View3D.drawingDrape ? Math.max(3, 0.9 * R.cam.zoom) : 3, 0, Math.PI * 2); ctx.fill();
     });
   }

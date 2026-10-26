@@ -155,12 +155,20 @@ function routeMove(sel, pts, mode) {
 }
 
 // Occupy a fighting position: men spread along a line across the sector's center, 6 m apart.
-function occupyPosition(sel, g) {
+// spots: optionally, each fire team's own place in the position (by team number); each
+// team then lines up across the sector at its spot, the rest at the position itself.
+function occupyPosition(sel, g, spots) {
   const members = selMembers(sel).filter(commandable);
   const nx = -Math.sin(g.dir), ny = Math.cos(g.dir);
-  members.forEach((s, i) => {
-    const off = (i - (members.length - 1) / 2) * 6;
-    orderMove(s, g.pts[0].x + nx * off, g.pts[0].y + ny * off, 'walk');
+  const groups = new Map();
+  for (const s of members) {
+    const at = spots && s.team.num && spots['t' + s.team.num] ? spots['t' + s.team.num] : g.pts[0];
+    if (!groups.has(at)) groups.set(at, []);
+    groups.get(at).push(s);
+  }
+  for (const [at, men] of groups) men.forEach((s, i) => {
+    const off = (i - (men.length - 1) / 2) * 6;
+    orderMove(s, at.x + nx * off, at.y + ny * off, 'walk');
   });
 }
 
