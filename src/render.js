@@ -694,6 +694,7 @@ function render() {
   drawObjects(ctx);
   drawPlanGhosts(ctx);
   drawOrdersOverlay(ctx);
+  if (G.ui.showDest) drawDestinations(ctx);
   drawProjectiles(ctx);
   drawEffects(ctx);
   drawCones(ctx);
@@ -1359,6 +1360,61 @@ function drawTarget(ctx, x, y, radius, label) {
   ctx.textAlign = 'left'; ctx.textBaseline = 'bottom';
   ctx.lineWidth = 3; ctx.strokeStyle = 'rgba(247,245,236,0.95)';
   ctx.strokeText(label, p.x + rr + 4, p.y - 3); ctx.fillStyle = OVL.black; ctx.fillText(label, p.x + rr + 4, p.y - 3);
+}
+
+// Space held: every unit's destination as a ghost, as in a Total War game. Each team (and
+// the leader's group) shows where its men will stand when they get there, its route, and
+// how it moves, how far and how long; a unit holding shows where it holds.
+function drawDestinations(ctx) {
+  if (!G.squads.blue) return;
+  const sq = G.squads.blue;
+  ctx.save();
+  for (const t of [sq.hq, ...sq.teams]) {
+    const act = t.members.filter(s => s.active);
+    if (!act.length) continue;
+    const movers = act.filter(s => s.path.length);
+    const here = centroid(act), q0 = toScreen(here.x, here.y);
+    if (!movers.length) {
+      // Holding: a small ring where it is.
+      ctx.strokeStyle = 'rgba(31,79,191,0.6)'; ctx.lineWidth = 1.5; ctx.setLineDash([3, 3]);
+      ctx.beginPath(); ctx.arc(q0.x, q0.y, 18, 0, Math.PI * 2); ctx.stroke(); ctx.setLineDash([]);
+      destLabel(ctx, q0.x, q0.y + 26, t.short + ' · holding', 'rgba(247,245,236,0.9)', MAP_INK);
+      continue;
+    }
+    const ends = movers.map(s => s.path[s.path.length - 1]), dest = centroid(ends), q = toScreen(dest.x, dest.y);
+    // The team's route: the longest of its men's, from where they are.
+    const lead = movers.reduce((a, s) => (s.path.length > a.path.length ? s : a), movers[0]);
+    const pts = [lead, ...lead.path].map(w => toScreen(w.x, w.y));
+    ctx.strokeStyle = 'rgba(255,214,10,0.55)'; ctx.lineWidth = 9; ctx.lineCap = 'round';
+    ctx.beginPath(); pts.forEach((p, i) => i ? ctx.lineTo(p.x, p.y) : ctx.moveTo(p.x, p.y)); ctx.stroke();
+    ctx.strokeStyle = OVL.blue; ctx.lineWidth = 2.2; ctx.setLineDash([8, 5]);
+    ctx.beginPath(); pts.forEach((p, i) => i ? ctx.lineTo(p.x, p.y) : ctx.moveTo(p.x, p.y)); ctx.stroke(); ctx.setLineDash([]);
+    // Each man's spot, then the unit's ghost over them.
+    ctx.fillStyle = 'rgba(31,79,191,0.45)';
+    for (const e of ends) { const p = toScreen(e.x, e.y); ctx.beginPath(); ctx.arc(p.x, p.y, 3.5, 0, Math.PI * 2); ctx.fill(); }
+    ctx.globalAlpha = 0.9;
+    drawUnitSymbol(ctx, q.x, q.y, 15, 'blue', t.num ? 'team' : 'squad', { fill: 'rgba(128,224,255,0.4)', ink: OVL.blue, dashed: true });
+    ctx.globalAlpha = 1;
+    // Facing at the end, if one was given.
+    const face = movers.find(s => s.faceAngle != null);
+    if (face) {
+      const a = face.faceAngle;
+      ctx.strokeStyle = OVL.blue; ctx.lineWidth = 2;
+      ctx.beginPath(); ctx.moveTo(q.x, q.y); ctx.lineTo(q.x + Math.cos(a) * 34, q.y + Math.sin(a) * 34); ctx.stroke();
+    }
+    let len = 0, px = lead.x, py = lead.y;
+    for (const w of lead.path) { len += dist(px, py, w.x, w.y); px = w.x; py = w.y; }
+    const mode = lead.moveMode, eta = len / Math.max(0.2, MOVE[mode].speed * 0.85 * lead.loadFactor);
+    destLabel(ctx, q.x, q.y + 24, t.short + ' · ' + MOVE[mode].label.toLowerCase() + (lead.assault ? ' (assault)' : '') + ' · ' + Math.round(len) + ' m · ' + fmtClock(eta), 'rgba(255,224,102,0.95)', MAP_INK);
+  }
+  ctx.restore();
+}
+function destLabel(ctx, x, y, text, bg, fg) {
+  ctx.font = '700 12px "IBM Plex Mono", ui-monospace, monospace';
+  const w = ctx.measureText(text).width + 10;
+  ctx.fillStyle = bg; ctx.fillRect(x - w / 2, y - 9, w, 18);
+  ctx.strokeStyle = 'rgba(22,22,22,0.5)'; ctx.lineWidth = 1; ctx.strokeRect(x - w / 2, y - 9, w, 18);
+  ctx.fillStyle = fg; ctx.textAlign = 'center'; ctx.textBaseline = 'middle'; ctx.fillText(text, x, y + 1);
 }
 
 // Friendly graphics drawn as on an acetate overlay, in blue grease pencil.

@@ -48,8 +48,15 @@ const Input = {
         } else if (this.moved && this.dragU) {
           G.ui.unitDrag.to = toWorld(p.x, p.y);
         } else if (this.moved && this.dragG) {
-          const w = toWorld(p.x, p.y), pt = this.dragG.g.pts[this.dragG.idx];
-          pt.x = clamp(w.x, 0, MAP_W); pt.y = clamp(w.y, 0, MAP_H);
+          const w = toWorld(p.x, p.y), dg = this.dragG;
+          if (dg.along || dg.inside) {
+            // Taken by its middle (a line) or its inside (an area): the whole measure moves.
+            if (!dg.orig) { dg.orig = dg.g.pts.map(q => ({ x: q.x, y: q.y })); dg.from = toWorld(p.sx, p.sy); }
+            dg.g.pts.forEach((q, i) => { q.x = clamp(dg.orig[i].x + w.x - dg.from.x, 0, MAP_W); q.y = clamp(dg.orig[i].y + w.y - dg.from.y, 0, MAP_H); });
+          } else {
+            const pt = dg.g.pts[dg.idx];
+            pt.x = clamp(w.x, 0, MAP_W); pt.y = clamp(w.y, 0, MAP_H);
+          }
         } else if (this.moved) {
           R.cam.x = this.camStart.x - (p.x - p.sx) / R.cam.zoom;
           R.cam.y = this.camStart.y - (p.y - p.sy) / R.cam.zoom;
@@ -121,7 +128,16 @@ const Input = {
       clampCam();
     }, { passive: false });
 
-    window.addEventListener('keyup', (e) => { G.ui.shift = e.shiftKey; });
+    window.addEventListener('keyup', (e) => {
+      G.ui.shift = e.shiftKey;
+      // Space: a tap pauses; held, it shows where every unit is going (released, it hides them).
+      if (e.key === ' ' && this.spaceAt != null) {
+        e.preventDefault();
+        clearTimeout(this.spaceTimer);
+        if (!G.ui.showDest && G.running) togglePause();
+        G.ui.showDest = false; this.spaceAt = null;
+      }
+    });
     window.addEventListener('keydown', (e) => {
       G.ui.shift = e.shiftKey;
       if (e.target.closest && e.target.closest('input, select, textarea')) return;
@@ -130,7 +146,10 @@ const Input = {
       const lk = k.length === 1 ? k.toLowerCase() : k;
       // W A S D shift the selected unit, Q E turn it (after step-off).
       if ('wasdqe'.includes(lk) && lk.length === 1 && !e.ctrlKey && !e.metaKey && !e.altKey) { if (Nudge.key(lk)) e.preventDefault(); return; }
-      if (k === ' ') { e.preventDefault(); togglePause(); }
+      if (k === ' ') {
+        e.preventDefault();
+        if (!e.repeat && this.spaceAt == null) { this.spaceAt = performance.now(); this.spaceTimer = setTimeout(() => { G.ui.showDest = true; }, 220); }
+      }
       else if (k === 'v' || k === 'V') $('btnCones').click();
       else if (k === 'm' || k === 'M') $('btnMeasure').click();
       else if (lk === 'z' && !e.ctrlKey && !e.metaKey) UI.changeSpacing(-1);

@@ -437,6 +437,16 @@ body:not(.roster-min) #btn3d, body:not(.roster-min) #ctl3d { margin-left: 0; }
 .planmenu .pmdanger b { color: #8a2d2d; }
 
 .bsit select { max-width: 100%; }
+
+.glist { display: flex; flex-direction: column; gap: 2px; margin: 4px 0 10px; }
+.glist .glgroup { font: 600 11px "Saira Condensed", sans-serif; letter-spacing: .08em; text-transform: uppercase; opacity: .7; margin-top: 6px; }
+.glist .glrow { display: flex; align-items: center; gap: 4px; border-radius: 3px; }
+.glist .glrow.sel { background: rgba(255,214,10,.14); outline: 1px solid rgba(255,214,10,.5); }
+.glist .glname { flex: 1; min-width: 0; display: flex; flex-direction: column; align-items: flex-start; background: none; border: 0; color: inherit; text-align: left; padding: 3px 6px; cursor: pointer; font: inherit; }
+.glist .glname:hover { background: rgba(255,255,255,.06); }
+.glist .glname b { font-size: 13px; }
+.glist .glname span { font-size: 11.5px; opacity: .75; }
+.glist .gldel { color: #e6a1a1; }
 </style>
 <link rel="manifest" href="manifest.webmanifest">
 <link rel="icon" type="image/png" sizes="192x192" href="icons/icon-192.png">
@@ -531,7 +541,7 @@ body:not(.roster-min) #btn3d, body:not(.roster-min) #ctl3d { margin-left: 0; }
         <h3>The order and the plan</h3>
         <p>Each mission opens with a five-paragraph order beside the map: <b>O</b>rientation, <b>S</b>ituation (SALUTE and DRAW-D), <b>M</b>ission, <b>E</b>xecution, <b>A</b>dmin &amp; Logistics, <b>C</b>ommand &amp; Signal. In Execution, place control measures on the map (CP, OBJ, SBF, ASLT POS, PL, CCP) and write the scheme of maneuver as lines: a trigger (at step-off, after or with the line above, on a signal, at a time, on contact), a unit, a task and a place. Draft a plan gives you a hasty attack to start from. The clock runs while you plan, at 4× speed, and the field is frozen: no one moves or fires until you step off. The enemy uses the time all the same: a defender digs in, and an enemy on the march is placed as far along its route at step-off as it would have walked. Use a third of the time available and leave the rest to the fire teams. Press Step off to execute. The Tracker shows each line; fire signals there. A line halted short by contact waits for you to press Resume. The plan is graded at step-off, and the grade sets the squad's confidence: steadiness under fire, staying power, and how fast it answers the radio. After step-off your orders go by radio and take a few seconds to be acknowledged. The debrief grades the mission on plan, result, casualties and time.</p>
         <h3>Mouse</h3>
-        <p>With a mouse, the left button selects and the right button acts. Left-click a man to select him, again for his team, again for the whole unit; left-click open ground to select nothing. Right-click the map for the action menu at that spot: move, rush or crawl there, bound, assault, suppress, fire 40mm, throw a grenade, or watch that way; right-click an enemy to engage him. Shift and right-click moves there at once. Hold the right button and drag to move there and face the way you drag. An order button (Walk, Assault, Suppress and the rest) arms that order: the next left click says where. While planning, right-click opens the plan menu. Drag one of your units with the left button to send it.</p>
+        <p>With a mouse, the left button selects and the right button acts. Left-click a man to select him, again for his team, again for the whole unit; left-click open ground to select nothing. Right-click the map for the action menu at that spot: move, rush or crawl there, bound, assault, suppress, fire 40mm, throw a grenade, or watch that way; right-click an enemy to engage him. Shift and right-click moves there at once. Hold the right button and drag to move there and face the way you drag. An order button (Walk, Assault, Suppress and the rest) arms that order: the next left click says where. While planning, right-click opens the plan menu. The Execution tab lists every control measure (points, lines, areas): click one to find it on the map, Edit to change its kind or name, ✕ to delete it. On the map, click a line anywhere along it or an area anywhere inside to edit it, or drag it by the middle to move all of it. Drag one of your units with the left button to send it.</p>
         <h3>Selecting</h3>
         <p>Tap a Marine to select that Marine. Tap again to select the fire team, and again for the whole squad. The Squad and fire team buttons above the orders do the same. Keys: <kbd>1</kbd> <kbd>2</kbd> <kbd>3</kbd> fire teams, <kbd>0</kbd> squad, <kbd>Esc</kbd> cancel.</p>
         <h3>Moving</h3>
@@ -547,7 +557,7 @@ body:not(.roster-min) #btn3d, body:not(.roster-min) #ctl3d { margin-left: 0; }
         <h3>Map key</h3>
         <p>A squad fights on a 2 by 2 kilometer sheet of four 1-kilometer grid squares, starting 1 to 1.4 km from the enemy, beyond spotting range; larger units will get larger sheets. The sheet is in standard US military map colors. White is open ground. Light green with tufts is tall grass, which hides a man lying prone. Green is woods and hedgerows; rows of small green circles are orchards, green row lines are vineyards. Blue lines are streams, which run in shallow gullies that give cover; blue areas are ponds and cannot be crossed. A broad blue band is a river: it can be crossed only at a bridge (two black lines across the road) or at a ford, marked FORD in a dashed blue circle, where men wade slowly in the open. Pale blue-green ground with small blue tufts is swamp: very slow going and no cover, but it hides a man. Red-brown lines are contours (5 or 10 meters apart, as the margin states), with a heavier, numbered index contour every fifth line; numbers with a dot are hilltop heights. Black blocks are buildings. A black line with ticks is a stone wall, which gives hard cover to a kneeling or prone man. The red road is a paved road; the dashed double lines are dirt tracks. Each mission is set in one of six regions, chosen in the New mission dialog or at random: rolling farmland; the Southern California coast (Pacific Ocean on the west edge, sand beach, chaparral); South Texas brush country (mesquite thickets, pasture, stock tanks); North Carolina pine woods and blackwater swamp; the Arizona desert and mountains (open creosote flats, rock outcrops, dry washes shown as dashed blue lines); and the Montana mountains in winter (deep snow, lodgepole pine, frozen ponds). The ground changes the fight: snow, sand, chaparral and rock are slow; brush and grass hide a man lying down; rock gives cover; open desert gives long fields of fire. The 3D button (key T) turns the map into a sand table: the same sheet laid over the ground in 3D, heights exaggerated, with every man standing on it as a peg under his billet symbol (gray when hit; a red wire sphere marks where an enemy was last seen), and key terrain and the reported enemy position on flagpoles. Planning works there too: tap with a tool to place a control measure, drag one to move it, tap the ground with a unit selected for the plan menu. Drag to move, right-drag or two fingers to turn and tilt, wheel or pinch to zoom; the buttons beside it turn, tilt and zoom on a phone. Taps give the same orders as on the flat map. Fog of war: ground your squad can see now is clear; ground it has seen before is faded; ground it has never seen is faded more (key F toggles the wash). Point at the map to read the 8-digit grid reference. Measure (key M) lays a tape between two taps and marks the distance, grid bearing and mils on the map; tap a label to remove it. Point at a formation button to see the selected team or squad ghosted in that formation. Zoomed out, your men gather into one counter per fire team, then one for the squad, in the standard unit symbol: a rectangle with an infantry X for friendly, a diamond for enemy.</p>
         <h3>Camera</h3>
-        <p>Drag to pan. Use the wheel or pinch to zoom. <kbd>Space</kbd> pauses; you can give orders while paused.</p>
+        <p>Drag to pan. Use the wheel or pinch to zoom. A tap of <kbd>Space</kbd> pauses; you can give orders while paused. Hold <kbd>Space</kbd> to see where every unit is going: a ghost of each team at its destination, its route, how it moves, how far and how long it will take; units holding are ringed where they stand.</p>
       </div>
       <div class="cardfoot"><button class="obtn primary" data-close="help">Close</button></div>
     </div>
@@ -5599,6 +5609,7 @@ function render() {
   drawObjects(ctx);
   drawPlanGhosts(ctx);
   drawOrdersOverlay(ctx);
+  if (G.ui.showDest) drawDestinations(ctx);
   drawProjectiles(ctx);
   drawEffects(ctx);
   drawCones(ctx);
@@ -6264,6 +6275,61 @@ function drawTarget(ctx, x, y, radius, label) {
   ctx.textAlign = 'left'; ctx.textBaseline = 'bottom';
   ctx.lineWidth = 3; ctx.strokeStyle = 'rgba(247,245,236,0.95)';
   ctx.strokeText(label, p.x + rr + 4, p.y - 3); ctx.fillStyle = OVL.black; ctx.fillText(label, p.x + rr + 4, p.y - 3);
+}
+
+// Space held: every unit's destination as a ghost, as in a Total War game. Each team (and
+// the leader's group) shows where its men will stand when they get there, its route, and
+// how it moves, how far and how long; a unit holding shows where it holds.
+function drawDestinations(ctx) {
+  if (!G.squads.blue) return;
+  const sq = G.squads.blue;
+  ctx.save();
+  for (const t of [sq.hq, ...sq.teams]) {
+    const act = t.members.filter(s => s.active);
+    if (!act.length) continue;
+    const movers = act.filter(s => s.path.length);
+    const here = centroid(act), q0 = toScreen(here.x, here.y);
+    if (!movers.length) {
+      // Holding: a small ring where it is.
+      ctx.strokeStyle = 'rgba(31,79,191,0.6)'; ctx.lineWidth = 1.5; ctx.setLineDash([3, 3]);
+      ctx.beginPath(); ctx.arc(q0.x, q0.y, 18, 0, Math.PI * 2); ctx.stroke(); ctx.setLineDash([]);
+      destLabel(ctx, q0.x, q0.y + 26, t.short + ' · holding', 'rgba(247,245,236,0.9)', MAP_INK);
+      continue;
+    }
+    const ends = movers.map(s => s.path[s.path.length - 1]), dest = centroid(ends), q = toScreen(dest.x, dest.y);
+    // The team's route: the longest of its men's, from where they are.
+    const lead = movers.reduce((a, s) => (s.path.length > a.path.length ? s : a), movers[0]);
+    const pts = [lead, ...lead.path].map(w => toScreen(w.x, w.y));
+    ctx.strokeStyle = 'rgba(255,214,10,0.55)'; ctx.lineWidth = 9; ctx.lineCap = 'round';
+    ctx.beginPath(); pts.forEach((p, i) => i ? ctx.lineTo(p.x, p.y) : ctx.moveTo(p.x, p.y)); ctx.stroke();
+    ctx.strokeStyle = OVL.blue; ctx.lineWidth = 2.2; ctx.setLineDash([8, 5]);
+    ctx.beginPath(); pts.forEach((p, i) => i ? ctx.lineTo(p.x, p.y) : ctx.moveTo(p.x, p.y)); ctx.stroke(); ctx.setLineDash([]);
+    // Each man's spot, then the unit's ghost over them.
+    ctx.fillStyle = 'rgba(31,79,191,0.45)';
+    for (const e of ends) { const p = toScreen(e.x, e.y); ctx.beginPath(); ctx.arc(p.x, p.y, 3.5, 0, Math.PI * 2); ctx.fill(); }
+    ctx.globalAlpha = 0.9;
+    drawUnitSymbol(ctx, q.x, q.y, 15, 'blue', t.num ? 'team' : 'squad', { fill: 'rgba(128,224,255,0.4)', ink: OVL.blue, dashed: true });
+    ctx.globalAlpha = 1;
+    // Facing at the end, if one was given.
+    const face = movers.find(s => s.faceAngle != null);
+    if (face) {
+      const a = face.faceAngle;
+      ctx.strokeStyle = OVL.blue; ctx.lineWidth = 2;
+      ctx.beginPath(); ctx.moveTo(q.x, q.y); ctx.lineTo(q.x + Math.cos(a) * 34, q.y + Math.sin(a) * 34); ctx.stroke();
+    }
+    let len = 0, px = lead.x, py = lead.y;
+    for (const w of lead.path) { len += dist(px, py, w.x, w.y); px = w.x; py = w.y; }
+    const mode = lead.moveMode, eta = len / Math.max(0.2, MOVE[mode].speed * 0.85 * lead.loadFactor);
+    destLabel(ctx, q.x, q.y + 24, t.short + ' · ' + MOVE[mode].label.toLowerCase() + (lead.assault ? ' (assault)' : '') + ' · ' + Math.round(len) + ' m · ' + fmtClock(eta), 'rgba(255,224,102,0.95)', MAP_INK);
+  }
+  ctx.restore();
+}
+function destLabel(ctx, x, y, text, bg, fg) {
+  ctx.font = '700 12px "IBM Plex Mono", ui-monospace, monospace';
+  const w = ctx.measureText(text).width + 10;
+  ctx.fillStyle = bg; ctx.fillRect(x - w / 2, y - 9, w, 18);
+  ctx.strokeStyle = 'rgba(22,22,22,0.5)'; ctx.lineWidth = 1; ctx.strokeRect(x - w / 2, y - 9, w, 18);
+  ctx.fillStyle = fg; ctx.textAlign = 'center'; ctx.textBaseline = 'middle'; ctx.fillText(text, x, y + 1);
 }
 
 // Friendly graphics drawn as on an acetate overlay, in blue grease pencil.
@@ -7912,18 +7978,34 @@ const Plan = {
     if (g.kind === 'pl' || g.kind === 'loa') return { x: (g.pts[0].x + g.pts[g.pts.length - 1].x) / 2, y: (g.pts[0].y + g.pts[g.pts.length - 1].y) / 2 };
     return g.pts[0];
   },
+  // The control measure under a screen point: a point near its symbol, a line anywhere
+  // along it (a vertex near the pointer is picked up to drag), an area anywhere inside.
   hitGraphic(sx, sy) {
     let best = null, bd = 22;
+    const segDist = (a, b) => {
+      const dx = b.x - a.x, dy = b.y - a.y, L = dx * dx + dy * dy, t = L ? clamp(((sx - a.x) * dx + (sy - a.y) * dy) / L, 0, 1) : 0;
+      return Math.hypot(a.x + dx * t - sx, a.y + dy * t - sy);
+    };
     for (const g of this.graphics) {
-      if (GRAPHIC_KINDS[g.kind].line) {
-        for (let i = 0; i < g.pts.length; i++) {
-          const p = toScreen(g.pts[i].x, g.pts[i].y), d = Math.hypot(p.x - sx, p.y - sy);
+      const K = GRAPHIC_KINDS[g.kind];
+      if (K.line) {
+        const q = g.pts.map(p => toScreen(p.x, p.y));
+        for (let i = 0; i < q.length; i++) {
+          const d = Math.hypot(q[i].x - sx, q[i].y - sy);
           if (d < bd) { bd = d; best = { g, idx: i }; }
+        }
+        // Along a segment: grab the nearer end of it, a little less eagerly than a vertex.
+        for (let i = 1; i < q.length; i++) {
+          const d = segDist(q[i - 1], q[i]) + 4;
+          if (d < bd) { bd = d; best = { g, idx: Math.hypot(q[i - 1].x - sx, q[i - 1].y - sy) < Math.hypot(q[i].x - sx, q[i].y - sy) ? i - 1 : i, along: true }; }
         }
         continue;
       }
       const p = toScreen(g.pts[0].x, g.pts[0].y), d = Math.hypot(p.x - sx, p.y - sy);
       if (d < bd) { bd = d; best = { g, idx: 0 }; }
+      // Inside an area (objective, assault position): a hit, though a point on top of it wins.
+      const rr = (K.r || 0) * R.cam.zoom;
+      if (rr && d < rr && !best) best = { g, idx: 0, inside: true };
     }
     return best;
   },
@@ -8735,6 +8817,46 @@ const OPORD = {
     this.para(box, null, 'Who, what, when, where and why, in one sentence. Everything in the plan serves it.');
   },
 
+  // Every control measure on the map, as the graphics manuals group them: points, lines,
+  // areas. A row shows it on the map and selects it; Edit opens its menu (change its kind,
+  // rename, delete); the cross deletes it.
+  graphicList(box) {
+    const gs = Plan.graphics;
+    box.appendChild(el('h4', null, 'Control measures (' + gs.length + ')'));
+    if (!gs.length) { box.appendChild(el('p', 'onote', 'None yet. Place points, lines and areas with the tools above, or right-click (tap) the map with a unit selected.')); return; }
+    const list = el('div', 'glist');
+    for (const [title, kinds] of GRAPHIC_GROUPS) {
+      const mine = gs.filter(g => kinds.includes(g.kind));
+      if (!mine.length) continue;
+      list.appendChild(el('div', 'glgroup', title));
+      for (const g of mine) {
+        const K = GRAPHIC_KINDS[g.kind], row = el('div', 'glrow' + (Plan.selected === g.id ? ' sel' : ''));
+        const pick = el('button', 'glname');
+        pick.appendChild(el('b', null, g.name));
+        const at = K.line ? g.pts.length + ' points, ' + Math.round(g.pts.slice(1).reduce((n, q, i) => n + dist(g.pts[i].x, g.pts[i].y, q.x, q.y), 0)) + ' m' : 'grid ' + gridRef(g.pts[0].x, g.pts[0].y);
+        pick.appendChild(el('span', null, K.label + ' · ' + at));
+        pick.title = 'Show on the map and select it';
+        pick.addEventListener('click', () => {
+          Plan.selected = g.id;
+          const c = centroid(g.pts);
+          this.focus(c.x, c.y, Math.max(R.cam.zoom, 1.4));
+          this.refresh();
+        });
+        row.appendChild(pick);
+        if (Plan.planning) {
+          const ed = el('button', 'obtn mini', 'Edit');
+          ed.addEventListener('click', () => { Plan.selected = g.id; const r = ed.getBoundingClientRect(), pr = $('opord').getBoundingClientRect(); UI.graphicMenu(pr.left - 290, r.top, g); });
+          const del = el('button', 'obtn mini gldel', '✕');
+          del.title = 'Delete ' + g.name;
+          del.addEventListener('click', () => { Plan.removeGraphic(g.id); if (Plan.selected === g.id) Plan.selected = null; this.refresh(); });
+          row.appendChild(ed); row.appendChild(del);
+        }
+        list.appendChild(row);
+      }
+    }
+    box.appendChild(list);
+  },
+
   // ------------------------------------------------------------ 4. Execution
   // Plain definitions of the control measures, tasks, triggers and signals. It stays open
   // or closed across redraws.
@@ -8810,6 +8932,7 @@ const OPORD = {
     if (Plan.planning) acts.appendChild(clear);
     box.appendChild(acts);
     this.cheatSheet(box);
+    this.graphicList(box);
 
     // The selected control measure: rename or delete.
     const g = Plan.graphic(Plan.selected);
@@ -8838,7 +8961,7 @@ const OPORD = {
         box.appendChild(sec);
       }
     } else {
-      box.appendChild(el('p', 'onote', 'Drag a control measure to move it; tap it to rename or delete it.'));
+      box.appendChild(el('p', 'onote', 'Click a control measure on the map (anywhere along a line, anywhere inside an area) or in the list to change, rename or delete it; drag it to move it.'));
     }
 
     // Lines
@@ -9761,8 +9884,15 @@ const Input = {
         } else if (this.moved && this.dragU) {
           G.ui.unitDrag.to = toWorld(p.x, p.y);
         } else if (this.moved && this.dragG) {
-          const w = toWorld(p.x, p.y), pt = this.dragG.g.pts[this.dragG.idx];
-          pt.x = clamp(w.x, 0, MAP_W); pt.y = clamp(w.y, 0, MAP_H);
+          const w = toWorld(p.x, p.y), dg = this.dragG;
+          if (dg.along || dg.inside) {
+            // Taken by its middle (a line) or its inside (an area): the whole measure moves.
+            if (!dg.orig) { dg.orig = dg.g.pts.map(q => ({ x: q.x, y: q.y })); dg.from = toWorld(p.sx, p.sy); }
+            dg.g.pts.forEach((q, i) => { q.x = clamp(dg.orig[i].x + w.x - dg.from.x, 0, MAP_W); q.y = clamp(dg.orig[i].y + w.y - dg.from.y, 0, MAP_H); });
+          } else {
+            const pt = dg.g.pts[dg.idx];
+            pt.x = clamp(w.x, 0, MAP_W); pt.y = clamp(w.y, 0, MAP_H);
+          }
         } else if (this.moved) {
           R.cam.x = this.camStart.x - (p.x - p.sx) / R.cam.zoom;
           R.cam.y = this.camStart.y - (p.y - p.sy) / R.cam.zoom;
@@ -9834,7 +9964,16 @@ const Input = {
       clampCam();
     }, { passive: false });
 
-    window.addEventListener('keyup', (e) => { G.ui.shift = e.shiftKey; });
+    window.addEventListener('keyup', (e) => {
+      G.ui.shift = e.shiftKey;
+      // Space: a tap pauses; held, it shows where every unit is going (released, it hides them).
+      if (e.key === ' ' && this.spaceAt != null) {
+        e.preventDefault();
+        clearTimeout(this.spaceTimer);
+        if (!G.ui.showDest && G.running) togglePause();
+        G.ui.showDest = false; this.spaceAt = null;
+      }
+    });
     window.addEventListener('keydown', (e) => {
       G.ui.shift = e.shiftKey;
       if (e.target.closest && e.target.closest('input, select, textarea')) return;
@@ -9843,7 +9982,10 @@ const Input = {
       const lk = k.length === 1 ? k.toLowerCase() : k;
       // W A S D shift the selected unit, Q E turn it (after step-off).
       if ('wasdqe'.includes(lk) && lk.length === 1 && !e.ctrlKey && !e.metaKey && !e.altKey) { if (Nudge.key(lk)) e.preventDefault(); return; }
-      if (k === ' ') { e.preventDefault(); togglePause(); }
+      if (k === ' ') {
+        e.preventDefault();
+        if (!e.repeat && this.spaceAt == null) { this.spaceAt = performance.now(); this.spaceTimer = setTimeout(() => { G.ui.showDest = true; }, 220); }
+      }
       else if (k === 'v' || k === 'V') $('btnCones').click();
       else if (k === 'm' || k === 'M') $('btnMeasure').click();
       else if (lk === 'z' && !e.ctrlKey && !e.metaKey) UI.changeSpacing(-1);

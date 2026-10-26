@@ -288,6 +288,46 @@ const OPORD = {
     this.para(box, null, 'Who, what, when, where and why, in one sentence. Everything in the plan serves it.');
   },
 
+  // Every control measure on the map, as the graphics manuals group them: points, lines,
+  // areas. A row shows it on the map and selects it; Edit opens its menu (change its kind,
+  // rename, delete); the cross deletes it.
+  graphicList(box) {
+    const gs = Plan.graphics;
+    box.appendChild(el('h4', null, 'Control measures (' + gs.length + ')'));
+    if (!gs.length) { box.appendChild(el('p', 'onote', 'None yet. Place points, lines and areas with the tools above, or right-click (tap) the map with a unit selected.')); return; }
+    const list = el('div', 'glist');
+    for (const [title, kinds] of GRAPHIC_GROUPS) {
+      const mine = gs.filter(g => kinds.includes(g.kind));
+      if (!mine.length) continue;
+      list.appendChild(el('div', 'glgroup', title));
+      for (const g of mine) {
+        const K = GRAPHIC_KINDS[g.kind], row = el('div', 'glrow' + (Plan.selected === g.id ? ' sel' : ''));
+        const pick = el('button', 'glname');
+        pick.appendChild(el('b', null, g.name));
+        const at = K.line ? g.pts.length + ' points, ' + Math.round(g.pts.slice(1).reduce((n, q, i) => n + dist(g.pts[i].x, g.pts[i].y, q.x, q.y), 0)) + ' m' : 'grid ' + gridRef(g.pts[0].x, g.pts[0].y);
+        pick.appendChild(el('span', null, K.label + ' · ' + at));
+        pick.title = 'Show on the map and select it';
+        pick.addEventListener('click', () => {
+          Plan.selected = g.id;
+          const c = centroid(g.pts);
+          this.focus(c.x, c.y, Math.max(R.cam.zoom, 1.4));
+          this.refresh();
+        });
+        row.appendChild(pick);
+        if (Plan.planning) {
+          const ed = el('button', 'obtn mini', 'Edit');
+          ed.addEventListener('click', () => { Plan.selected = g.id; const r = ed.getBoundingClientRect(), pr = $('opord').getBoundingClientRect(); UI.graphicMenu(pr.left - 290, r.top, g); });
+          const del = el('button', 'obtn mini gldel', '✕');
+          del.title = 'Delete ' + g.name;
+          del.addEventListener('click', () => { Plan.removeGraphic(g.id); if (Plan.selected === g.id) Plan.selected = null; this.refresh(); });
+          row.appendChild(ed); row.appendChild(del);
+        }
+        list.appendChild(row);
+      }
+    }
+    box.appendChild(list);
+  },
+
   // ------------------------------------------------------------ 4. Execution
   // Plain definitions of the control measures, tasks, triggers and signals. It stays open
   // or closed across redraws.
@@ -363,6 +403,7 @@ const OPORD = {
     if (Plan.planning) acts.appendChild(clear);
     box.appendChild(acts);
     this.cheatSheet(box);
+    this.graphicList(box);
 
     // The selected control measure: rename or delete.
     const g = Plan.graphic(Plan.selected);
@@ -391,7 +432,7 @@ const OPORD = {
         box.appendChild(sec);
       }
     } else {
-      box.appendChild(el('p', 'onote', 'Drag a control measure to move it; tap it to rename or delete it.'));
+      box.appendChild(el('p', 'onote', 'Click a control measure on the map (anywhere along a line, anywhere inside an area) or in the list to change, rename or delete it; drag it to move it.'));
     }
 
     // Lines

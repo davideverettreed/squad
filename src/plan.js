@@ -299,18 +299,34 @@ const Plan = {
     if (g.kind === 'pl' || g.kind === 'loa') return { x: (g.pts[0].x + g.pts[g.pts.length - 1].x) / 2, y: (g.pts[0].y + g.pts[g.pts.length - 1].y) / 2 };
     return g.pts[0];
   },
+  // The control measure under a screen point: a point near its symbol, a line anywhere
+  // along it (a vertex near the pointer is picked up to drag), an area anywhere inside.
   hitGraphic(sx, sy) {
     let best = null, bd = 22;
+    const segDist = (a, b) => {
+      const dx = b.x - a.x, dy = b.y - a.y, L = dx * dx + dy * dy, t = L ? clamp(((sx - a.x) * dx + (sy - a.y) * dy) / L, 0, 1) : 0;
+      return Math.hypot(a.x + dx * t - sx, a.y + dy * t - sy);
+    };
     for (const g of this.graphics) {
-      if (GRAPHIC_KINDS[g.kind].line) {
-        for (let i = 0; i < g.pts.length; i++) {
-          const p = toScreen(g.pts[i].x, g.pts[i].y), d = Math.hypot(p.x - sx, p.y - sy);
+      const K = GRAPHIC_KINDS[g.kind];
+      if (K.line) {
+        const q = g.pts.map(p => toScreen(p.x, p.y));
+        for (let i = 0; i < q.length; i++) {
+          const d = Math.hypot(q[i].x - sx, q[i].y - sy);
           if (d < bd) { bd = d; best = { g, idx: i }; }
+        }
+        // Along a segment: grab the nearer end of it, a little less eagerly than a vertex.
+        for (let i = 1; i < q.length; i++) {
+          const d = segDist(q[i - 1], q[i]) + 4;
+          if (d < bd) { bd = d; best = { g, idx: Math.hypot(q[i - 1].x - sx, q[i - 1].y - sy) < Math.hypot(q[i].x - sx, q[i].y - sy) ? i - 1 : i, along: true }; }
         }
         continue;
       }
       const p = toScreen(g.pts[0].x, g.pts[0].y), d = Math.hypot(p.x - sx, p.y - sy);
       if (d < bd) { bd = d; best = { g, idx: 0 }; }
+      // Inside an area (objective, assault position): a hit, though a point on top of it wins.
+      const rr = (K.r || 0) * R.cam.zoom;
+      if (rr && d < rr && !best) best = { g, idx: 0, inside: true };
     }
     return best;
   },
