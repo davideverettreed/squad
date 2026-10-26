@@ -130,13 +130,8 @@ const Input = {
 
     window.addEventListener('keyup', (e) => {
       G.ui.shift = e.shiftKey;
-      // Space: a tap pauses; held, it shows where every unit is going (released, it hides them).
-      if (e.key === ' ' && this.spaceAt != null) {
-        e.preventDefault();
-        clearTimeout(this.spaceTimer);
-        if (!G.ui.showDest && G.running) togglePause();
-        G.ui.showDest = false; this.spaceAt = null;
-      }
+      // Space held shows where every unit is going; let go, it hides them.
+      if (e.key === ' ' && G.ui.showDest) { e.preventDefault(); G.ui.showDest = false; View3D.markDirty(); }
     });
     window.addEventListener('keydown', (e) => {
       G.ui.shift = e.shiftKey;
@@ -146,10 +141,8 @@ const Input = {
       const lk = k.length === 1 ? k.toLowerCase() : k;
       // W A S D shift the selected unit, Q E turn it (after step-off).
       if ('wasdqe'.includes(lk) && lk.length === 1 && !e.ctrlKey && !e.metaKey && !e.altKey) { if (Nudge.key(lk)) e.preventDefault(); return; }
-      if (k === ' ') {
-        e.preventDefault();
-        if (!e.repeat && this.spaceAt == null) { this.spaceAt = performance.now(); this.spaceTimer = setTimeout(() => { G.ui.showDest = true; }, 220); }
-      }
+      if (k === ' ') { e.preventDefault(); if (!G.ui.showDest) { G.ui.showDest = true; View3D.markDirty(); } }
+      else if (lk === 'p' && !e.ctrlKey && !e.metaKey) togglePause();
       else if (k === 'v' || k === 'V') $('btnCones').click();
       else if (k === 'm' || k === 'M') $('btnMeasure').click();
       else if (lk === 'z' && !e.ctrlKey && !e.metaKey) UI.changeSpacing(-1);

@@ -1393,7 +1393,7 @@ function drawDestinations(ctx) {
     ctx.fillStyle = 'rgba(31,79,191,0.45)';
     for (const e of ends) { const p = toScreen(e.x, e.y); ctx.beginPath(); ctx.arc(p.x, p.y, 3.5, 0, Math.PI * 2); ctx.fill(); }
     ctx.globalAlpha = 0.9;
-    drawUnitSymbol(ctx, q.x, q.y, 15, 'blue', t.num ? 'team' : 'squad', { fill: 'rgba(128,224,255,0.4)', ink: OVL.blue, dashed: true });
+    drawUnitSymbol(ctx, q.x, q.y, View3D.drawingDrape ? 22 : 15, 'blue', t.num ? 'team' : 'squad', { fill: 'rgba(128,224,255,0.4)', ink: OVL.blue, dashed: true });
     ctx.globalAlpha = 1;
     // Facing at the end, if one was given.
     const face = movers.find(s => s.faceAngle != null);
@@ -1410,10 +1410,13 @@ function drawDestinations(ctx) {
   ctx.restore();
 }
 function destLabel(ctx, x, y, text, bg, fg) {
-  ctx.font = '700 12px "IBM Plex Mono", ui-monospace, monospace';
-  const w = ctx.measureText(text).width + 10;
-  ctx.fillStyle = bg; ctx.fillRect(x - w / 2, y - 9, w, 18);
-  ctx.strokeStyle = 'rgba(22,22,22,0.5)'; ctx.lineWidth = 1; ctx.strokeRect(x - w / 2, y - 9, w, 18);
+  // Larger on the sand table, where the ground is seen from afar and at a slant.
+  const k = View3D.drawingDrape ? 1.4 : 1;
+  ctx.font = '700 ' + Math.round(12 * k) + 'px "IBM Plex Mono", ui-monospace, monospace';
+  const w = ctx.measureText(text).width + 10 * k;
+  y += (k - 1) * 14;
+  ctx.fillStyle = bg; ctx.fillRect(x - w / 2, y - 9 * k, w, 18 * k);
+  ctx.strokeStyle = 'rgba(22,22,22,0.5)'; ctx.lineWidth = k; ctx.strokeRect(x - w / 2, y - 9 * k, w, 18 * k);
   ctx.fillStyle = fg; ctx.textAlign = 'center'; ctx.textBaseline = 'middle'; ctx.fillText(text, x, y + 1);
 }
 

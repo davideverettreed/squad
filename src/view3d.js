@@ -219,10 +219,14 @@ const View3D = {
       Fog.draw(ctx);
       drawPlan(ctx); drawPlanGhosts(ctx); drawOrdersOverlay(ctx); drawProjectiles(ctx); drawEffects(ctx);
       drawCones(ctx); drawGhostFormation(ctx); drawNudge(ctx); drawUnitDrag(ctx); drawTapes(ctx);
+      if (G.ui.showDest) drawDestinations(ctx);
     } finally { R.cam = save.cam; R.w = save.w; R.h = save.h; this.drawingDrape = false; }
     t.tex.needsUpdate = true;
     t.drawnAt = performance.now(); t.dirty = false;
   },
+
+  // Every tile is drawn again soon (an overlay was turned on or off).
+  markDirty() { for (const t of this.tiles || []) t.dirty = true; },
 
   // Redraw the tiles in view, oldest first, two a frame at most.
   refreshTiles() {

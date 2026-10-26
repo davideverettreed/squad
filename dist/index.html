@@ -550,7 +550,7 @@ body:not(.roster-min) #btn3d, body:not(.roster-min) #ctl3d { margin-left: 0; }
         <h3>Map key</h3>
         <p>A squad fights on a 2 by 2 kilometer sheet of four 1-kilometer grid squares, starting 1 to 1.4 km from the enemy, beyond spotting range; larger units will get larger sheets. The sheet is in standard US military map colors. White is open ground. Light green with tufts is tall grass, which hides a man lying prone. Green is woods and hedgerows; rows of small green circles are orchards, green row lines are vineyards. Blue lines are streams, which run in shallow gullies that give cover; blue areas are ponds and cannot be crossed. A broad blue band is a river: it can be crossed only at a bridge (two black lines across the road) or at a ford, marked FORD in a dashed blue circle, where men wade slowly in the open. Pale blue-green ground with small blue tufts is swamp: very slow going and no cover, but it hides a man. Red-brown lines are contours (5 or 10 meters apart, as the margin states), with a heavier, numbered index contour every fifth line; numbers with a dot are hilltop heights. Black blocks are buildings. A black line with ticks is a stone wall, which gives hard cover to a kneeling or prone man. The red road is a paved road; the dashed double lines are dirt tracks. Each mission is set in one of six regions, chosen in the New mission dialog or at random: rolling farmland; the Southern California coast (Pacific Ocean on the west edge, sand beach, chaparral); South Texas brush country (mesquite thickets, pasture, stock tanks); North Carolina pine woods and blackwater swamp; the Arizona desert and mountains (open creosote flats, rock outcrops, dry washes shown as dashed blue lines); and the Montana mountains in winter (deep snow, lodgepole pine, frozen ponds). The ground changes the fight: snow, sand, chaparral and rock are slow; brush and grass hide a man lying down; rock gives cover; open desert gives long fields of fire. The 3D button (key T) turns the map into a sand table: the same sheet laid over the ground in 3D, heights exaggerated, with every man standing on it as a peg under his billet symbol (gray when hit; a red wire sphere marks where an enemy was last seen), and key terrain and the reported enemy position on flagpoles. Planning works there too: tap with a tool to place a control measure, drag one to move it, tap the ground with a unit selected for the plan menu. Drag to move, right-drag or two fingers to turn and tilt, wheel or pinch to zoom; the buttons beside it turn, tilt and zoom on a phone. Taps give the same orders as on the flat map. Fog of war: ground your squad can see now is clear; ground it has seen before is faded; ground it has never seen is faded more (key F toggles the wash). Point at the map to read the 8-digit grid reference. Measure (key M) lays a tape between two taps and marks the distance, grid bearing and mils on the map; tap a label to remove it. Point at a formation button to see the selected team or squad ghosted in that formation. Zoomed out, your men gather into one counter per fire team, then one for the squad, in the standard unit symbol: a rectangle with an infantry X for friendly, a diamond for enemy.</p>
         <h3>Camera</h3>
-        <p>Drag to pan. Use the wheel or pinch to zoom. A tap of <kbd>Space</kbd> pauses; you can give orders while paused. Hold <kbd>Space</kbd> to see where every unit is going: a ghost of each team at its destination, its route, how it moves, how far and how long it will take; units holding are ringed where they stand.</p>
+        <p>Drag to pan. Use the wheel or pinch to zoom. <kbd>P</kbd> pauses; you can give orders while paused. Hold <kbd>Space</kbd> (on the flat map or the 3D sand table) to see where every unit is going: a ghost of each team at its destination, its route, how it moves, how far and how long it will take; units holding are ringed where they stand.</p>
       </div>
       <div class="cardfoot"><button class="obtn primary" data-close="help">Close</button></div>
     </div>
@@ -6301,7 +6301,7 @@ function drawDestinations(ctx) {
     ctx.fillStyle = 'rgba(31,79,191,0.45)';
     for (const e of ends) { const p = toScreen(e.x, e.y); ctx.beginPath(); ctx.arc(p.x, p.y, 3.5, 0, Math.PI * 2); ctx.fill(); }
     ctx.globalAlpha = 0.9;
-    drawUnitSymbol(ctx, q.x, q.y, 15, 'blue', t.num ? 'team' : 'squad', { fill: 'rgba(128,224,255,0.4)', ink: OVL.blue, dashed: true });
+    drawUnitSymbol(ctx, q.x, q.y, View3D.drawingDrape ? 22 : 15, 'blue', t.num ? 'team' : 'squad', { fill: 'rgba(128,224,255,0.4)', ink: OVL.blue, dashed: true });
     ctx.globalAlpha = 1;
     // Facing at the end, if one was given.
     const face = movers.find(s => s.faceAngle != null);
@@ -6318,10 +6318,13 @@ function drawDestinations(ctx) {
   ctx.restore();
 }
 function destLabel(ctx, x, y, text, bg, fg) {
-  ctx.font = '700 12px "IBM Plex Mono", ui-monospace, monospace';
-  const w = ctx.measureText(text).width + 10;
-  ctx.fillStyle = bg; ctx.fillRect(x - w / 2, y - 9, w, 18);
-  ctx.strokeStyle = 'rgba(22,22,22,0.5)'; ctx.lineWidth = 1; ctx.strokeRect(x - w / 2, y - 9, w, 18);
+  // Larger on the sand table, where the ground is seen from afar and at a slant.
+  const k = View3D.drawingDrape ? 1.4 : 1;
+  ctx.font = '700 ' + Math.round(12 * k) + 'px "IBM Plex Mono", ui-monospace, monospace';
+  const w = ctx.measureText(text).width + 10 * k;
+  y += (k - 1) * 14;
+  ctx.fillStyle = bg; ctx.fillRect(x - w / 2, y - 9 * k, w, 18 * k);
+  ctx.strokeStyle = 'rgba(22,22,22,0.5)'; ctx.lineWidth = k; ctx.strokeRect(x - w / 2, y - 9 * k, w, 18 * k);
   ctx.fillStyle = fg; ctx.textAlign = 'center'; ctx.textBaseline = 'middle'; ctx.fillText(text, x, y + 1);
 }
 
@@ -9394,10 +9397,14 @@ const View3D = {
       Fog.draw(ctx);
       drawPlan(ctx); drawPlanGhosts(ctx); drawOrdersOverlay(ctx); drawProjectiles(ctx); drawEffects(ctx);
       drawCones(ctx); drawGhostFormation(ctx); drawNudge(ctx); drawUnitDrag(ctx); drawTapes(ctx);
+      if (G.ui.showDest) drawDestinations(ctx);
     } finally { R.cam = save.cam; R.w = save.w; R.h = save.h; this.drawingDrape = false; }
     t.tex.needsUpdate = true;
     t.drawnAt = performance.now(); t.dirty = false;
   },
+
+  // Every tile is drawn again soon (an overlay was turned on or off).
+  markDirty() { for (const t of this.tiles || []) t.dirty = true; },
 
   // Redraw the tiles in view, oldest first, two a frame at most.
   refreshTiles() {
@@ -9959,13 +9966,8 @@ const Input = {
 
     window.addEventListener('keyup', (e) => {
       G.ui.shift = e.shiftKey;
-      // Space: a tap pauses; held, it shows where every unit is going (released, it hides them).
-      if (e.key === ' ' && this.spaceAt != null) {
-        e.preventDefault();
-        clearTimeout(this.spaceTimer);
-        if (!G.ui.showDest && G.running) togglePause();
-        G.ui.showDest = false; this.spaceAt = null;
-      }
+      // Space held shows where every unit is going; let go, it hides them.
+      if (e.key === ' ' && G.ui.showDest) { e.preventDefault(); G.ui.showDest = false; View3D.markDirty(); }
     });
     window.addEventListener('keydown', (e) => {
       G.ui.shift = e.shiftKey;
@@ -9975,10 +9977,8 @@ const Input = {
       const lk = k.length === 1 ? k.toLowerCase() : k;
       // W A S D shift the selected unit, Q E turn it (after step-off).
       if ('wasdqe'.includes(lk) && lk.length === 1 && !e.ctrlKey && !e.metaKey && !e.altKey) { if (Nudge.key(lk)) e.preventDefault(); return; }
-      if (k === ' ') {
-        e.preventDefault();
-        if (!e.repeat && this.spaceAt == null) { this.spaceAt = performance.now(); this.spaceTimer = setTimeout(() => { G.ui.showDest = true; }, 220); }
-      }
+      if (k === ' ') { e.preventDefault(); if (!G.ui.showDest) { G.ui.showDest = true; View3D.markDirty(); } }
+      else if (lk === 'p' && !e.ctrlKey && !e.metaKey) togglePause();
       else if (k === 'v' || k === 'V') $('btnCones').click();
       else if (k === 'm' || k === 'M') $('btnMeasure').click();
       else if (lk === 'z' && !e.ctrlKey && !e.metaKey) UI.changeSpacing(-1);
