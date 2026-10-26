@@ -63,6 +63,7 @@ function newMission() {
   G.byId = new Map(G.soldiers.map(s => [s.id, s]));
   G.known = { blue: new Map(), red: new Map() };
   G.effects = []; G.projectiles = []; G.floaters = []; G.controllers = []; G.flares = [];
+  G.wstats = { blue: new Map(), red: new Map() };
   G.stats = { blue: { light: 0, serious: 0, kia: 0 }, red: { light: 0, serious: 0, kia: 0 } };
   G.time = 0; G.spotT = 0; G.teamT = 0; G.endT = 0;
   G.over = false; G.running = true; G.paused = false;

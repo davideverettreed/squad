@@ -398,6 +398,14 @@ body:not(.roster-min) #btn3d, body:not(.roster-min) #ctl3d { margin-left: 0; }
 .wbox .wimg canvas { width: 100%; height: auto; display: block; border: 1px solid #c8ccd1; }
 .wbox .wcap { font-size: 12px; padding-top: 3px; }
 .wbox .wk { width: 30%; font-weight: 700; }
+.wbox td.wdetail { border-top: 1px solid #c8ccd1; font-size: 12.5px; }
+.wbox td.wdetail summary { cursor: pointer; color: #3366cc; padding: 2px 0; }
+.wbox .wdhead { font-weight: 700; margin: 8px 0 3px; }
+.wbox .wdtable { width: 100%; border-collapse: collapse; font-size: 12px; }
+.wbox .wdtable th, .wbox .wdtable td { padding: 2px 4px; border: 1px solid #c8ccd1; width: auto; text-align: right; }
+.wbox .wdtable th:first-child, .wbox .wdtable td:first-child { text-align: left; }
+.wbox .wdtable th { background: #eaecf0; }
+.wbox .wdtable .wdtotal td { font-weight: 700; background: #f1f2f4; }
 .wbox tr:not(.wkv) > td { width: 50%; border-top: 1px solid #c8ccd1; }
 .wbox tr:not(.wkv) > td + td { border-left: 1px solid #c8ccd1; }
 .wlink { color: #0645ad; }

@@ -748,7 +748,7 @@ const UI = {
     pair(lines([blue.all.length + ' ' + bi.men, ...arms(blue)]), lines([red.all.length + ' men', ...arms(red), sz ? '<i>Reported: ' + sz.text.replace('OPFOR ', '') + '</i>' : '']));
     th('Casualties and losses');
     const loss = (sq, men) => {
-      const kia = sq.all.filter(s => s.health === 'kia').length, ser = sq.all.filter(s => s.health === 'serious').length, wia = sq.all.filter(s => s.health === 'light').length, fled = sq.all.filter(s => s.routed || s.routing).length;
+      const kia = sq.all.filter(s => s.health === 'kia').length, ser = sq.all.filter(s => s.health === 'serious').length, wia = sq.all.filter(s => s.health === 'light').length, fled = sq.all.filter(s => (s.routed || s.routing) && s.health !== 'kia' && s.health !== 'serious').length;
       return lines([kia + ' killed', ser + ' seriously wounded', wia + ' wounded', fled ? fled + ' fled' : '', (sq.all.length - kia - ser - fled) + ' of ' + sq.all.length + ' ' + men + ' still fighting']);
     };
     pair(loss(blue, bi.men), loss(red, 'men'));
@@ -765,6 +765,39 @@ const UI = {
         fr + ' hand grenades thrown, ' + frLeft + ' left', gl || glLeft ? gl + ' launcher rounds fired, ' + glLeft + ' left' : '']);
     };
     pair(spent(blue), spent(red));
+    // Hits and kills by weapon: an overview by kind of weapon, then every weapon in detail.
+    const ws = G.wstats || { blue: new Map(), red: new Map() };
+    const sum = (list) => list.reduce((a, e) => { for (const k of ['shots', 'hits', 'kia', 'serious', 'light']) a[k] += e[k]; return a; }, { shots: 0, hits: 0, kia: 0, serious: 0, light: 0 });
+    const byClass = (side) => {
+      const m = new Map();
+      for (const e of ws[side].values()) { if (!m.has(e.cls)) m.set(e.cls, []); m.get(e.cls).push(e); }
+      return [...m].map(([cls, list]) => ({ cls, ...sum(list) })).filter(c => c.shots || c.hits).sort((a, b) => b.hits - a.hits || b.shots - a.shots);
+    };
+    const overview = (side) => {
+      const rows = byClass(side);
+      if (!rows.length) return '<i>No fire</i>';
+      return lines(rows.map(c => '<b>' + c.cls + '</b>: ' + c.hits + ' hit' + (c.hits === 1 ? '' : 's') + (c.kia ? ', ' + c.kia + ' killed' : '') + (c.serious ? ', ' + c.serious + ' seriously wounded' : '') + (c.light ? ', ' + c.light + ' wounded' : '')));
+    };
+    th('Hits and kills by weapon');
+    pair(overview('blue'), overview('red'));
+    const det = tr(), dc = el('td', 'wdetail'); dc.colSpan = 2; det.appendChild(dc);
+    const d = el('details'); d.appendChild(el('summary', null, 'In detail: every weapon'));
+    for (const [side, sq] of [['blue', blue], ['red', red]]) {
+      d.appendChild(el('div', 'wdhead', side === 'blue' ? blue.name + ' (' + bi.nation + ')' : red.name + ' (' + ri.nation + ')'));
+      const t = el('table', 'wdtable'), h = el('tr');
+      for (const c of ['Weapon', 'Fired', 'Hits', 'Hit %', 'Killed', 'Serious', 'Wounded']) h.appendChild(el('th', null, c));
+      t.appendChild(h);
+      const list = [...ws[side].values()].filter(e => e.shots || e.hits).sort((a, b) => b.hits - a.hits || b.shots - a.shots);
+      for (const e of [...list, ...(list.length > 1 ? [{ name: 'Total', ...sum(list), total: true }] : [])]) {
+        const r = el('tr', e.total ? 'wdtotal' : null);
+        for (const v of [e.name, e.shots, e.hits, e.shots ? (e.hits / e.shots * 100).toFixed(1) : '—', e.kia, e.serious, e.light]) r.appendChild(el('td', null, String(v)));
+        t.appendChild(r);
+      }
+      if (!list.length) { const r = el('tr'), c = el('td', null, 'No fire.'); c.colSpan = 7; r.appendChild(c); t.appendChild(r); }
+      d.appendChild(t);
+    }
+    d.appendChild(el('div', 'wcap', 'Fired counts rounds, grenades, rockets and blows. A man wounded by one weapon and later killed by another counts under both.'));
+    dc.appendChild(d);
     return box;
   },
 

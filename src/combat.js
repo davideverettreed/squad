@@ -257,6 +257,7 @@ function fireDelay(s, d, exposed) {
 function fireBurst(s, e, exp) {
   const W = s.weapon, n = Math.min(W.rounds, s.inMag), d = dist(s.x, s.y, e.x, e.y);
   s.inMag -= n; s.shots += n; s.lastFired = G.time;
+  wstat(s, s.weapon).shots += n;
   s.facing = angleTo(s.x, s.y, e.x, e.y);
   muzzle(s);
   const p = hitChance(s, e, exp, d);
@@ -264,7 +265,7 @@ function fireBurst(s, e, exp) {
   for (let i = 0; i < n; i++) {
     const pi = i === 0 ? p : p * 0.55;
     const h = e.alive && e.health !== 'serious' && chance(Math.min(0.9, pi));
-    if (h) { applyHit(e, s); s.hits++; hit = true; }
+    if (h) { applyHit(e, s, false, null, s.weapon); s.hits++; hit = true; }
     const miss = h ? 0 : 1 + d * 0.02;
     addTracer(s, e.x + gauss() * miss, e.y + gauss() * miss, i * 0.07);
   }
@@ -296,6 +297,7 @@ function fireArea(s, x, y, rate) {
   if (d > W.range * 1.2 || G.map.los(s.x, s.y, POSTURE[s.posture].eye, x, y, 0.6) <= 0) { s.fireCD = 1; return; }
   const n = Math.min(W.rounds, s.inMag);
   s.inMag -= n; s.shots += n; s.lastFired = G.time;
+  wstat(s, s.weapon).shots += n;
   s.facing = angleTo(s.x, s.y, x, y);
   muzzle(s);
   const spread = 2 + d * 0.015;
@@ -308,7 +310,7 @@ function fireArea(s, x, y, rate) {
     noteFiredUpon(o.team, s);
     if (dd < 3) {
       const exp = exposure(s, o);
-      for (let i = 0; i < n; i++) if (o.alive && o.health !== 'serious' && chance(0.025 * POSTURE[o.posture].size * exp)) { applyHit(o, s); s.hits++; }
+      for (let i = 0; i < n; i++) if (o.alive && o.health !== 'serious' && chance(0.025 * POSTURE[o.posture].size * exp)) { applyHit(o, s, false, null, s.weapon); s.hits++; }
     }
   }
   s.fireCD = fireDelay(s, d, false) * randRange(0.9, 1.4) * (s.pinned ? 2.5 : 1) / (rate || 1);
@@ -383,7 +385,7 @@ function launchAt(s, x, y) {
   if (kind === 'rpg') ({ x: tx, y: ty } = flatImpact(s.x, s.y, tx, ty));
   G.projectiles.push({ x0: s.x, y0: s.y, x1: tx, y1: ty, t: 0, flight: dist(s.x, s.y, tx, ty) / L.vel + 0.05, fuse: 0,
     spec: L, side: s.side, shooter: s, kind });
-  s.lRounds--; s.launchCD = L.cycle * randRange(1, 1.5); s.lastFired = G.time;
+  s.lRounds--; wstat(s, L).shots++; s.launchCD = L.cycle * randRange(1, 1.5); s.lastFired = G.time;
   s.facing = angleTo(s.x, s.y, x, y);
   G.effects.push({ type: 'flash', x: s.x, y: s.y, t: 0, life: 0.2 });
   return true;
@@ -405,7 +407,7 @@ function throwFrag(s, x, y) {
   const sc = 1 + d * 0.08 + s.supp / 40;
   G.projectiles.push({ x0: s.x, y0: s.y, x1: x + gauss() * sc, y1: y + gauss() * sc, t: 0, flight: d / 14, fuse: R.fuse,
     spec: R, side: s.side, shooter: s, kind: 'frag', dud: R.dud && chance(R.dud) });
-  s.frags--; s.fragCD = 8; s.lastFired = G.time;
+  s.frags--; wstat(s, R).shots++; s.fragCD = 8; s.lastFired = G.time;
   s.loadKg = s.computeLoad();
   if (s.side === 'blue') G.log(s.team.short + ': Frag out!', 'fire');
 }
@@ -431,7 +433,7 @@ function explode(x, y, spec, side, shooter) {
       let p = d < spec.lethal ? 0.8 : 0.4 * (1 - (d - spec.lethal) / (spec.casualty - spec.lethal));
       if (o.posture === 'prone') p *= 0.55;
       if (shielded) p *= 0.12;
-      if (chance(p)) { applyHit(o, shooter, true); if (shooter && o.side !== shooter.side) shooter.hits++; }
+      if (chance(p)) { applyHit(o, shooter, true, null, spec); if (shooter && o.side !== shooter.side) shooter.hits++; }
     }
     if (d < spec.casualty * 1.6 && o.active) {
       addSupp(o, 70 * (1 - d / (spec.casualty * 1.6)));
@@ -443,8 +445,11 @@ function explode(x, y, spec, side, shooter) {
 // ---------------------------------------------------------------- wounds and morale
 // How badly a hit wounds goes with what made it (dmg, against 5.56 mm = 1): a .22 rimfire
 // round mostly wounds lightly, a musket ball or a full-power rifle round seldom does.
-function applyHit(t, shooter, blast, dmg) {
+function applyHit(t, shooter, blast, dmg, src) {
   if (!t.alive || t.health === 'serious') return;
+  // Tally what each weapon did to the enemy (not to friends).
+  const tally = src && shooter && shooter.side !== t.side ? wstat(shooter, src) : null;
+  if (tally) tally.hits++;
   const m = blast ? 1.1 : dmg != null ? dmg : shooter && shooter.weapon ? shooter.weapon.dmg || 1 : 1;
   const r = rand();
   let res;
@@ -452,9 +457,11 @@ function applyHit(t, shooter, blast, dmg) {
     const k = clamp(0.4 * m, 0.1, 0.7), sv = clamp(0.6 * Math.sqrt(m), 0.2, 0.9);
     res = r < k ? 'kia' : r < k + sv ? 'serious' : 'light';
     if (res === 'light') { t.supp = Math.min(100, t.supp + 30); t.lastHitAt = G.time; return; }
+    if (tally) tally[res]++;
   } else {
     const k = clamp(0.25 * Math.pow(m, 1.3), 0.03, 0.6), sv = clamp(0.37 * Math.pow(m, 0.7), 0.1, 0.55);
     res = r < k ? 'kia' : r < k + sv ? 'serious' : 'light';
+    if (tally) tally[res]++;
   }
   t.health = res; t.lastHitAt = G.time;
   G.stats[t.side][res]++;
@@ -512,17 +519,40 @@ function updateMelee(s, dt) {
   noteFiredUpon(foe.team, s);
   addSupp(foe, 15);
   if (s.inMag > 0 && s.reloadT <= 0 && !s.weapon.quiet && s.weapon.range > 60 && chance(0.5)) {
-    s.inMag--; s.shots++; muzzle(s);
-    if (chance(0.6 * (s.skill || 1))) { applyHit(foe, s); s.hits++; }
+    s.inMag--; s.shots++; muzzle(s); wstat(s, s.weapon).shots++;
+    if (chance(0.6 * (s.skill || 1))) { applyHit(foe, s, false, null, s.weapon); s.hits++; }
     if (s.inMag <= 0) startReload(s);
     return true;
   }
   const M = MELEE[s.meleeKey] || MELEE.butt, F = MELEE[foe.meleeKey] || MELEE.butt;
   // The better armed and the less shaken man has the edge.
   const p = 0.32 * M.skill / Math.sqrt(F.skill) * (1 - s.supp / 200) * (foe.supp > 50 ? 1.3 : 1) * (s.skill || 1);
+  wstat(s, M).shots++;
   if (chance(clamp(p, 0.05, 0.7))) {
-    applyHit(foe, s, false, M.dmg); s.hits++;
+    applyHit(foe, s, false, M.dmg, M); s.hits++;
     if (s.side === 'blue' && G.time - (s.team.meleeLogT || -99) > 20) { s.team.meleeLogT = G.time; G.log(s.team.short + ': Hand to hand!', 'contact'); }
   }
   return true;
+}
+
+// ---------------------------------------------------------------- tallies by weapon
+// What each side's weapons fired and did: rounds (or grenades, rockets, blows), hits, and
+// the enemy killed, seriously wounded and lightly wounded. A man hit again counts again.
+function weaponClass(W) {
+  if (MELEE[Object.keys(MELEE).find(k => MELEE[k] === W)]) return 'Hand to hand';
+  if (Object.values(GRENADES).includes(W)) return 'Hand grenades';
+  if (Object.values(LAUNCHERS).includes(W)) return W.flat ? 'Rockets' : 'Grenade launchers';
+  if (W.magType === 'arrow') return 'Bows';
+  if (W.smoke && W.mag === 1) return W.range < 50 ? 'Pistols, shotguns' : 'Muskets, black-powder rifles';
+  if (W.rounds >= 5) return 'Machine guns';
+  if (W.rounds >= 3) return W.range > 150 ? 'Automatic rifles' : 'Submachine guns';
+  if (W.range <= 60) return 'Pistols, shotguns';
+  if (W.acc >= 0.6) return 'Sniper and marksman rifles';
+  return 'Rifles, carbines';
+}
+function wstat(s, W) {
+  const side = (G.wstats = G.wstats || { blue: new Map(), red: new Map() })[s.side];
+  let e = side.get(W.name);
+  if (!e) { e = { name: W.name, cls: weaponClass(W), shots: 0, hits: 0, kia: 0, serious: 0, light: 0 }; side.set(W.name, e); }
+  return e;
 }

@@ -410,6 +410,14 @@ body:not(.roster-min) #btn3d, body:not(.roster-min) #ctl3d { margin-left: 0; }
 .wbox .wimg canvas { width: 100%; height: auto; display: block; border: 1px solid #c8ccd1; }
 .wbox .wcap { font-size: 12px; padding-top: 3px; }
 .wbox .wk { width: 30%; font-weight: 700; }
+.wbox td.wdetail { border-top: 1px solid #c8ccd1; font-size: 12.5px; }
+.wbox td.wdetail summary { cursor: pointer; color: #3366cc; padding: 2px 0; }
+.wbox .wdhead { font-weight: 700; margin: 8px 0 3px; }
+.wbox .wdtable { width: 100%; border-collapse: collapse; font-size: 12px; }
+.wbox .wdtable th, .wbox .wdtable td { padding: 2px 4px; border: 1px solid #c8ccd1; width: auto; text-align: right; }
+.wbox .wdtable th:first-child, .wbox .wdtable td:first-child { text-align: left; }
+.wbox .wdtable th { background: #eaecf0; }
+.wbox .wdtable .wdtotal td { font-weight: 700; background: #f1f2f4; }
 .wbox tr:not(.wkv) > td { width: 50%; border-top: 1px solid #c8ccd1; }
 .wbox tr:not(.wkv) > td + td { border-left: 1px solid #c8ccd1; }
 .wlink { color: #0645ad; }
@@ -2470,6 +2478,7 @@ function fireDelay(s, d, exposed) {
 function fireBurst(s, e, exp) {
   const W = s.weapon, n = Math.min(W.rounds, s.inMag), d = dist(s.x, s.y, e.x, e.y);
   s.inMag -= n; s.shots += n; s.lastFired = G.time;
+  wstat(s, s.weapon).shots += n;
   s.facing = angleTo(s.x, s.y, e.x, e.y);
   muzzle(s);
   const p = hitChance(s, e, exp, d);
@@ -2477,7 +2486,7 @@ function fireBurst(s, e, exp) {
   for (let i = 0; i < n; i++) {
     const pi = i === 0 ? p : p * 0.55;
     const h = e.alive && e.health !== 'serious' && chance(Math.min(0.9, pi));
-    if (h) { applyHit(e, s); s.hits++; hit = true; }
+    if (h) { applyHit(e, s, false, null, s.weapon); s.hits++; hit = true; }
     const miss = h ? 0 : 1 + d * 0.02;
     addTracer(s, e.x + gauss() * miss, e.y + gauss() * miss, i * 0.07);
   }
@@ -2509,6 +2518,7 @@ function fireArea(s, x, y, rate) {
   if (d > W.range * 1.2 || G.map.los(s.x, s.y, POSTURE[s.posture].eye, x, y, 0.6) <= 0) { s.fireCD = 1; return; }
   const n = Math.min(W.rounds, s.inMag);
   s.inMag -= n; s.shots += n; s.lastFired = G.time;
+  wstat(s, s.weapon).shots += n;
   s.facing = angleTo(s.x, s.y, x, y);
   muzzle(s);
   const spread = 2 + d * 0.015;
@@ -2521,7 +2531,7 @@ function fireArea(s, x, y, rate) {
     noteFiredUpon(o.team, s);
     if (dd < 3) {
       const exp = exposure(s, o);
-      for (let i = 0; i < n; i++) if (o.alive && o.health !== 'serious' && chance(0.025 * POSTURE[o.posture].size * exp)) { applyHit(o, s); s.hits++; }
+      for (let i = 0; i < n; i++) if (o.alive && o.health !== 'serious' && chance(0.025 * POSTURE[o.posture].size * exp)) { applyHit(o, s, false, null, s.weapon); s.hits++; }
     }
   }
   s.fireCD = fireDelay(s, d, false) * randRange(0.9, 1.4) * (s.pinned ? 2.5 : 1) / (rate || 1);
@@ -2596,7 +2606,7 @@ function launchAt(s, x, y) {
   if (kind === 'rpg') ({ x: tx, y: ty } = flatImpact(s.x, s.y, tx, ty));
   G.projectiles.push({ x0: s.x, y0: s.y, x1: tx, y1: ty, t: 0, flight: dist(s.x, s.y, tx, ty) / L.vel + 0.05, fuse: 0,
     spec: L, side: s.side, shooter: s, kind });
-  s.lRounds--; s.launchCD = L.cycle * randRange(1, 1.5); s.lastFired = G.time;
+  s.lRounds--; wstat(s, L).shots++; s.launchCD = L.cycle * randRange(1, 1.5); s.lastFired = G.time;
   s.facing = angleTo(s.x, s.y, x, y);
   G.effects.push({ type: 'flash', x: s.x, y: s.y, t: 0, life: 0.2 });
   return true;
@@ -2618,7 +2628,7 @@ function throwFrag(s, x, y) {
   const sc = 1 + d * 0.08 + s.supp / 40;
   G.projectiles.push({ x0: s.x, y0: s.y, x1: x + gauss() * sc, y1: y + gauss() * sc, t: 0, flight: d / 14, fuse: R.fuse,
     spec: R, side: s.side, shooter: s, kind: 'frag', dud: R.dud && chance(R.dud) });
-  s.frags--; s.fragCD = 8; s.lastFired = G.time;
+  s.frags--; wstat(s, R).shots++; s.fragCD = 8; s.lastFired = G.time;
   s.loadKg = s.computeLoad();
   if (s.side === 'blue') G.log(s.team.short + ': Frag out!', 'fire');
 }
@@ -2644,7 +2654,7 @@ function explode(x, y, spec, side, shooter) {
       let p = d < spec.lethal ? 0.8 : 0.4 * (1 - (d - spec.lethal) / (spec.casualty - spec.lethal));
       if (o.posture === 'prone') p *= 0.55;
       if (shielded) p *= 0.12;
-      if (chance(p)) { applyHit(o, shooter, true); if (shooter && o.side !== shooter.side) shooter.hits++; }
+      if (chance(p)) { applyHit(o, shooter, true, null, spec); if (shooter && o.side !== shooter.side) shooter.hits++; }
     }
     if (d < spec.casualty * 1.6 && o.active) {
       addSupp(o, 70 * (1 - d / (spec.casualty * 1.6)));
@@ -2656,8 +2666,11 @@ function explode(x, y, spec, side, shooter) {
 // ---------------------------------------------------------------- wounds and morale
 // How badly a hit wounds goes with what made it (dmg, against 5.56 mm = 1): a .22 rimfire
 // round mostly wounds lightly, a musket ball or a full-power rifle round seldom does.
-function applyHit(t, shooter, blast, dmg) {
+function applyHit(t, shooter, blast, dmg, src) {
   if (!t.alive || t.health === 'serious') return;
+  // Tally what each weapon did to the enemy (not to friends).
+  const tally = src && shooter && shooter.side !== t.side ? wstat(shooter, src) : null;
+  if (tally) tally.hits++;
   const m = blast ? 1.1 : dmg != null ? dmg : shooter && shooter.weapon ? shooter.weapon.dmg || 1 : 1;
   const r = rand();
   let res;
@@ -2665,9 +2678,11 @@ function applyHit(t, shooter, blast, dmg) {
     const k = clamp(0.4 * m, 0.1, 0.7), sv = clamp(0.6 * Math.sqrt(m), 0.2, 0.9);
     res = r < k ? 'kia' : r < k + sv ? 'serious' : 'light';
     if (res === 'light') { t.supp = Math.min(100, t.supp + 30); t.lastHitAt = G.time; return; }
+    if (tally) tally[res]++;
   } else {
     const k = clamp(0.25 * Math.pow(m, 1.3), 0.03, 0.6), sv = clamp(0.37 * Math.pow(m, 0.7), 0.1, 0.55);
     res = r < k ? 'kia' : r < k + sv ? 'serious' : 'light';
+    if (tally) tally[res]++;
   }
   t.health = res; t.lastHitAt = G.time;
   G.stats[t.side][res]++;
@@ -2725,19 +2740,42 @@ function updateMelee(s, dt) {
   noteFiredUpon(foe.team, s);
   addSupp(foe, 15);
   if (s.inMag > 0 && s.reloadT <= 0 && !s.weapon.quiet && s.weapon.range > 60 && chance(0.5)) {
-    s.inMag--; s.shots++; muzzle(s);
-    if (chance(0.6 * (s.skill || 1))) { applyHit(foe, s); s.hits++; }
+    s.inMag--; s.shots++; muzzle(s); wstat(s, s.weapon).shots++;
+    if (chance(0.6 * (s.skill || 1))) { applyHit(foe, s, false, null, s.weapon); s.hits++; }
     if (s.inMag <= 0) startReload(s);
     return true;
   }
   const M = MELEE[s.meleeKey] || MELEE.butt, F = MELEE[foe.meleeKey] || MELEE.butt;
   // The better armed and the less shaken man has the edge.
   const p = 0.32 * M.skill / Math.sqrt(F.skill) * (1 - s.supp / 200) * (foe.supp > 50 ? 1.3 : 1) * (s.skill || 1);
+  wstat(s, M).shots++;
   if (chance(clamp(p, 0.05, 0.7))) {
-    applyHit(foe, s, false, M.dmg); s.hits++;
+    applyHit(foe, s, false, M.dmg, M); s.hits++;
     if (s.side === 'blue' && G.time - (s.team.meleeLogT || -99) > 20) { s.team.meleeLogT = G.time; G.log(s.team.short + ': Hand to hand!', 'contact'); }
   }
   return true;
+}
+
+// ---------------------------------------------------------------- tallies by weapon
+// What each side's weapons fired and did: rounds (or grenades, rockets, blows), hits, and
+// the enemy killed, seriously wounded and lightly wounded. A man hit again counts again.
+function weaponClass(W) {
+  if (MELEE[Object.keys(MELEE).find(k => MELEE[k] === W)]) return 'Hand to hand';
+  if (Object.values(GRENADES).includes(W)) return 'Hand grenades';
+  if (Object.values(LAUNCHERS).includes(W)) return W.flat ? 'Rockets' : 'Grenade launchers';
+  if (W.magType === 'arrow') return 'Bows';
+  if (W.smoke && W.mag === 1) return W.range < 50 ? 'Pistols, shotguns' : 'Muskets, black-powder rifles';
+  if (W.rounds >= 5) return 'Machine guns';
+  if (W.rounds >= 3) return W.range > 150 ? 'Automatic rifles' : 'Submachine guns';
+  if (W.range <= 60) return 'Pistols, shotguns';
+  if (W.acc >= 0.6) return 'Sniper and marksman rifles';
+  return 'Rifles, carbines';
+}
+function wstat(s, W) {
+  const side = (G.wstats = G.wstats || { blue: new Map(), red: new Map() })[s.side];
+  let e = side.get(W.name);
+  if (!e) { e = { name: W.name, cls: weaponClass(W), shots: 0, hits: 0, kia: 0, serious: 0, light: 0 }; side.set(W.name, e); }
+  return e;
 }
 
 // ---- src/fog.js
@@ -7286,7 +7324,7 @@ const UI = {
     pair(lines([blue.all.length + ' ' + bi.men, ...arms(blue)]), lines([red.all.length + ' men', ...arms(red), sz ? '<i>Reported: ' + sz.text.replace('OPFOR ', '') + '</i>' : '']));
     th('Casualties and losses');
     const loss = (sq, men) => {
-      const kia = sq.all.filter(s => s.health === 'kia').length, ser = sq.all.filter(s => s.health === 'serious').length, wia = sq.all.filter(s => s.health === 'light').length, fled = sq.all.filter(s => s.routed || s.routing).length;
+      const kia = sq.all.filter(s => s.health === 'kia').length, ser = sq.all.filter(s => s.health === 'serious').length, wia = sq.all.filter(s => s.health === 'light').length, fled = sq.all.filter(s => (s.routed || s.routing) && s.health !== 'kia' && s.health !== 'serious').length;
       return lines([kia + ' killed', ser + ' seriously wounded', wia + ' wounded', fled ? fled + ' fled' : '', (sq.all.length - kia - ser - fled) + ' of ' + sq.all.length + ' ' + men + ' still fighting']);
     };
     pair(loss(blue, bi.men), loss(red, 'men'));
@@ -7303,6 +7341,39 @@ const UI = {
         fr + ' hand grenades thrown, ' + frLeft + ' left', gl || glLeft ? gl + ' launcher rounds fired, ' + glLeft + ' left' : '']);
     };
     pair(spent(blue), spent(red));
+    // Hits and kills by weapon: an overview by kind of weapon, then every weapon in detail.
+    const ws = G.wstats || { blue: new Map(), red: new Map() };
+    const sum = (list) => list.reduce((a, e) => { for (const k of ['shots', 'hits', 'kia', 'serious', 'light']) a[k] += e[k]; return a; }, { shots: 0, hits: 0, kia: 0, serious: 0, light: 0 });
+    const byClass = (side) => {
+      const m = new Map();
+      for (const e of ws[side].values()) { if (!m.has(e.cls)) m.set(e.cls, []); m.get(e.cls).push(e); }
+      return [...m].map(([cls, list]) => ({ cls, ...sum(list) })).filter(c => c.shots || c.hits).sort((a, b) => b.hits - a.hits || b.shots - a.shots);
+    };
+    const overview = (side) => {
+      const rows = byClass(side);
+      if (!rows.length) return '<i>No fire</i>';
+      return lines(rows.map(c => '<b>' + c.cls + '</b>: ' + c.hits + ' hit' + (c.hits === 1 ? '' : 's') + (c.kia ? ', ' + c.kia + ' killed' : '') + (c.serious ? ', ' + c.serious + ' seriously wounded' : '') + (c.light ? ', ' + c.light + ' wounded' : '')));
+    };
+    th('Hits and kills by weapon');
+    pair(overview('blue'), overview('red'));
+    const det = tr(), dc = el('td', 'wdetail'); dc.colSpan = 2; det.appendChild(dc);
+    const d = el('details'); d.appendChild(el('summary', null, 'In detail: every weapon'));
+    for (const [side, sq] of [['blue', blue], ['red', red]]) {
+      d.appendChild(el('div', 'wdhead', side === 'blue' ? blue.name + ' (' + bi.nation + ')' : red.name + ' (' + ri.nation + ')'));
+      const t = el('table', 'wdtable'), h = el('tr');
+      for (const c of ['Weapon', 'Fired', 'Hits', 'Hit %', 'Killed', 'Serious', 'Wounded']) h.appendChild(el('th', null, c));
+      t.appendChild(h);
+      const list = [...ws[side].values()].filter(e => e.shots || e.hits).sort((a, b) => b.hits - a.hits || b.shots - a.shots);
+      for (const e of [...list, ...(list.length > 1 ? [{ name: 'Total', ...sum(list), total: true }] : [])]) {
+        const r = el('tr', e.total ? 'wdtotal' : null);
+        for (const v of [e.name, e.shots, e.hits, e.shots ? (e.hits / e.shots * 100).toFixed(1) : '—', e.kia, e.serious, e.light]) r.appendChild(el('td', null, String(v)));
+        t.appendChild(r);
+      }
+      if (!list.length) { const r = el('tr'), c = el('td', null, 'No fire.'); c.colSpan = 7; r.appendChild(c); t.appendChild(r); }
+      d.appendChild(t);
+    }
+    d.appendChild(el('div', 'wcap', 'Fired counts rounds, grenades, rockets and blows. A man wounded by one weapon and later killed by another counts under both.'));
+    dc.appendChild(d);
     return box;
   },
 
@@ -9677,6 +9748,7 @@ function newMission() {
   G.byId = new Map(G.soldiers.map(s => [s.id, s]));
   G.known = { blue: new Map(), red: new Map() };
   G.effects = []; G.projectiles = []; G.floaters = []; G.controllers = []; G.flares = [];
+  G.wstats = { blue: new Map(), red: new Map() };
   G.stats = { blue: { light: 0, serious: 0, kia: 0 }, red: { light: 0, serious: 0, kia: 0 } };
   G.time = 0; G.spotT = 0; G.teamT = 0; G.endT = 0;
   G.over = false; G.running = true; G.paused = false;
