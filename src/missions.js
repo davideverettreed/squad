@@ -387,7 +387,8 @@ function setupMission(key, blue, sc) {
         }
       }
     } else {
-    const n = randInt(D.size[0], D.size[1]);
+    // A custom battle may set the generic enemy's strength.
+    const n = sc.size ? randInt(sc.size[0], sc.size[1]) : randInt(D.size[0], D.size[1]);
     red = buildOpfor(n, D.kind, { leader: D.leader });
     if (D.morale) red.morale = randRange(D.morale[0], D.morale[1]);
     }

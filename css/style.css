@@ -423,3 +423,5 @@ body:not(.roster-min) #btn3d, body:not(.roster-min) #ctl3d { margin-left: 0; }
 .planmenu .pmkinds .obtn { background: #eceae3; color: #1c2b3a; border-color: #c9c3b3; }
 .planmenu .pmkinds .obtn:hover { background: #ffe066; }
 .planmenu .pmdanger b { color: #8a2d2d; }
+
+.bsit select { max-width: 100%; }

@@ -19,7 +19,7 @@ function loadSettings() {
   let saved = null;
   try { saved = JSON.parse(localStorage.getItem('squad.settings') || 'null'); } catch (e) { saved = null; }
   const s = { seed: Math.floor(Math.random() * 99999) + 1, mode: 'random', region: 'random', echelon: 'squad', loadout: defaultLoadout(),
-    scenario: 'modern', friendly: 'era' };
+    scenario: 'modern', friendly: 'era', enemy: 'generic', enemySize: 'default' };
   if (saved && saved.loadout) {
     for (const k of Object.keys(s.loadout)) {
       const l = saved.loadout[k];
@@ -29,12 +29,14 @@ function loadSettings() {
     if (saved.region && (saved.region === 'random' || REGIONS[saved.region])) s.region = saved.region;
     if (saved.scenario && SCENARIOS[saved.scenario]) s.scenario = saved.scenario;
     if (saved.friendly && (saved.friendly === 'era' || FRIENDLY_KEYS.includes(saved.friendly))) s.friendly = saved.friendly;
+    if (saved.enemy && (saved.enemy === 'generic' || FORCES[saved.enemy])) s.enemy = saved.enemy;
+    if (saved.enemySize && ENEMY_SIZES[saved.enemySize]) s.enemySize = saved.enemySize;
   }
   return s;
 }
 function saveSettings() {
   try { localStorage.setItem('squad.settings', JSON.stringify({ mode: G.settings.mode, region: G.settings.region, loadout: G.settings.loadout,
-    scenario: G.settings.scenario, friendly: G.settings.friendly })); } catch (e) { /* storage unavailable */ }
+    scenario: G.settings.scenario, friendly: G.settings.friendly, enemy: G.settings.enemy, enemySize: G.settings.enemySize })); } catch (e) { /* storage unavailable */ }
 }
 
 function newMission() {

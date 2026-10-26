@@ -369,6 +369,10 @@ const SCENARIOS = {
   modern: {
     label: 'Present day · Generic OPFOR', status: null, opfor: null, blue: 'usmc', region: null, missions: null,
   },
+  // Built from the player's own choices: any ground, any force of yours, any enemy.
+  custom: {
+    label: 'Custom battle', status: 'Custom', custom: true, opfor: null, blue: 'usmc', region: null, missions: null,
+  },
   swansea1675: {
     label: '1675 · Wampanoag war party, Swansea', status: 'Historical', date: '24 June 1675', place: 'Swansea, Plymouth Colony', war: "King Philip's War",
     opfor: 'wampanoag1675', size: [180, 220], blue: 'plymouth1675', region: 'newengland', missions: ['townAttack', 'meeting', 'column'], siteName: 'Swansea',
@@ -521,4 +525,31 @@ function buildBlue(set) {
   if (k === 'usmc' || !FORCES[k]) return buildUSMCSquad(set.loadout);
   return buildForce(k, 'blue');
 }
-function scenarioOf(set) { return SCENARIOS[set && set.scenario] || SCENARIOS.modern; }
+function scenarioOf(set) {
+  if (set && set.scenario === 'custom') return customScenario(set);
+  return SCENARIOS[set && set.scenario] || SCENARIOS.modern;
+}
+
+// Enemy strengths for a custom battle. 'default': the strength the enemy had in history
+// (or, for today's generic enemy, what the mission calls for).
+const ENEMY_SIZES = {
+  default: { label: 'Its usual strength' },
+  team:    { label: 'Fire team (4-6)', range: [4, 6] },
+  squad:   { label: 'Squad (9-13)', range: [9, 13] },
+  platoon: { label: 'Platoon (22-32)', range: [22, 32] },
+  company: { label: 'Company (50-70)', range: [50, 70] },
+  host:    { label: 'Large force (150-200)', range: [150, 200] },
+};
+// The enemies a custom battle can field, earliest first.
+const ENEMY_KEYS = Object.keys(FORCES).filter(k => FORCES[k].side !== 'blue').sort((a, b) => FORCES[a].year - FORCES[b].year);
+function enemyLabel(k) { return k === 'generic' ? 'Present day · Generic OPFOR (by mission)' : FORCES[k].year + ' · ' + FORCES[k].label; }
+// The strength a force had in the scenario that uses it.
+function usualSize(k) { const sc = Object.values(SCENARIOS).find(x => x.opfor === k); return sc ? sc.size : [10, 14]; }
+function customScenario(set) {
+  const k = set.enemy && FORCES[set.enemy] && FORCES[set.enemy].side !== 'blue' ? set.enemy : null;
+  const z = ENEMY_SIZES[set.enemySize] || ENEMY_SIZES.default;
+  return Object.assign({}, SCENARIOS.custom, {
+    opfor: k, size: z.range || (k ? usualSize(k) : null),
+    label: 'Custom battle', place: null, date: null,
+  });
+}

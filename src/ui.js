@@ -581,6 +581,7 @@ const UI = {
     const sdesc = el('span', 'bdesc');
     const scText = () => {
       const sc = scenarioOf(set);
+      if (sc.custom) return 'Your own battle: pick the enemy and its strength, your force, the mission and the ground below. Any force can fight on any ground, in any era: Viet Cong in the Montana snow, Soviet paratroopers on the California coast.';
       if (!sc.opfor) return 'Today\'s Marines against a present-day enemy of regular soldiers, irregulars, reconnaissance troops or aircrew, depending on the mission.';
       return sc.status + ' · ' + sc.date + ' · ' + sc.place + '. ' + sc.history + ' Enemy: ' + FORCES[sc.opfor].label + ', ' + sc.size[0] + '-' + sc.size[1] + ' men.';
     };
@@ -595,11 +596,12 @@ const UI = {
     const fillFriendly = () => {
       frSel.innerHTML = '';
       const era = scenarioOf(set).blue || 'usmc';
-      const o0 = el('option', null, 'Of the era: ' + friendlyLabel(era)); o0.value = 'era'; frSel.appendChild(o0);
+      const custom = scenarioOf(set).custom;
+      const o0 = el('option', null, (custom ? 'Default: ' : 'Of the era: ') + friendlyLabel(era)); o0.value = 'era'; frSel.appendChild(o0);
       for (const k of FRIENDLY_KEYS) { const o = el('option', null, friendlyLabel(k)); o.value = k; frSel.appendChild(o); }
       frSel.value = set.friendly || 'era';
       const k = set.friendly === 'era' || !set.friendly ? era : set.friendly;
-      fdesc.textContent = forceInfo(k).unit + (k === era ? '' : ' Not of the era: historical fiction.');
+      fdesc.textContent = forceInfo(k).unit + (k === era || custom ? '' : ' Not of the era: historical fiction.');
     };
     frSel.addEventListener('change', () => { set.friendly = frSel.value; fillFriendly(); eyebrow(); });
     // The dialog's subtitle: the force you will command.
@@ -610,6 +612,27 @@ const UI = {
     };
     fp.appendChild(frSel); fp.appendChild(fdesc);
     sit.appendChild(fp);
+    // A custom battle: the enemy force and its strength.
+    const enemyBox = el('div');
+    enemyBox.appendChild(el('h3', null, 'Enemy'));
+    const ep = el('p'), enSel = el('select'), szSel = el('select'), edesc = el('span', 'bdesc');
+    enSel.id = 'missionEnemy'; szSel.id = 'missionEnemySize';
+    for (const k of ['generic', ...ENEMY_KEYS]) { const o = el('option', null, enemyLabel(k)); o.value = k; enSel.appendChild(o); }
+    for (const k of Object.keys(ENEMY_SIZES)) { const o = el('option', null, ENEMY_SIZES[k].label); o.value = k; szSel.appendChild(o); }
+    enSel.value = set.enemy || 'generic'; szSel.value = set.enemySize || 'default';
+    const enText = () => {
+      const k = enSel.value, z = ENEMY_SIZES[szSel.value];
+      const usual = k === 'generic' ? 'as the mission calls for' : usualSize(k).join('-') + ' men';
+      edesc.textContent = (k === 'generic' ? 'Regular soldiers, irregulars, reconnaissance troops or aircrew, depending on the mission.' : forceInfo(k).unit + ' Fights by: ' + DOCTRINES[FORCES[k].doctrine].label.toLowerCase() + '.') +
+        ' Strength: ' + (z.range ? z.range.join('-') + ' men' : usual) + '.';
+    };
+    enSel.addEventListener('change', () => { set.enemy = enSel.value; enText(); });
+    szSel.addEventListener('change', () => { set.enemySize = szSel.value; enText(); });
+    ep.appendChild(enSel); ep.appendChild(szSel); ep.appendChild(edesc);
+    enemyBox.appendChild(ep);
+    sit.appendChild(enemyBox);
+    const showEnemy = () => { enemyBox.hidden = !scenarioOf(set).custom; enText(); };
+    showEnemy();
     sit.appendChild(el('h3', null, 'Mission'));
     const mp = el('p');
     // The mission: one of many, at random unless one is picked. The description is the
@@ -647,7 +670,7 @@ const UI = {
     rdesc.textContent = regText();
     regSel.addEventListener('change', () => { set.region = regSel.value; rdesc.textContent = regText(); });
     scSel.addEventListener('change', () => {
-      set.scenario = scSel.value; sdesc.textContent = scText(); fillFriendly(); fillModes();
+      set.scenario = scSel.value; sdesc.textContent = scText(); fillFriendly(); fillModes(); showEnemy();
       regSel.options[0].textContent = scenarioOf(set).region ? 'Scenario\'s ground' : 'Random region';
       rdesc.textContent = regText(); eyebrow();
     });
