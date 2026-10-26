@@ -676,9 +676,11 @@ function render() {
   drawEffects(ctx);
   drawCones(ctx);
   drawUnits(ctx);
+  drawFlares(ctx);
   drawGhostFormation(ctx);
   drawNudge(ctx);
   drawUnitDrag(ctx);
+  drawFaceDrag(ctx);
   drawTapes(ctx);
   drawFloaters(ctx);
   drawScale(ctx);
@@ -1527,6 +1529,27 @@ function drawGhostFormation(ctx) {
   ctx.restore();
 }
 
+// Right button held: the spot the unit goes to, and an arrow to the front it will face.
+function drawFaceDrag(ctx) {
+  const f = G.ui.faceDrag;
+  if (!f || !f.to) return;
+  const a = toScreen(f.at.x, f.at.y), b = toScreen(f.to.x, f.to.y), ang = Math.atan2(b.y - a.y, b.x - a.x), L = Math.max(30, Math.hypot(b.x - a.x, b.y - a.y));
+  const e = { x: a.x + Math.cos(ang) * L, y: a.y + Math.sin(ang) * L };
+  ctx.save();
+  ctx.strokeStyle = 'rgba(31,79,191,0.95)'; ctx.fillStyle = 'rgba(31,79,191,0.95)'; ctx.lineWidth = 3;
+  ctx.beginPath(); ctx.arc(a.x, a.y, 8, 0, Math.PI * 2); ctx.stroke();
+  // The front: a bar across the facing, the arrow along it.
+  const nx = -Math.sin(ang), ny = Math.cos(ang);
+  ctx.beginPath(); ctx.moveTo(a.x + nx * 26, a.y + ny * 26); ctx.lineTo(a.x - nx * 26, a.y - ny * 26); ctx.stroke();
+  ctx.beginPath(); ctx.moveTo(a.x, a.y); ctx.lineTo(e.x, e.y); ctx.stroke();
+  ctx.beginPath(); ctx.moveTo(e.x, e.y); ctx.lineTo(e.x - Math.cos(ang - 0.45) * 14, e.y - Math.sin(ang - 0.45) * 14); ctx.lineTo(e.x - Math.cos(ang + 0.45) * 14, e.y - Math.sin(ang + 0.45) * 14); ctx.closePath(); ctx.fill();
+  const brg = pad3(Math.round((ang * 180 / Math.PI + 90 + 360) % 360));
+  ctx.font = '700 13px "Saira Condensed", "Arial Narrow", sans-serif'; ctx.textAlign = 'center'; ctx.textBaseline = 'bottom';
+  ctx.lineWidth = 3; ctx.strokeStyle = 'rgba(247,245,236,0.95)'; ctx.strokeText('FACE ' + brg + '°', e.x, e.y - 10);
+  ctx.fillText('FACE ' + brg + '°', e.x, e.y - 10);
+  ctx.restore();
+}
+
 // A unit being dragged by a finger: a dashed line from where it stands to under the finger,
 // with a ring and what letting go will do.
 function drawUnitDrag(ctx) {
@@ -1547,6 +1570,46 @@ function drawUnitDrag(ctx) {
     ctx.fillStyle = OVL.blue; ctx.fillText(txt, b.x, b.y - r - 4);
   }
   ctx.restore();
+}
+
+// A star cluster fired by the squad leader: a flash at his position, the trail as it
+// climbs, the burst into five stars, and the glow as they drift down. Real-time seconds.
+function drawFlares(ctx) {
+  if (!G.flares || View3D.drawingDrape) return;
+  for (const fl of G.flares) {
+    const p = toScreen(fl.x, fl.y), t = fl.t, up = Math.min(1, t / 1.2), top = 150 * up;
+    const fade = clamp((fl.life - t) / 1.5, 0, 1);
+    ctx.save();
+    // The flash at the leader as it leaves the launcher.
+    if (t < 0.5) {
+      ctx.fillStyle = 'rgba(255,240,200,' + (1 - t * 2) + ')';
+      ctx.beginPath(); ctx.arc(p.x, p.y, 8 + 20 * t, 0, Math.PI * 2); ctx.fill();
+    }
+    // The trail of smoke up to the flare.
+    ctx.strokeStyle = 'rgba(220,220,215,' + (0.8 * fade) + ')'; ctx.lineWidth = 2.5;
+    ctx.beginPath(); ctx.moveTo(p.x, p.y); ctx.quadraticCurveTo(p.x + 10, p.y - top * 0.6, p.x + 4, p.y - top); ctx.stroke();
+    const burst = t > 1.2 ? Math.min(1, (t - 1.2) / 0.5) : 0, drift = Math.max(0, t - 1.2) * 12;
+    ctx.globalAlpha = fade;
+    if (!burst) {
+      ctx.fillStyle = fl.color; ctx.shadowColor = fl.color; ctx.shadowBlur = 16;
+      ctx.beginPath(); ctx.arc(p.x + 4, p.y - top, 5, 0, Math.PI * 2); ctx.fill();
+    } else {
+      // A soft glow on the ground and five stars falling apart.
+      const g = ctx.createRadialGradient(p.x, p.y - top + drift, 0, p.x, p.y - top + drift, 90);
+      g.addColorStop(0, fl.color + '66'); g.addColorStop(1, fl.color + '00');
+      ctx.fillStyle = g; ctx.beginPath(); ctx.arc(p.x, p.y - top + drift, 90, 0, Math.PI * 2); ctx.fill();
+      ctx.fillStyle = fl.color; ctx.shadowColor = fl.color; ctx.shadowBlur = 18;
+      for (let k = 0; k < 5; k++) {
+        const a = -Math.PI / 2 + (k - 2) * 0.55;
+        ctx.beginPath(); ctx.arc(p.x + Math.cos(a) * 34 * burst, p.y - top + drift + Math.sin(a) * 20 * burst + k % 2 * drift * 0.3, 6, 0, Math.PI * 2); ctx.fill();
+      }
+    }
+    ctx.shadowBlur = 0; ctx.globalAlpha = Math.min(1, fade * 1.5);
+    ctx.font = '700 14px "Saira Condensed", "Arial Narrow", sans-serif'; ctx.textAlign = 'left'; ctx.textBaseline = 'middle';
+    ctx.lineWidth = 3; ctx.strokeStyle = 'rgba(20,20,20,0.85)'; ctx.strokeText(fl.label.toUpperCase(), p.x + 16, p.y - 8);
+    ctx.fillStyle = '#fff'; ctx.fillText(fl.label.toUpperCase(), p.x + 16, p.y - 8);
+    ctx.restore();
+  }
 }
 
 // The unit as a W A S D nudge will leave it: dashed rings with a tick for the new front.

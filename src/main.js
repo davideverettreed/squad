@@ -56,7 +56,7 @@ function newMission() {
   G.soldiers = [...blue.all, ...red.all];
   G.byId = new Map(G.soldiers.map(s => [s.id, s]));
   G.known = { blue: new Map(), red: new Map() };
-  G.effects = []; G.projectiles = []; G.floaters = []; G.controllers = [];
+  G.effects = []; G.projectiles = []; G.floaters = []; G.controllers = []; G.flares = [];
   G.stats = { blue: { light: 0, serious: 0, kia: 0 }, red: { light: 0, serious: 0, kia: 0 } };
   G.time = 0; G.spotT = 0; G.teamT = 0; G.endT = 0;
   G.over = false; G.running = true; G.paused = false;
@@ -267,6 +267,8 @@ function frame(now) {
   }
   Fog.update();
   Nudge.update();
+  for (const f of G.flares || []) f.t += dt;
+  if (G.flares) G.flares = G.flares.filter(f => f.t < f.life);
   if (View3D.active) View3D.frame(dt); else render();
   UI.tick(dt);
   requestAnimationFrame(frame);

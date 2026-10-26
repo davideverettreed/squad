@@ -261,6 +261,7 @@ const View3D = {
     this.updateMarks();
     this.updateGhosts();
     this.updateObjects();
+    this.updateFlares();
     this.renderer.render(this.scene, this.camera);
   },
 
@@ -352,6 +353,35 @@ const View3D = {
     }
     for (; n < this.lost.length; n++) this.lost[n].visible = false;
   },
+  // ------------------------------------------------------------ signal flares
+  // Five glowing stars above the squad leader, rising, bursting and drifting down.
+  updateFlares() {
+    this.flareSprites = this.flareSprites || [];
+    let n = 0;
+    const glow = this.glowTex || (this.glowTex = (() => {
+      const c = document.createElement('canvas'); c.width = c.height = 64;
+      const x = c.getContext('2d'), g = x.createRadialGradient(32, 32, 0, 32, 32, 32);
+      g.addColorStop(0, 'rgba(255,255,255,1)'); g.addColorStop(0.3, 'rgba(255,255,255,0.8)'); g.addColorStop(1, 'rgba(255,255,255,0)');
+      x.fillStyle = g; x.fillRect(0, 0, 64, 64); return new THREE.CanvasTexture(c);
+    })());
+    const k = this.pegScale();
+    for (const fl of G.flares || []) {
+      const t = fl.t, up = Math.min(1, t / 1.2), burst = t > 1.2 ? Math.min(1, (t - 1.2) / 0.5) : 0, drift = Math.max(0, t - 1.2) * 6 * k;
+      const fade = clamp((fl.life - t) / 1.5, 0, 1), base = this.height(fl.x, fl.y);
+      for (let s = 0; s < 5; s++) {
+        let sp = this.flareSprites[n];
+        if (!sp) { sp = new THREE.Sprite(new THREE.SpriteMaterial({ map: glow, transparent: true, depthWrite: false, blending: THREE.AdditiveBlending })); this.scene.add(sp); this.flareSprites.push(sp); }
+        n++;
+        const a = (s - 2) * 0.9;
+        sp.visible = burst > 0 || s === 2;
+        sp.material.color.set(fl.color); sp.material.opacity = fade;
+        sp.position.set(fl.x - MAP_W / 2 + Math.sin(a) * 18 * k * burst, base + 60 * k * up - drift, fl.y - MAP_H / 2 + Math.cos(a) * 18 * k * burst * 0.4);
+        sp.scale.setScalar(8 * k);
+      }
+    }
+    for (; n < this.flareSprites.length; n++) this.flareSprites[n].visible = false;
+  },
+
   // ------------------------------------------------------------ mission objects
   updateObjects() {
     if (this.objRef === G.objects) return;

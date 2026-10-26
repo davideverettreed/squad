@@ -514,7 +514,7 @@ body:not(.roster-min) #btn3d, body:not(.roster-min) #ctl3d { margin-left: 0; }
         <h3>Selecting</h3>
         <p>Tap a Marine to select that Marine. Tap again to select the fire team, and again for the whole squad. The Squad and fire team buttons above the orders do the same. Keys: <kbd>1</kbd> <kbd>2</kbd> <kbd>3</kbd> fire teams, <kbd>0</kbd> squad, <kbd>Esc</kbd> cancel.</p>
         <h3>Moving</h3>
-        <p>While planning, each planned move shows as a dashed blue arrow, and a dashed ghost of the unit stands where its last move ends. Tap a ghost to pick that unit there, then tap the map to plan its next step. Tap a control measure to change it into another kind (a checkpoint into an assault position, say), rename it, open it in the order or delete it; drag it to move it. While planning, nothing moves: select a unit and tap the map to open a menu that sets a checkpoint, a bound, a route, a fighting position, a support-by-fire position, an assault position, an objective or a target reference point at that spot and adds the line to the plan. Press on one of your pieces (finger or left button) and drag it: let go to open the plan menu at that spot while planning, or to send it there after step-off. After step-off, orders go by radio: tap the ground to move in the chosen mode (Walk unless you pick Rush or Crawl); tap twice quickly to rush. Double-click a fire team's button to select every other team instead. The squad leader moves with 1st Fire Team, but can still be selected alone, and the other teams move without him. Closer and Wider (keys − and +) set the interval between the men of the selected team or squad, from half to three times the standard 7 m; in the fight they spread out or close up where they are. W, A, S and D shift the selected unit forward, left, back and right while it keeps its front; Q and E turn it. A ghost shows where it will end up, the order goes out when you stop pressing, and once there the men take up whatever move they were on. Right-click also moves. Teams and the squad move in their formation. A walking team that takes fire, or sees a new enemy within 250 m, halts on its own, gets down and returns fire; rush, assault or bound to keep moving under fire. Rushing is fast but tiring and easy to spot. Crawling is slow but men can crawl while pinned.</p>
+        <p>While planning, each planned move shows as a dashed blue arrow, and a dashed ghost of the unit stands where its last move ends. Tap a ghost to pick that unit there, then tap the map to plan its next step. Tap a control measure to change it into another kind (a checkpoint into an assault position, say), rename it, open it in the order or delete it; drag it to move it. While planning, nothing moves: select a unit and tap the map to open a menu that sets a checkpoint, a bound, a route, a fighting position, a support-by-fire position, an assault position, an objective or a target reference point at that spot and adds the line to the plan. Press on one of your pieces (finger or left button) and drag it: let go to open the plan menu at that spot while planning, or to send it there after step-off. After step-off, orders go by radio: tap the ground to move in the chosen mode (Walk unless you pick Rush or Crawl); tap twice quickly to rush. Hold the right button where the unit should go and drag toward the front it should face: let go and it moves there and turns to face that way. Double-click a fire team's button to select every other team instead. The squad leader moves with 1st Fire Team, but can still be selected alone, and the other teams move without him. Closer and Wider (keys − and +) set the interval between the men of the selected team or squad, from half to three times the standard 7 m; in the fight they spread out or close up where they are. W, A, S and D shift the selected unit forward, left, back and right while it keeps its front; Q and E turn it. A ghost shows where it will end up, the order goes out when you stop pressing, and once there the men take up whatever move they were on. Right-click also moves. Teams and the squad move in their formation. A walking team that takes fire, or sees a new enemy within 250 m, halts on its own, gets down and returns fire; rush, assault or bound to keep moving under fire. Rushing is fast but tiring and easy to spot. Crawling is slow but men can crawl while pinned.</p>
         <h3>Fire and maneuver</h3>
         <p><b>Suppress</b> puts fire on an area, seen enemy or not. <b>Bound</b> sends the squad forward one fire team at a time while the others cover it (a fire team bounds in buddy pairs). <b>Assault</b> walks forward firing and throwing grenades. Tap a visible enemy to make the selection engage that target.</p>
         <h3>Reading the pieces</h3>
@@ -2616,10 +2616,10 @@ function teamMove(team, x, y, mode, heading, alone) {
   });
 }
 
-function squadMove(sq, x, y, mode) {
+function squadMove(sq, x, y, mode, face) {
   const act = sq.all.filter(commandable);
   if (!act.length) return;
-  const c = centroid(act), heading = angleTo(c.x, c.y, x, y);
+  const c = centroid(act), heading = face != null ? face : angleTo(c.x, c.y, x, y);
   const teams = sq.teams.filter(t => t.members.some(commandable));
   teams.forEach((t, k) => {
     const o = scaled(squadSlot(sq.formation, k, teams.length), sq.spacing), w = rotateOffset(o.x, o.y, heading);
@@ -2667,22 +2667,25 @@ function occupyPosition(sel, g) {
   });
 }
 
-function groupMove(sel, x, y, mode) {
+// face: a bearing (radians) to face on arrival, the formation set out across it; or null.
+function groupMove(sel, x, y, mode, face) {
   const members = selMembers(sel);
   Plan.override(members, 'move');
   releaseControllers(members);
   for (const s of members) { s.assault = false; s.launchQueue = null; }
   if (sel.level === 'soldier') orderMove(sel.soldier, x, y, mode);
-  else if (sel.level === 'team') teamMove(sel.team, x, y, mode);
+  else if (sel.level === 'team') teamMove(sel.team, x, y, mode, face);
   else if (sel.level === 'group') {
     // The teams side by side in a line across the direction of march.
-    const act = members.filter(commandable), c = act.length ? centroid(act) : { x, y }, h = angleTo(c.x, c.y, x, y);
+    const act = members.filter(commandable), c = act.length ? centroid(act) : { x, y }, h = face != null ? face : angleTo(c.x, c.y, x, y);
     sel.teams.forEach((t, k) => {
       const w = rotateOffset((k - (sel.teams.length - 1) / 2) * 32, 0, h);
       teamMove(t, x + w.x, y + w.y, mode, h);
     });
   }
-  else squadMove(sel.squad, x, y, mode);
+  else squadMove(sel.squad, x, y, mode, face);
+  // On arrival each man turns to the given front.
+  if (face != null) for (const s of members) if (commandable(s)) s.faceAngle = face;
 }
 
 // Nearest enemy this man's side knows about, or the last man who shot at his team.
@@ -2804,7 +2807,7 @@ function issueOrder(sel, type, arg) {
 
   switch (type) {
     case 'move':
-      groupMove(sel, arg.x, arg.y, arg.mode || G.ui.moveMode);
+      groupMove(sel, arg.x, arg.y, arg.mode || G.ui.moveMode, arg.face);
       break;
     case 'posture':
       for (const s of members) { s.homePosture = arg; if (!s.moving) setPosture(s, arg); }
@@ -4441,9 +4444,11 @@ function render() {
   drawEffects(ctx);
   drawCones(ctx);
   drawUnits(ctx);
+  drawFlares(ctx);
   drawGhostFormation(ctx);
   drawNudge(ctx);
   drawUnitDrag(ctx);
+  drawFaceDrag(ctx);
   drawTapes(ctx);
   drawFloaters(ctx);
   drawScale(ctx);
@@ -5292,6 +5297,27 @@ function drawGhostFormation(ctx) {
   ctx.restore();
 }
 
+// Right button held: the spot the unit goes to, and an arrow to the front it will face.
+function drawFaceDrag(ctx) {
+  const f = G.ui.faceDrag;
+  if (!f || !f.to) return;
+  const a = toScreen(f.at.x, f.at.y), b = toScreen(f.to.x, f.to.y), ang = Math.atan2(b.y - a.y, b.x - a.x), L = Math.max(30, Math.hypot(b.x - a.x, b.y - a.y));
+  const e = { x: a.x + Math.cos(ang) * L, y: a.y + Math.sin(ang) * L };
+  ctx.save();
+  ctx.strokeStyle = 'rgba(31,79,191,0.95)'; ctx.fillStyle = 'rgba(31,79,191,0.95)'; ctx.lineWidth = 3;
+  ctx.beginPath(); ctx.arc(a.x, a.y, 8, 0, Math.PI * 2); ctx.stroke();
+  // The front: a bar across the facing, the arrow along it.
+  const nx = -Math.sin(ang), ny = Math.cos(ang);
+  ctx.beginPath(); ctx.moveTo(a.x + nx * 26, a.y + ny * 26); ctx.lineTo(a.x - nx * 26, a.y - ny * 26); ctx.stroke();
+  ctx.beginPath(); ctx.moveTo(a.x, a.y); ctx.lineTo(e.x, e.y); ctx.stroke();
+  ctx.beginPath(); ctx.moveTo(e.x, e.y); ctx.lineTo(e.x - Math.cos(ang - 0.45) * 14, e.y - Math.sin(ang - 0.45) * 14); ctx.lineTo(e.x - Math.cos(ang + 0.45) * 14, e.y - Math.sin(ang + 0.45) * 14); ctx.closePath(); ctx.fill();
+  const brg = pad3(Math.round((ang * 180 / Math.PI + 90 + 360) % 360));
+  ctx.font = '700 13px "Saira Condensed", "Arial Narrow", sans-serif'; ctx.textAlign = 'center'; ctx.textBaseline = 'bottom';
+  ctx.lineWidth = 3; ctx.strokeStyle = 'rgba(247,245,236,0.95)'; ctx.strokeText('FACE ' + brg + '°', e.x, e.y - 10);
+  ctx.fillText('FACE ' + brg + '°', e.x, e.y - 10);
+  ctx.restore();
+}
+
 // A unit being dragged by a finger: a dashed line from where it stands to under the finger,
 // with a ring and what letting go will do.
 function drawUnitDrag(ctx) {
@@ -5312,6 +5338,46 @@ function drawUnitDrag(ctx) {
     ctx.fillStyle = OVL.blue; ctx.fillText(txt, b.x, b.y - r - 4);
   }
   ctx.restore();
+}
+
+// A star cluster fired by the squad leader: a flash at his position, the trail as it
+// climbs, the burst into five stars, and the glow as they drift down. Real-time seconds.
+function drawFlares(ctx) {
+  if (!G.flares || View3D.drawingDrape) return;
+  for (const fl of G.flares) {
+    const p = toScreen(fl.x, fl.y), t = fl.t, up = Math.min(1, t / 1.2), top = 150 * up;
+    const fade = clamp((fl.life - t) / 1.5, 0, 1);
+    ctx.save();
+    // The flash at the leader as it leaves the launcher.
+    if (t < 0.5) {
+      ctx.fillStyle = 'rgba(255,240,200,' + (1 - t * 2) + ')';
+      ctx.beginPath(); ctx.arc(p.x, p.y, 8 + 20 * t, 0, Math.PI * 2); ctx.fill();
+    }
+    // The trail of smoke up to the flare.
+    ctx.strokeStyle = 'rgba(220,220,215,' + (0.8 * fade) + ')'; ctx.lineWidth = 2.5;
+    ctx.beginPath(); ctx.moveTo(p.x, p.y); ctx.quadraticCurveTo(p.x + 10, p.y - top * 0.6, p.x + 4, p.y - top); ctx.stroke();
+    const burst = t > 1.2 ? Math.min(1, (t - 1.2) / 0.5) : 0, drift = Math.max(0, t - 1.2) * 12;
+    ctx.globalAlpha = fade;
+    if (!burst) {
+      ctx.fillStyle = fl.color; ctx.shadowColor = fl.color; ctx.shadowBlur = 16;
+      ctx.beginPath(); ctx.arc(p.x + 4, p.y - top, 5, 0, Math.PI * 2); ctx.fill();
+    } else {
+      // A soft glow on the ground and five stars falling apart.
+      const g = ctx.createRadialGradient(p.x, p.y - top + drift, 0, p.x, p.y - top + drift, 90);
+      g.addColorStop(0, fl.color + '66'); g.addColorStop(1, fl.color + '00');
+      ctx.fillStyle = g; ctx.beginPath(); ctx.arc(p.x, p.y - top + drift, 90, 0, Math.PI * 2); ctx.fill();
+      ctx.fillStyle = fl.color; ctx.shadowColor = fl.color; ctx.shadowBlur = 18;
+      for (let k = 0; k < 5; k++) {
+        const a = -Math.PI / 2 + (k - 2) * 0.55;
+        ctx.beginPath(); ctx.arc(p.x + Math.cos(a) * 34 * burst, p.y - top + drift + Math.sin(a) * 20 * burst + k % 2 * drift * 0.3, 6, 0, Math.PI * 2); ctx.fill();
+      }
+    }
+    ctx.shadowBlur = 0; ctx.globalAlpha = Math.min(1, fade * 1.5);
+    ctx.font = '700 14px "Saira Condensed", "Arial Narrow", sans-serif'; ctx.textAlign = 'left'; ctx.textBaseline = 'middle';
+    ctx.lineWidth = 3; ctx.strokeStyle = 'rgba(20,20,20,0.85)'; ctx.strokeText(fl.label.toUpperCase(), p.x + 16, p.y - 8);
+    ctx.fillStyle = '#fff'; ctx.fillText(fl.label.toUpperCase(), p.x + 16, p.y - 8);
+    ctx.restore();
+  }
 }
 
 // The unit as a W A S D nudge will leave it: dashed rings with a tick for the new front.
@@ -6669,7 +6735,9 @@ const Plan = {
     const sq = G.squads.blue, by = sq.all.find(s => s.billet === 'SL' && s.active) || sq.teams.map(t => t.leader).find(Boolean);
     const at = by || centroid(sq.all);
     this.signals[color] = true;
-    G.effects.push({ type: 'star', x: at.x, y: at.y, color: SIGNALS[color].color, t: 0, life: 5 });
+    // The squad leader fires it: shown in real time, so it is seen at any game speed.
+    G.flares.push({ x: at.x, y: at.y, color: SIGNALS[color].color, label: SIGNALS[color].label, t: 0, life: 5.5 });
+    if (by) by.lastFired = G.time;
     G.log(SIGNALS[color].label + ' fired: ' + SIGNALS[color].meaning.toLowerCase() + '.', 'plan');
     this.update(0, true);
   },
@@ -7412,7 +7480,7 @@ const Radio = {
 
   text(type, arg) {
     switch (type) {
-      case 'move': return 'move to ' + this.where(arg) + (arg.mode && arg.mode !== 'walk' ? ', ' + MOVE[arg.mode].label.toLowerCase() : '');
+      case 'move': return 'move to ' + this.where(arg) + (arg.mode && arg.mode !== 'walk' ? ', ' + MOVE[arg.mode].label.toLowerCase() : '') + (arg.face != null ? ', face ' + pad3(Math.round((arg.face * 180 / Math.PI + 90 + 360) % 360)) : '');
       case 'bound': return 'bound to ' + this.where(arg);
       case 'assault': return 'assault ' + this.where(arg);
       case 'suppress': return 'suppress ' + this.where(arg);
@@ -7445,7 +7513,7 @@ const Radio = {
   },
 
   send(sel, type, arg) {
-    if (type === 'move') arg = { x: arg.x, y: arg.y, mode: arg.mode || G.ui.moveMode };
+    if (type === 'move') arg = { x: arg.x, y: arg.y, mode: arg.mode || G.ui.moveMode, face: arg.face };
     const to = this.callsign(sel);
     G.log(this.sender() + ': ' + to + ', ' + this.text(type, arg) + ', over.', 'radio');
     this.queue.push({ due: G.time + this.delayFor(sel), sel, type, arg, to });
@@ -7732,6 +7800,7 @@ const View3D = {
     this.updateMarks();
     this.updateGhosts();
     this.updateObjects();
+    this.updateFlares();
     this.renderer.render(this.scene, this.camera);
   },
 
@@ -7823,6 +7892,35 @@ const View3D = {
     }
     for (; n < this.lost.length; n++) this.lost[n].visible = false;
   },
+  // ------------------------------------------------------------ signal flares
+  // Five glowing stars above the squad leader, rising, bursting and drifting down.
+  updateFlares() {
+    this.flareSprites = this.flareSprites || [];
+    let n = 0;
+    const glow = this.glowTex || (this.glowTex = (() => {
+      const c = document.createElement('canvas'); c.width = c.height = 64;
+      const x = c.getContext('2d'), g = x.createRadialGradient(32, 32, 0, 32, 32, 32);
+      g.addColorStop(0, 'rgba(255,255,255,1)'); g.addColorStop(0.3, 'rgba(255,255,255,0.8)'); g.addColorStop(1, 'rgba(255,255,255,0)');
+      x.fillStyle = g; x.fillRect(0, 0, 64, 64); return new THREE.CanvasTexture(c);
+    })());
+    const k = this.pegScale();
+    for (const fl of G.flares || []) {
+      const t = fl.t, up = Math.min(1, t / 1.2), burst = t > 1.2 ? Math.min(1, (t - 1.2) / 0.5) : 0, drift = Math.max(0, t - 1.2) * 6 * k;
+      const fade = clamp((fl.life - t) / 1.5, 0, 1), base = this.height(fl.x, fl.y);
+      for (let s = 0; s < 5; s++) {
+        let sp = this.flareSprites[n];
+        if (!sp) { sp = new THREE.Sprite(new THREE.SpriteMaterial({ map: glow, transparent: true, depthWrite: false, blending: THREE.AdditiveBlending })); this.scene.add(sp); this.flareSprites.push(sp); }
+        n++;
+        const a = (s - 2) * 0.9;
+        sp.visible = burst > 0 || s === 2;
+        sp.material.color.set(fl.color); sp.material.opacity = fade;
+        sp.position.set(fl.x - MAP_W / 2 + Math.sin(a) * 18 * k * burst, base + 60 * k * up - drift, fl.y - MAP_H / 2 + Math.cos(a) * 18 * k * burst * 0.4);
+        sp.scale.setScalar(8 * k);
+      }
+    }
+    for (; n < this.flareSprites.length; n++) this.flareSprites[n].visible = false;
+  },
+
   // ------------------------------------------------------------ mission objects
   updateObjects() {
     if (this.objRef === G.objects) return;
@@ -8107,6 +8205,9 @@ const Input = {
       if (this.pointers.size === 1) {
         this.moved = false;
         this.camStart = { x: R.cam.x, y: R.cam.y };
+        // Right button held after step-off: where the selected unit goes, then drag to set its front.
+        this.faceDrag = e.button === 2 && G.running && !G.over && !Plan.planning && G.ui.sel ? { at: toWorld(e.offsetX, e.offsetY), to: null } : null;
+        G.ui.faceDrag = this.faceDrag;
         // A finger (or the left button) pressed on one of our pieces drags the unit to a new place.
         this.dragU = e.button === 0 && G.running && !G.over && !Plan.tool && !G.ui.measuring ? UI.unitDragStart(pieceAt(e.offsetX, e.offsetY)) : null;
         // While planning, a control measure under the finger is dragged instead of the map.
@@ -8127,7 +8228,9 @@ const Input = {
       p.x = e.offsetX; p.y = e.offsetY;
       if (this.pointers.size === 1) {
         if (Math.hypot(p.x - p.sx, p.y - p.sy) > 8) this.moved = true;
-        if (this.moved && this.dragU) {
+        if (this.moved && this.faceDrag) {
+          this.faceDrag.to = toWorld(p.x, p.y);
+        } else if (this.moved && this.dragU) {
           G.ui.unitDrag.to = toWorld(p.x, p.y);
         } else if (this.moved && this.dragG) {
           const w = toWorld(p.x, p.y), pt = this.dragG.g.pts[this.dragG.idx];
@@ -8150,6 +8253,13 @@ const Input = {
       const p = this.pointers.get(e.pointerId);
       if (!p) return;
       this.pointers.delete(e.pointerId);
+      if (e.type === 'pointerup' && this.faceDrag && this.pointers.size === 0) {
+        const f = this.faceDrag; this.faceDrag = null; G.ui.faceDrag = null;
+        if (this.moved && f.to && dist(f.at.x, f.at.y, f.to.x, f.to.y) > 3) {
+          issueOrder(G.ui.sel, 'move', { x: f.at.x, y: f.at.y, mode: G.ui.moveMode, face: angleTo(f.at.x, f.at.y, f.to.x, f.to.y) });
+          return;
+        }
+      }
       if (e.type === 'pointerup' && this.dragU && this.pointers.size === 0) {
         const d = this.dragU; this.dragU = null;
         if (this.moved) { UI.unitDrop(p.x, p.y, toWorld(p.x, p.y), d); return; }
@@ -8275,7 +8385,7 @@ function newMission() {
   G.soldiers = [...blue.all, ...red.all];
   G.byId = new Map(G.soldiers.map(s => [s.id, s]));
   G.known = { blue: new Map(), red: new Map() };
-  G.effects = []; G.projectiles = []; G.floaters = []; G.controllers = [];
+  G.effects = []; G.projectiles = []; G.floaters = []; G.controllers = []; G.flares = [];
   G.stats = { blue: { light: 0, serious: 0, kia: 0 }, red: { light: 0, serious: 0, kia: 0 } };
   G.time = 0; G.spotT = 0; G.teamT = 0; G.endT = 0;
   G.over = false; G.running = true; G.paused = false;
@@ -8486,6 +8596,8 @@ function frame(now) {
   }
   Fog.update();
   Nudge.update();
+  for (const f of G.flares || []) f.t += dt;
+  if (G.flares) G.flares = G.flares.filter(f => f.t < f.life);
   if (View3D.active) View3D.frame(dt); else render();
   UI.tick(dt);
   requestAnimationFrame(frame);

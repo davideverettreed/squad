@@ -94,10 +94,10 @@ function teamMove(team, x, y, mode, heading, alone) {
   });
 }
 
-function squadMove(sq, x, y, mode) {
+function squadMove(sq, x, y, mode, face) {
   const act = sq.all.filter(commandable);
   if (!act.length) return;
-  const c = centroid(act), heading = angleTo(c.x, c.y, x, y);
+  const c = centroid(act), heading = face != null ? face : angleTo(c.x, c.y, x, y);
   const teams = sq.teams.filter(t => t.members.some(commandable));
   teams.forEach((t, k) => {
     const o = scaled(squadSlot(sq.formation, k, teams.length), sq.spacing), w = rotateOffset(o.x, o.y, heading);
@@ -145,22 +145,25 @@ function occupyPosition(sel, g) {
   });
 }
 
-function groupMove(sel, x, y, mode) {
+// face: a bearing (radians) to face on arrival, the formation set out across it; or null.
+function groupMove(sel, x, y, mode, face) {
   const members = selMembers(sel);
   Plan.override(members, 'move');
   releaseControllers(members);
   for (const s of members) { s.assault = false; s.launchQueue = null; }
   if (sel.level === 'soldier') orderMove(sel.soldier, x, y, mode);
-  else if (sel.level === 'team') teamMove(sel.team, x, y, mode);
+  else if (sel.level === 'team') teamMove(sel.team, x, y, mode, face);
   else if (sel.level === 'group') {
     // The teams side by side in a line across the direction of march.
-    const act = members.filter(commandable), c = act.length ? centroid(act) : { x, y }, h = angleTo(c.x, c.y, x, y);
+    const act = members.filter(commandable), c = act.length ? centroid(act) : { x, y }, h = face != null ? face : angleTo(c.x, c.y, x, y);
     sel.teams.forEach((t, k) => {
       const w = rotateOffset((k - (sel.teams.length - 1) / 2) * 32, 0, h);
       teamMove(t, x + w.x, y + w.y, mode, h);
     });
   }
-  else squadMove(sel.squad, x, y, mode);
+  else squadMove(sel.squad, x, y, mode, face);
+  // On arrival each man turns to the given front.
+  if (face != null) for (const s of members) if (commandable(s)) s.faceAngle = face;
 }
 
 // Nearest enemy this man's side knows about, or the last man who shot at his team.
@@ -282,7 +285,7 @@ function issueOrder(sel, type, arg) {
 
   switch (type) {
     case 'move':
-      groupMove(sel, arg.x, arg.y, arg.mode || G.ui.moveMode);
+      groupMove(sel, arg.x, arg.y, arg.mode || G.ui.moveMode, arg.face);
       break;
     case 'posture':
       for (const s of members) { s.homePosture = arg; if (!s.moving) setPosture(s, arg); }

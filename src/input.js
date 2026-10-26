@@ -12,6 +12,9 @@ const Input = {
       if (this.pointers.size === 1) {
         this.moved = false;
         this.camStart = { x: R.cam.x, y: R.cam.y };
+        // Right button held after step-off: where the selected unit goes, then drag to set its front.
+        this.faceDrag = e.button === 2 && G.running && !G.over && !Plan.planning && G.ui.sel ? { at: toWorld(e.offsetX, e.offsetY), to: null } : null;
+        G.ui.faceDrag = this.faceDrag;
         // A finger (or the left button) pressed on one of our pieces drags the unit to a new place.
         this.dragU = e.button === 0 && G.running && !G.over && !Plan.tool && !G.ui.measuring ? UI.unitDragStart(pieceAt(e.offsetX, e.offsetY)) : null;
         // While planning, a control measure under the finger is dragged instead of the map.
@@ -32,7 +35,9 @@ const Input = {
       p.x = e.offsetX; p.y = e.offsetY;
       if (this.pointers.size === 1) {
         if (Math.hypot(p.x - p.sx, p.y - p.sy) > 8) this.moved = true;
-        if (this.moved && this.dragU) {
+        if (this.moved && this.faceDrag) {
+          this.faceDrag.to = toWorld(p.x, p.y);
+        } else if (this.moved && this.dragU) {
           G.ui.unitDrag.to = toWorld(p.x, p.y);
         } else if (this.moved && this.dragG) {
           const w = toWorld(p.x, p.y), pt = this.dragG.g.pts[this.dragG.idx];
@@ -55,6 +60,13 @@ const Input = {
       const p = this.pointers.get(e.pointerId);
       if (!p) return;
       this.pointers.delete(e.pointerId);
+      if (e.type === 'pointerup' && this.faceDrag && this.pointers.size === 0) {
+        const f = this.faceDrag; this.faceDrag = null; G.ui.faceDrag = null;
+        if (this.moved && f.to && dist(f.at.x, f.at.y, f.to.x, f.to.y) > 3) {
+          issueOrder(G.ui.sel, 'move', { x: f.at.x, y: f.at.y, mode: G.ui.moveMode, face: angleTo(f.at.x, f.at.y, f.to.x, f.to.y) });
+          return;
+        }
+      }
       if (e.type === 'pointerup' && this.dragU && this.pointers.size === 0) {
         const d = this.dragU; this.dragU = null;
         if (this.moved) { UI.unitDrop(p.x, p.y, toWorld(p.x, p.y), d); return; }

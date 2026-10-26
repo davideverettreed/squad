@@ -36,7 +36,7 @@ const Radio = {
 
   text(type, arg) {
     switch (type) {
-      case 'move': return 'move to ' + this.where(arg) + (arg.mode && arg.mode !== 'walk' ? ', ' + MOVE[arg.mode].label.toLowerCase() : '');
+      case 'move': return 'move to ' + this.where(arg) + (arg.mode && arg.mode !== 'walk' ? ', ' + MOVE[arg.mode].label.toLowerCase() : '') + (arg.face != null ? ', face ' + pad3(Math.round((arg.face * 180 / Math.PI + 90 + 360) % 360)) : '');
       case 'bound': return 'bound to ' + this.where(arg);
       case 'assault': return 'assault ' + this.where(arg);
       case 'suppress': return 'suppress ' + this.where(arg);
@@ -69,7 +69,7 @@ const Radio = {
   },
 
   send(sel, type, arg) {
-    if (type === 'move') arg = { x: arg.x, y: arg.y, mode: arg.mode || G.ui.moveMode };
+    if (type === 'move') arg = { x: arg.x, y: arg.y, mode: arg.mode || G.ui.moveMode, face: arg.face };
     const to = this.callsign(sel);
     G.log(this.sender() + ': ' + to + ', ' + this.text(type, arg) + ', over.', 'radio');
     this.queue.push({ due: G.time + this.delayFor(sel), sel, type, arg, to });
