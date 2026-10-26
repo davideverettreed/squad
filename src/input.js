@@ -14,16 +14,19 @@ const Input = {
       if (this.pointers.size === 1) {
         this.moved = false;
         this.camStart = { x: R.cam.x, y: R.cam.y };
+        // A beaten zone (or a handle of the selected one) under the pointer: dragged to reshape it.
+        this.dragZ = e.button === 0 && G.running && !G.over && !Plan.tool && !G.ui.measuring ? zoneHit(e.offsetX, e.offsetY, toWorld(e.offsetX, e.offsetY), toScreen) : null;
+        if (this.dragZ) { const z = this.dragZ.z; this.dragZ.orig = { x: z.x, y: z.y, len: z.len, wid: z.wid, ang: z.ang }; this.dragZ.from = toWorld(e.offsetX, e.offsetY); }
         // While planning, a plan ghost under the pointer is tapped or dragged to its spot.
-        this.dragGh = e.button === 0 && G.running && Plan.planning && !Plan.tool ? ghostAt(e.offsetX, e.offsetY) : null;
+        this.dragGh = !this.dragZ && e.button === 0 && G.running && Plan.planning && !Plan.tool ? ghostAt(e.offsetX, e.offsetY) : null;
         if (this.dragGh) { const q = ghostScreen(this.dragGh), w = toScreen(this.dragGh.x, this.dragGh.y); this.dragGh.off = { x: q.x - w.x, y: q.y - w.y }; }
         // Right button held after step-off: where the selected unit goes, then drag to set its front.
         this.faceDrag = e.button === 2 && G.running && !G.over && !Plan.planning && G.ui.sel ? { at: toWorld(e.offsetX, e.offsetY), to: null } : null;
         G.ui.faceDrag = this.faceDrag;
         // A finger (or the left button) pressed on one of our pieces drags the unit to a new place.
-        this.dragU = !this.dragGh && e.button === 0 && G.running && !G.over && !Plan.tool && !G.ui.measuring ? UI.unitDragStart(pieceAt(e.offsetX, e.offsetY)) : null;
+        this.dragU = !this.dragZ && !this.dragGh && e.button === 0 && G.running && !G.over && !Plan.tool && !G.ui.measuring ? UI.unitDragStart(pieceAt(e.offsetX, e.offsetY)) : null;
         // While planning, a control measure under the finger is dragged instead of the map.
-        this.dragG = !this.dragU && !this.dragGh && G.running && Plan.planning && !Plan.tool && e.button !== 2 ? Plan.hitGraphic(e.offsetX, e.offsetY) : null;
+        this.dragG = !this.dragZ && !this.dragU && !this.dragGh && G.running && Plan.planning && !Plan.tool && e.button !== 2 ? Plan.hitGraphic(e.offsetX, e.offsetY) : null;
       } else if (this.pointers.size === 2) {
         this.moved = true;
         if (this.dragU) { this.dragU = null; G.ui.unitDrag = null; }
@@ -40,7 +43,9 @@ const Input = {
       p.x = e.offsetX; p.y = e.offsetY;
       if (this.pointers.size === 1) {
         if (Math.hypot(p.x - p.sx, p.y - p.sy) > 8) this.moved = true;
-        if (this.moved && this.dragGh) {
+        if (this.moved && this.dragZ) {
+          dragZone(this.dragZ, toWorld(p.x, p.y));
+        } else if (this.moved && this.dragGh) {
           const g = this.dragGh, l = g.line;
           if (SPOT_TASKS.includes(l.task)) {
             // Kept as an offset from the checkpoint (or objective), so the spot moves with it.
@@ -80,6 +85,11 @@ const Input = {
       const p = this.pointers.get(e.pointerId);
       if (!p) return;
       this.pointers.delete(e.pointerId);
+      if (e.type === 'pointerup' && this.dragZ && this.pointers.size === 0) {
+        const d = this.dragZ; this.dragZ = null;
+        zoneDone(d, this.moved);
+        return;
+      }
       if (e.type === 'pointerup' && this.dragGh && this.pointers.size === 0) {
         const g = this.dragGh; this.dragGh = null;
         if (!this.moved) UI.ghostTap(g, e.shiftKey || e.ctrlKey || e.metaKey);
@@ -157,7 +167,8 @@ const Input = {
       else if (k === '1' || k === '2' || k === '3') UI.selectTeam(+k);
       else if (k === '0' || k === '`') UI.select({ level: 'squad', squad: G.squads.blue });
       else if (k === 'Escape') {
-        if ($('planMenu')) UI.closePlanMenu();
+        if (G.ui.zoneSel) G.ui.zoneSel = null;
+        else if ($('planMenu')) UI.closePlanMenu();
         else if (G.ui.measuring) UI.setMeasuring(false);
         else if (Plan.tool) { Plan.tool = null; Plan.plStart = null; Plan.routeDraft = null; Plan.routeUnit = null; OPORD.refresh(); }
         else if (G.ui.pending) { G.ui.pending = null; UI.refreshOrders(); }
@@ -166,3 +177,12 @@ const Input = {
     });
   },
 };
+
+// A beaten zone let go: a tap selects it (its handles show) or clears it; a drag reshaped it.
+function zoneDone(d, moved) {
+  if (!moved) { G.ui.zoneSel = G.ui.zoneSel === d.z.key ? null : d.z.key; return; }
+  G.ui.zoneSel = d.z.key;
+  if (d.z.live) G.log(PLAN_UNITS[d.z.unit] + ': Shifting fire.', 'fire');
+  else OPORD.refresh();
+  View3D.markDirty();
+}

@@ -694,6 +694,7 @@ function render() {
   drawObjects(ctx);
   drawPlanGhosts(ctx);
   drawOrdersOverlay(ctx);
+  drawBeatenZones(ctx);
   if (G.ui.showDest) drawDestinations(ctx);
   drawProjectiles(ctx);
   drawEffects(ctx);
@@ -1216,31 +1217,8 @@ function drawPlanGhosts(ctx) {
       ctx.beginPath(); ctx.arc(p.x, p.y, View3D.drawingDrape ? Math.max(3, 0.9 * R.cam.zoom) : 3, 0, Math.PI * 2); ctx.fill();
     });
   }
-  // Suppression: each team's aim point, a crosshair with a dashed line of fire to it.
-  for (const gh of pr.ghosts) {
-    if (!gh.aim) continue;
-    const q = toScreen(gh.x, gh.y), f = toScreen(gh.from.x, gh.from.y), r = View3D.drawingDrape ? Math.max(10, 2.5 * R.cam.zoom) : 11;
-    ctx.save();
-    ctx.strokeStyle = 'rgba(214,96,24,0.75)'; ctx.lineWidth = View3D.drawingDrape ? lw * 0.6 : 1.4; ctx.setLineDash([4, 5]);
-    ctx.beginPath(); ctx.moveTo(f.x, f.y); ctx.lineTo(q.x, q.y); ctx.stroke(); ctx.setLineDash([]);
-    ctx.strokeStyle = 'rgba(214,96,24,0.95)'; ctx.lineWidth = View3D.drawingDrape ? lw * 0.8 : 2;
-    ctx.beginPath(); ctx.arc(q.x, q.y, r, 0, Math.PI * 2);
-    ctx.moveTo(q.x - r * 1.5, q.y); ctx.lineTo(q.x - r * 0.4, q.y); ctx.moveTo(q.x + r * 0.4, q.y); ctx.lineTo(q.x + r * 1.5, q.y);
-    ctx.moveTo(q.x, q.y - r * 1.5); ctx.lineTo(q.x, q.y - r * 0.4); ctx.moveTo(q.x, q.y + r * 0.4); ctx.lineTo(q.x, q.y + r * 1.5);
-    ctx.stroke();
-    ctx.restore();
-  }
   if (!View3D.drawingDrape) for (const gh of pr.ghosts) {
-    if (gh.aim) {
-      // The team number beside its aim point (set off the TRP when on it, like any ghost).
-      const q = ghostScreen(gh), sl = G.ui.sel;
-      const picked = sl && (sl.level === 'squad' || (sl.level === 'team' && 't' + sl.team.num === gh.unit) || (sl.level === 'group' && sl.teams.some(t => 't' + t.num === gh.unit)));
-      if (picked) { ctx.fillStyle = 'rgba(255,214,10,0.35)'; ctx.beginPath(); ctx.arc(q.x, q.y, 14, 0, Math.PI * 2); ctx.fill(); }
-      ctx.font = '700 13px "Saira Condensed", "Arial Narrow", sans-serif'; ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
-      ctx.lineWidth = 3; ctx.strokeStyle = 'rgba(247,245,236,0.95)'; ctx.strokeText(gh.unit[1] + ' FIRE', q.x, q.y);
-      ctx.fillStyle = 'rgb(176,70,14)'; ctx.fillText(gh.unit[1] + ' FIRE', q.x, q.y);
-      continue;
-    }
+    if (gh.aim) continue; // drawn as its beaten zone
     const q = ghostScreen(gh), at = toScreen(gh.x, gh.y);
     // An earlier step is fainter than where the plan leaves the team.
     ctx.globalAlpha = gh.final ? 0.85 : 0.45;
@@ -1265,10 +1243,82 @@ function ghostScreen(gh) {
   const onMark = Plan.graphics.some(g => { const a = toScreen(Plan.anchor(g).x, Plan.anchor(g).y); return Math.hypot(a.x - q.x, a.y - q.y) < 16; });
   return onMark ? { x: q.x + 24, y: q.y - 24 } : q;
 }
+// Beaten zones: each team's ground under fire, amber, with its line of fire while planning
+// and, for the one selected, handles: the ends to lengthen or turn it, the sides to widen it.
+function zoneHandles(z) {
+  const c = Math.cos(z.ang), s = Math.sin(z.ang), L = z.len / 2, W = z.wid / 2;
+  return [{ part: 'end', x: z.x + c * L, y: z.y + s * L }, { part: 'end', x: z.x - c * L, y: z.y - s * L },
+    { part: 'side', x: z.x - s * W, y: z.y + c * W }, { part: 'side', x: z.x + s * W, y: z.y - c * W }];
+}
+function inZone(z, w) {
+  const dx = w.x - z.x, dy = w.y - z.y, c = Math.cos(z.ang), s = Math.sin(z.ang);
+  const a = (dx * c + dy * s) / Math.max(1, z.len / 2), b = (-dx * s + dy * c) / Math.max(1, z.wid / 2);
+  return a * a + b * b <= 1.15;
+}
+// The zone or handle under a screen point (w: the ground there; proj: world to screen).
+function zoneHit(sx, sy, w, proj) {
+  const zs = Plan.beatenZones();
+  for (const z of zs) if (G.ui.zoneSel === z.key) for (const h of zoneHandles(z)) {
+    const q = proj(h.x, h.y);
+    if (!(q.z > 1) && Math.hypot(q.x - sx, q.y - sy) < 14) return { z, part: h.part };
+  }
+  if (!w) return null;
+  for (const z of zs) if (inZone(z, w)) return { z, part: 'body' };
+  return null;
+}
+// Reshape a zone from a drag: its body moves it, an end sets its depth and axis, a side its width.
+function dragZone(d, w) {
+  const z = d.z, g = Object.assign({}, d.orig);
+  if (d.part === 'body') { g.x = d.orig.x + w.x - d.from.x; g.y = d.orig.y + w.y - d.from.y; }
+  else if (d.part === 'end') { g.len = clamp(2 * dist(g.x, g.y, w.x, w.y), 6, 160); g.ang = angleTo(g.x, g.y, w.x, w.y); }
+  else { const c = Math.cos(g.ang), s = Math.sin(g.ang); g.wid = clamp(2 * Math.abs(-(w.x - g.x) * s + (w.y - g.y) * c), 4, 80); }
+  z.set(g);
+}
+function drawBeatenZones(ctx) {
+  const zs = Plan.beatenZones();
+  if (!zs.length) return;
+  const k = R.cam.zoom, big = View3D.drawingDrape;
+  ctx.save();
+  for (const z of zs) {
+    const q = toScreen(z.x, z.y), sel = G.ui.zoneSel === z.key;
+    if (!z.live && z.from) {
+      const f = toScreen(z.from.x, z.from.y);
+      ctx.strokeStyle = 'rgba(214,96,24,0.7)'; ctx.lineWidth = big ? Math.max(2, k) : 1.4; ctx.setLineDash([5, 5]);
+      ctx.beginPath(); ctx.moveTo(f.x, f.y); ctx.lineTo(q.x, q.y); ctx.stroke(); ctx.setLineDash([]);
+    }
+    ctx.fillStyle = sel ? 'rgba(255,170,60,0.32)' : 'rgba(214,96,24,0.2)';
+    ctx.strokeStyle = sel ? 'rgba(255,214,10,0.95)' : 'rgba(214,96,24,0.9)'; ctx.lineWidth = big ? Math.max(2, 1.2 * k) : sel ? 2.5 : 1.8;
+    ctx.beginPath(); ctx.ellipse(q.x, q.y, Math.max(4, z.len / 2 * k), Math.max(3, z.wid / 2 * k), z.ang, 0, Math.PI * 2); ctx.fill(); ctx.stroke();
+    // Strike marks along the axis, where the fire falls thickest.
+    ctx.strokeStyle = 'rgba(176,70,14,0.6)'; ctx.lineWidth = 1;
+    for (let i = -2; i <= 2; i++) {
+      const t = i / 5 * z.len, x = z.x + Math.cos(z.ang) * t, y = z.y + Math.sin(z.ang) * t, p = toScreen(x, y);
+      ctx.beginPath(); ctx.moveTo(p.x - 3, p.y - 3); ctx.lineTo(p.x + 3, p.y + 3); ctx.moveTo(p.x + 3, p.y - 3); ctx.lineTo(p.x - 3, p.y + 3); ctx.stroke();
+    }
+    const fs = big ? Math.max(13, 2.2 * k) : 12;
+    ctx.font = '700 ' + Math.round(fs) + 'px "Saira Condensed", "Arial Narrow", sans-serif'; ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+    const label = (z.unit === 'squad' ? 'SQD' : z.unit[1]) + ' FIRE';
+    ctx.lineWidth = 3; ctx.strokeStyle = 'rgba(247,245,236,0.95)'; ctx.strokeText(label, q.x, q.y - Math.max(10, z.wid / 2 * k) - 8);
+    ctx.fillStyle = 'rgb(176,70,14)'; ctx.fillText(label, q.x, q.y - Math.max(10, z.wid / 2 * k) - 8);
+    if (sel) for (const h of zoneHandles(z)) {
+      const p = toScreen(h.x, h.y);
+      ctx.fillStyle = '#ffd60a'; ctx.strokeStyle = '#1c2b3a'; ctx.lineWidth = 1.5;
+      ctx.beginPath();
+      if (h.part === 'end') ctx.arc(p.x, p.y, 6, 0, Math.PI * 2); else ctx.rect(p.x - 5, p.y - 5, 10, 10);
+      ctx.fill(); ctx.stroke();
+    }
+  }
+  ctx.restore();
+}
+
 function ghostAt(sx, sy) {
   if (!Plan.planning) return null;
   let best = null, bd = 20;
-  for (const gh of Plan.projection().ghosts) { const q = ghostScreen(gh), d = Math.hypot(q.x - sx, q.y - sy); if (d < bd) { bd = d; best = gh; } }
+  for (const gh of Plan.projection().ghosts) {
+    if (gh.aim) continue; // a beaten zone is taken by its own area
+    const q = ghostScreen(gh), d = Math.hypot(q.x - sx, q.y - sy);
+    if (d < bd) { bd = d; best = gh; }
+  }
   return best;
 }
 
@@ -1521,7 +1571,7 @@ function drawOrdersOverlay(ctx) {
     ctx.strokeStyle = OVL.blue; ctx.globalAlpha = 0.6; ctx.lineWidth = 1.2; ctx.setLineDash([6, 4]);
     for (const s of t.shooters) { const a = toScreen(s.x, s.y); ctx.beginPath(); ctx.moveTo(a.x, a.y); ctx.lineTo(b.x, b.y); ctx.stroke(); }
     ctx.setLineDash([]); ctx.globalAlpha = 1;
-    drawTarget(ctx, t.pt.x, t.pt.y, 6, 'SUPP');
+    if (!t.pt.len) drawTarget(ctx, t.pt.x, t.pt.y, 6, 'SUPP');
   }
   // Sectors of fire for selected men told to watch a direction.
   for (const s of selSet) {

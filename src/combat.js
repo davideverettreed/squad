@@ -211,7 +211,7 @@ function updateCombat(s, dt) {
   }
 
   if (s.suppressPt && !s.moving) {
-    const p = s.suppressPt;
+    const p = zonePoint(s.suppressPt);
     if (s.launcher && s.lRounds > 0 && s.launchCD <= 0 && chance(0.3) && launchAt(s, p.x, p.y)) { s.fireCD = 2; return; }
     fireArea(s, p.x, p.y);
     return;
@@ -563,4 +563,11 @@ function wstat(s, W) {
   let e = side.get(W.name);
   if (!e) { e = { name: W.name, cls: weaponClass(W), shots: 0, hits: 0, kia: 0, serious: 0, light: 0 }; side.set(W.name, e); }
   return e;
+}
+
+// A point in a beaten zone, spread evenly over it; a bare point is itself.
+function zonePoint(p) {
+  if (!p.len) return p;
+  const r = Math.sqrt(rand()), a = rand() * Math.PI * 2, lx = Math.cos(a) * r * p.len / 2, ly = Math.sin(a) * r * p.wid / 2;
+  return { x: p.x + lx * Math.cos(p.ang) - ly * Math.sin(p.ang), y: p.y + lx * Math.sin(p.ang) + ly * Math.cos(p.ang) };
 }

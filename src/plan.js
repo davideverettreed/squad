@@ -17,6 +17,9 @@ const GRAPHIC_KINDS = {
   rel:  { label: 'Release point', short: 'RP', numbered: true },
   trp:  { label: 'Target reference point', short: 'TRP', numbered: true },
 };
+// A team's beaten zone when suppressing: the ground its fire falls on, an ellipse along its
+// line of fire, len m deep and wid m wide; the men fire at points spread over it.
+const ZONE = { len: 30, wid: 10 };
 // Plan lines whose teams can each be given their own spot by dragging their ghosts.
 const SPOT_TASKS = ['move', 'route', 'bound', 'assault', 'occupy', 'sbf', 'suppress'];
 // What placing a control measure means for a selected unit: its next step of the plan.
@@ -572,6 +575,37 @@ const Plan = {
     });
   },
 
+  // Every beaten zone on the map: while planning, those of the suppress lines (kept in the
+  // line's spots: offset, depth, width, axis); after step-off, those the teams are firing
+  // on. Each comes with set(), which reshapes it where it is kept.
+  beatenZones() {
+    const out = [];
+    if (!G.squads.blue) return out;
+    if (this.planning) {
+      for (const gh of this.projection().ghosts) {
+        if (!gh.aim) continue;
+        const l = gh.line, u = gh.unit, sp = (l.spots && l.spots[u]) || {}, tg = this.anchor(this.graphic(l.target));
+        out.push({ x: gh.x, y: gh.y, len: sp.len || ZONE.len, wid: sp.wid || ZONE.wid, ang: sp.ang != null ? sp.ang : angleTo(gh.from.x, gh.from.y, gh.x, gh.y),
+          from: gh.from, unit: u, key: 'L' + l.id + u,
+          set: (z) => { l.spots = l.spots || {}; l.spots[u] = { dx: z.x - tg.x, dy: z.y - tg.y, len: z.len, wid: z.wid, ang: z.ang }; } });
+      }
+      return out;
+    }
+    const by = new Map();
+    for (const s of G.squads.blue.all) {
+      const p = s.suppressPt;
+      if (!s.active || !p || !p.len) continue;
+      if (!by.has(p)) by.set(p, []);
+      by.get(p).push(s);
+    }
+    for (const [p, men] of by) {
+      const t = men.find(s => s.team.num);
+      out.push({ x: p.x, y: p.y, len: p.len, wid: p.wid, ang: p.ang, from: centroid(men), unit: t ? 't' + t.team.num : 'squad', key: p, live: true,
+        set: (z) => Object.assign(p, { x: z.x, y: z.y, len: z.len, wid: z.wid, ang: z.ang }) });
+    }
+    return out;
+  },
+
   // Where each team of a suppress line aims: its dragged aim point, or (a squad) the teams'
   // fire spread 12 m apart across the target as seen from the squad, or the point itself.
   aimsFor(l, dest, from, units) {
@@ -685,7 +719,11 @@ const Plan = {
             // Each team on its own aim point.
             const sq = G.squads.blue, units = l.unit === 'squad' ? sq.teams.filter(t => t.members.some(commandable)).map(t => 't' + t.num) : [l.unit];
             const aims = this.aimsFor(l, this.anchor(tgt), centroid(m), units);
-            for (const u of units) issueOrder(this.unitSel(u), 'suppress', aims[u]);
+            for (const u of units) {
+              const sp = (l.spots && l.spots[u]) || {}, from = centroid(this.liveMembers(u));
+              issueOrder(this.unitSel(u), 'suppress', Object.assign({}, aims[u], { len: sp.len || ZONE.len, wid: sp.wid || ZONE.wid,
+                ang: sp.ang != null ? sp.ang : angleTo(from.x, from.y, aims[u].x, aims[u].y) }));
+            }
           } else issueOrder(sel, 'suppress', this.anchor(tgt));
           l.status = 'done';
           break;

@@ -2455,7 +2455,7 @@ function updateCombat(s, dt) {
   }
 
   if (s.suppressPt && !s.moving) {
-    const p = s.suppressPt;
+    const p = zonePoint(s.suppressPt);
     if (s.launcher && s.lRounds > 0 && s.launchCD <= 0 && chance(0.3) && launchAt(s, p.x, p.y)) { s.fireCD = 2; return; }
     fireArea(s, p.x, p.y);
     return;
@@ -2807,6 +2807,13 @@ function wstat(s, W) {
   let e = side.get(W.name);
   if (!e) { e = { name: W.name, cls: weaponClass(W), shots: 0, hits: 0, kia: 0, serious: 0, light: 0 }; side.set(W.name, e); }
   return e;
+}
+
+// A point in a beaten zone, spread evenly over it; a bare point is itself.
+function zonePoint(p) {
+  if (!p.len) return p;
+  const r = Math.sqrt(rand()), a = rand() * Math.PI * 2, lx = Math.cos(a) * r * p.len / 2, ly = Math.sin(a) * r * p.wid / 2;
+  return { x: p.x + lx * Math.cos(p.ang) - ly * Math.sin(p.ang), y: p.y + lx * Math.sin(p.ang) + ly * Math.cos(p.ang) };
 }
 
 // ---- src/fog.js
@@ -3321,8 +3328,20 @@ function issueOrder(sel, type, arg) {
       G.toast(who + ': Bounding overwatch.');
       break;
     }
-    case 'suppress':
-      for (const s of members) { s.suppressPt = { x: arg.x, y: arg.y }; s.priorityId = null; if (s.fireControl === 'hold') s.fireControl = 'free'; }
+    case 'suppress': {
+      // Each team fires on its own beaten zone: several teams on one point side by side,
+      // 12 m apart across it; the leader joins the first team's zone.
+      const groups = new Map();
+      for (const s of members) { const k = s.team.num || (members.find(o => o.team.num) || s).team.num; if (!groups.has(k)) groups.set(k, []); groups.get(k).push(s); }
+      const keys = [...groups.keys()].sort(), c = centroid(members);
+      keys.forEach((k, i) => {
+        const men = groups.get(k), from = centroid(men), h = angleTo(c.x, c.y, arg.x, arg.y);
+        const o = arg.len || keys.length < 2 ? { x: 0, y: 0 } : rotateOffset((i - (keys.length - 1) / 2) * 12, 0, h);
+        const zone = { x: arg.x + o.x, y: arg.y + o.y, len: arg.len || ZONE.len, wid: arg.wid || ZONE.wid };
+        zone.ang = arg.ang != null ? arg.ang : angleTo(from.x, from.y, zone.x, zone.y);
+        for (const s of men) { s.suppressPt = zone; s.priorityId = null; if (s.fireControl === 'hold') s.fireControl = 'free'; }
+      });
+    }
       G.log(who + ': Suppressing, bearing ' + pad3(bearing(members[0].x, members[0].y, arg.x, arg.y)) + '.', 'fire');
       break;
     case 'lift':
@@ -5638,6 +5657,7 @@ function render() {
   drawObjects(ctx);
   drawPlanGhosts(ctx);
   drawOrdersOverlay(ctx);
+  drawBeatenZones(ctx);
   if (G.ui.showDest) drawDestinations(ctx);
   drawProjectiles(ctx);
   drawEffects(ctx);
@@ -6160,31 +6180,8 @@ function drawPlanGhosts(ctx) {
       ctx.beginPath(); ctx.arc(p.x, p.y, View3D.drawingDrape ? Math.max(3, 0.9 * R.cam.zoom) : 3, 0, Math.PI * 2); ctx.fill();
     });
   }
-  // Suppression: each team's aim point, a crosshair with a dashed line of fire to it.
-  for (const gh of pr.ghosts) {
-    if (!gh.aim) continue;
-    const q = toScreen(gh.x, gh.y), f = toScreen(gh.from.x, gh.from.y), r = View3D.drawingDrape ? Math.max(10, 2.5 * R.cam.zoom) : 11;
-    ctx.save();
-    ctx.strokeStyle = 'rgba(214,96,24,0.75)'; ctx.lineWidth = View3D.drawingDrape ? lw * 0.6 : 1.4; ctx.setLineDash([4, 5]);
-    ctx.beginPath(); ctx.moveTo(f.x, f.y); ctx.lineTo(q.x, q.y); ctx.stroke(); ctx.setLineDash([]);
-    ctx.strokeStyle = 'rgba(214,96,24,0.95)'; ctx.lineWidth = View3D.drawingDrape ? lw * 0.8 : 2;
-    ctx.beginPath(); ctx.arc(q.x, q.y, r, 0, Math.PI * 2);
-    ctx.moveTo(q.x - r * 1.5, q.y); ctx.lineTo(q.x - r * 0.4, q.y); ctx.moveTo(q.x + r * 0.4, q.y); ctx.lineTo(q.x + r * 1.5, q.y);
-    ctx.moveTo(q.x, q.y - r * 1.5); ctx.lineTo(q.x, q.y - r * 0.4); ctx.moveTo(q.x, q.y + r * 0.4); ctx.lineTo(q.x, q.y + r * 1.5);
-    ctx.stroke();
-    ctx.restore();
-  }
   if (!View3D.drawingDrape) for (const gh of pr.ghosts) {
-    if (gh.aim) {
-      // The team number beside its aim point (set off the TRP when on it, like any ghost).
-      const q = ghostScreen(gh), sl = G.ui.sel;
-      const picked = sl && (sl.level === 'squad' || (sl.level === 'team' && 't' + sl.team.num === gh.unit) || (sl.level === 'group' && sl.teams.some(t => 't' + t.num === gh.unit)));
-      if (picked) { ctx.fillStyle = 'rgba(255,214,10,0.35)'; ctx.beginPath(); ctx.arc(q.x, q.y, 14, 0, Math.PI * 2); ctx.fill(); }
-      ctx.font = '700 13px "Saira Condensed", "Arial Narrow", sans-serif'; ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
-      ctx.lineWidth = 3; ctx.strokeStyle = 'rgba(247,245,236,0.95)'; ctx.strokeText(gh.unit[1] + ' FIRE', q.x, q.y);
-      ctx.fillStyle = 'rgb(176,70,14)'; ctx.fillText(gh.unit[1] + ' FIRE', q.x, q.y);
-      continue;
-    }
+    if (gh.aim) continue; // drawn as its beaten zone
     const q = ghostScreen(gh), at = toScreen(gh.x, gh.y);
     // An earlier step is fainter than where the plan leaves the team.
     ctx.globalAlpha = gh.final ? 0.85 : 0.45;
@@ -6209,10 +6206,82 @@ function ghostScreen(gh) {
   const onMark = Plan.graphics.some(g => { const a = toScreen(Plan.anchor(g).x, Plan.anchor(g).y); return Math.hypot(a.x - q.x, a.y - q.y) < 16; });
   return onMark ? { x: q.x + 24, y: q.y - 24 } : q;
 }
+// Beaten zones: each team's ground under fire, amber, with its line of fire while planning
+// and, for the one selected, handles: the ends to lengthen or turn it, the sides to widen it.
+function zoneHandles(z) {
+  const c = Math.cos(z.ang), s = Math.sin(z.ang), L = z.len / 2, W = z.wid / 2;
+  return [{ part: 'end', x: z.x + c * L, y: z.y + s * L }, { part: 'end', x: z.x - c * L, y: z.y - s * L },
+    { part: 'side', x: z.x - s * W, y: z.y + c * W }, { part: 'side', x: z.x + s * W, y: z.y - c * W }];
+}
+function inZone(z, w) {
+  const dx = w.x - z.x, dy = w.y - z.y, c = Math.cos(z.ang), s = Math.sin(z.ang);
+  const a = (dx * c + dy * s) / Math.max(1, z.len / 2), b = (-dx * s + dy * c) / Math.max(1, z.wid / 2);
+  return a * a + b * b <= 1.15;
+}
+// The zone or handle under a screen point (w: the ground there; proj: world to screen).
+function zoneHit(sx, sy, w, proj) {
+  const zs = Plan.beatenZones();
+  for (const z of zs) if (G.ui.zoneSel === z.key) for (const h of zoneHandles(z)) {
+    const q = proj(h.x, h.y);
+    if (!(q.z > 1) && Math.hypot(q.x - sx, q.y - sy) < 14) return { z, part: h.part };
+  }
+  if (!w) return null;
+  for (const z of zs) if (inZone(z, w)) return { z, part: 'body' };
+  return null;
+}
+// Reshape a zone from a drag: its body moves it, an end sets its depth and axis, a side its width.
+function dragZone(d, w) {
+  const z = d.z, g = Object.assign({}, d.orig);
+  if (d.part === 'body') { g.x = d.orig.x + w.x - d.from.x; g.y = d.orig.y + w.y - d.from.y; }
+  else if (d.part === 'end') { g.len = clamp(2 * dist(g.x, g.y, w.x, w.y), 6, 160); g.ang = angleTo(g.x, g.y, w.x, w.y); }
+  else { const c = Math.cos(g.ang), s = Math.sin(g.ang); g.wid = clamp(2 * Math.abs(-(w.x - g.x) * s + (w.y - g.y) * c), 4, 80); }
+  z.set(g);
+}
+function drawBeatenZones(ctx) {
+  const zs = Plan.beatenZones();
+  if (!zs.length) return;
+  const k = R.cam.zoom, big = View3D.drawingDrape;
+  ctx.save();
+  for (const z of zs) {
+    const q = toScreen(z.x, z.y), sel = G.ui.zoneSel === z.key;
+    if (!z.live && z.from) {
+      const f = toScreen(z.from.x, z.from.y);
+      ctx.strokeStyle = 'rgba(214,96,24,0.7)'; ctx.lineWidth = big ? Math.max(2, k) : 1.4; ctx.setLineDash([5, 5]);
+      ctx.beginPath(); ctx.moveTo(f.x, f.y); ctx.lineTo(q.x, q.y); ctx.stroke(); ctx.setLineDash([]);
+    }
+    ctx.fillStyle = sel ? 'rgba(255,170,60,0.32)' : 'rgba(214,96,24,0.2)';
+    ctx.strokeStyle = sel ? 'rgba(255,214,10,0.95)' : 'rgba(214,96,24,0.9)'; ctx.lineWidth = big ? Math.max(2, 1.2 * k) : sel ? 2.5 : 1.8;
+    ctx.beginPath(); ctx.ellipse(q.x, q.y, Math.max(4, z.len / 2 * k), Math.max(3, z.wid / 2 * k), z.ang, 0, Math.PI * 2); ctx.fill(); ctx.stroke();
+    // Strike marks along the axis, where the fire falls thickest.
+    ctx.strokeStyle = 'rgba(176,70,14,0.6)'; ctx.lineWidth = 1;
+    for (let i = -2; i <= 2; i++) {
+      const t = i / 5 * z.len, x = z.x + Math.cos(z.ang) * t, y = z.y + Math.sin(z.ang) * t, p = toScreen(x, y);
+      ctx.beginPath(); ctx.moveTo(p.x - 3, p.y - 3); ctx.lineTo(p.x + 3, p.y + 3); ctx.moveTo(p.x + 3, p.y - 3); ctx.lineTo(p.x - 3, p.y + 3); ctx.stroke();
+    }
+    const fs = big ? Math.max(13, 2.2 * k) : 12;
+    ctx.font = '700 ' + Math.round(fs) + 'px "Saira Condensed", "Arial Narrow", sans-serif'; ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+    const label = (z.unit === 'squad' ? 'SQD' : z.unit[1]) + ' FIRE';
+    ctx.lineWidth = 3; ctx.strokeStyle = 'rgba(247,245,236,0.95)'; ctx.strokeText(label, q.x, q.y - Math.max(10, z.wid / 2 * k) - 8);
+    ctx.fillStyle = 'rgb(176,70,14)'; ctx.fillText(label, q.x, q.y - Math.max(10, z.wid / 2 * k) - 8);
+    if (sel) for (const h of zoneHandles(z)) {
+      const p = toScreen(h.x, h.y);
+      ctx.fillStyle = '#ffd60a'; ctx.strokeStyle = '#1c2b3a'; ctx.lineWidth = 1.5;
+      ctx.beginPath();
+      if (h.part === 'end') ctx.arc(p.x, p.y, 6, 0, Math.PI * 2); else ctx.rect(p.x - 5, p.y - 5, 10, 10);
+      ctx.fill(); ctx.stroke();
+    }
+  }
+  ctx.restore();
+}
+
 function ghostAt(sx, sy) {
   if (!Plan.planning) return null;
   let best = null, bd = 20;
-  for (const gh of Plan.projection().ghosts) { const q = ghostScreen(gh), d = Math.hypot(q.x - sx, q.y - sy); if (d < bd) { bd = d; best = gh; } }
+  for (const gh of Plan.projection().ghosts) {
+    if (gh.aim) continue; // a beaten zone is taken by its own area
+    const q = ghostScreen(gh), d = Math.hypot(q.x - sx, q.y - sy);
+    if (d < bd) { bd = d; best = gh; }
+  }
   return best;
 }
 
@@ -6465,7 +6534,7 @@ function drawOrdersOverlay(ctx) {
     ctx.strokeStyle = OVL.blue; ctx.globalAlpha = 0.6; ctx.lineWidth = 1.2; ctx.setLineDash([6, 4]);
     for (const s of t.shooters) { const a = toScreen(s.x, s.y); ctx.beginPath(); ctx.moveTo(a.x, a.y); ctx.lineTo(b.x, b.y); ctx.stroke(); }
     ctx.setLineDash([]); ctx.globalAlpha = 1;
-    drawTarget(ctx, t.pt.x, t.pt.y, 6, 'SUPP');
+    if (!t.pt.len) drawTarget(ctx, t.pt.x, t.pt.y, 6, 'SUPP');
   }
   // Sectors of fire for selected men told to watch a direction.
   for (const s of selSet) {
@@ -7788,6 +7857,9 @@ const GRAPHIC_KINDS = {
   rel:  { label: 'Release point', short: 'RP', numbered: true },
   trp:  { label: 'Target reference point', short: 'TRP', numbered: true },
 };
+// A team's beaten zone when suppressing: the ground its fire falls on, an ellipse along its
+// line of fire, len m deep and wid m wide; the men fire at points spread over it.
+const ZONE = { len: 30, wid: 10 };
 // Plan lines whose teams can each be given their own spot by dragging their ghosts.
 const SPOT_TASKS = ['move', 'route', 'bound', 'assault', 'occupy', 'sbf', 'suppress'];
 // What placing a control measure means for a selected unit: its next step of the plan.
@@ -8343,6 +8415,37 @@ const Plan = {
     });
   },
 
+  // Every beaten zone on the map: while planning, those of the suppress lines (kept in the
+  // line's spots: offset, depth, width, axis); after step-off, those the teams are firing
+  // on. Each comes with set(), which reshapes it where it is kept.
+  beatenZones() {
+    const out = [];
+    if (!G.squads.blue) return out;
+    if (this.planning) {
+      for (const gh of this.projection().ghosts) {
+        if (!gh.aim) continue;
+        const l = gh.line, u = gh.unit, sp = (l.spots && l.spots[u]) || {}, tg = this.anchor(this.graphic(l.target));
+        out.push({ x: gh.x, y: gh.y, len: sp.len || ZONE.len, wid: sp.wid || ZONE.wid, ang: sp.ang != null ? sp.ang : angleTo(gh.from.x, gh.from.y, gh.x, gh.y),
+          from: gh.from, unit: u, key: 'L' + l.id + u,
+          set: (z) => { l.spots = l.spots || {}; l.spots[u] = { dx: z.x - tg.x, dy: z.y - tg.y, len: z.len, wid: z.wid, ang: z.ang }; } });
+      }
+      return out;
+    }
+    const by = new Map();
+    for (const s of G.squads.blue.all) {
+      const p = s.suppressPt;
+      if (!s.active || !p || !p.len) continue;
+      if (!by.has(p)) by.set(p, []);
+      by.get(p).push(s);
+    }
+    for (const [p, men] of by) {
+      const t = men.find(s => s.team.num);
+      out.push({ x: p.x, y: p.y, len: p.len, wid: p.wid, ang: p.ang, from: centroid(men), unit: t ? 't' + t.team.num : 'squad', key: p, live: true,
+        set: (z) => Object.assign(p, { x: z.x, y: z.y, len: z.len, wid: z.wid, ang: z.ang }) });
+    }
+    return out;
+  },
+
   // Where each team of a suppress line aims: its dragged aim point, or (a squad) the teams'
   // fire spread 12 m apart across the target as seen from the squad, or the point itself.
   aimsFor(l, dest, from, units) {
@@ -8456,7 +8559,11 @@ const Plan = {
             // Each team on its own aim point.
             const sq = G.squads.blue, units = l.unit === 'squad' ? sq.teams.filter(t => t.members.some(commandable)).map(t => 't' + t.num) : [l.unit];
             const aims = this.aimsFor(l, this.anchor(tgt), centroid(m), units);
-            for (const u of units) issueOrder(this.unitSel(u), 'suppress', aims[u]);
+            for (const u of units) {
+              const sp = (l.spots && l.spots[u]) || {}, from = centroid(this.liveMembers(u));
+              issueOrder(this.unitSel(u), 'suppress', Object.assign({}, aims[u], { len: sp.len || ZONE.len, wid: sp.wid || ZONE.wid,
+                ang: sp.ang != null ? sp.ang : angleTo(from.x, from.y, aims[u].x, aims[u].y) }));
+            }
           } else issueOrder(sel, 'suppress', this.anchor(tgt));
           l.status = 'done';
           break;
@@ -9614,6 +9721,7 @@ const View3D = {
       Fog.draw(ctx);
       drawPlan(ctx); drawPlanGhosts(ctx); drawOrdersOverlay(ctx); drawProjectiles(ctx); drawEffects(ctx);
       drawCones(ctx); drawGhostFormation(ctx); drawNudge(ctx); drawUnitDrag(ctx); drawTapes(ctx);
+      drawBeatenZones(ctx);
       if (G.ui.showDest) drawDestinations(ctx);
     } finally { R.cam = save.cam; R.w = save.w; R.h = save.h; this.drawingDrape = false; }
     t.tex.needsUpdate = true;
@@ -9857,7 +9965,7 @@ const View3D = {
   // ------------------------------------------------------------ plan ghosts
   // Where the plan leaves each unit: a pale peg with the unit's name, to tap and plan on from.
   updateGhosts() {
-    const gs = Plan.planning ? Plan.projection().ghosts : [], k = this.pegScale();
+    const gs = Plan.planning ? Plan.projection().ghosts.filter(g => !g.aim) : [], k = this.pegScale();
     this.ghostList = gs;
     gs.forEach((gh, i) => {
       let m = this.ghostPegs[i];
@@ -9994,13 +10102,17 @@ const View3D = {
       this.pointers.set(e.pointerId, { x: e.offsetX, y: e.offsetY, sx: e.offsetX, sy: e.offsetY, button: e.button });
       this.moved = this.pointers.size > 1;
       this.drag = { turn: e.button === 2 || e.shiftKey };
+      // A beaten zone, or a handle of the selected one: dragged to reshape it.
+      const w0 = this.pointers.size === 1 && e.button === 0 && !e.shiftKey && G.running && !G.over && !Plan.tool ? this.groundAt(e.offsetX, e.offsetY) : null;
+      this.dragZ = w0 ? zoneHit(e.offsetX, e.offsetY, w0, (x, y) => this.screenOf(x, y)) : null;
+      if (this.dragZ) { const z = this.dragZ.z; this.dragZ.orig = { x: z.x, y: z.y, len: z.len, wid: z.wid, ang: z.ang }; this.dragZ.from = w0; }
       // While planning, a team's ghost under the pointer is dragged to give the team its spot.
-      this.dragGh = this.pointers.size === 1 && e.button === 0 && !e.shiftKey && G.running && Plan.planning && !Plan.tool ? this.ghostAt(e.offsetX, e.offsetY) : null;
+      this.dragGh = !this.dragZ && this.pointers.size === 1 && e.button === 0 && !e.shiftKey && G.running && Plan.planning && !Plan.tool ? this.ghostAt(e.offsetX, e.offsetY) : null;
       // A finger (or the left button) pressed on one of our pieces drags the unit to a new place.
-      this.dragU = !this.dragGh && this.pointers.size === 1 && e.button === 0 && !e.shiftKey && G.running && !G.over && !Plan.tool && !G.ui.measuring ? UI.unitDragStart(this.pieceAt(e.offsetX, e.offsetY)) : null;
+      this.dragU = !this.dragZ && !this.dragGh && this.pointers.size === 1 && e.button === 0 && !e.shiftKey && G.running && !G.over && !Plan.tool && !G.ui.measuring ? UI.unitDragStart(this.pieceAt(e.offsetX, e.offsetY)) : null;
       if (this.pointers.size > 1 && this.dragU) { this.dragU = null; G.ui.unitDrag = null; }
       // While planning, a control measure under the finger is dragged instead of the view.
-      this.dragG = !this.dragU && this.pointers.size === 1 && G.running && Plan.planning && !Plan.tool && e.button !== 2 ? this.hitGraphic(e.offsetX, e.offsetY) : null;
+      this.dragG = !this.dragZ && !this.dragU && this.pointers.size === 1 && G.running && Plan.planning && !Plan.tool && e.button !== 2 ? this.hitGraphic(e.offsetX, e.offsetY) : null;
       if (this.pointers.size === 2) this.pinch = this.twoFinger();
     });
     cv.addEventListener('pointermove', (e) => {
@@ -10020,6 +10132,9 @@ const View3D = {
         c.yaw += (now.a - this.pinch.a);
         c.pitch += (now.my - this.pinch.my) * 0.006;
         this.pinch = now;
+      } else if (this.pointers.size === 1 && this.moved && this.dragZ) {
+        const w = this.groundAt(p.x, p.y);
+        if (w) { dragZone(this.dragZ, w); this.markDirty(); }
       } else if (this.pointers.size === 1 && this.moved && this.dragGh) {
         const w = this.groundAt(p.x, p.y), l = this.dragGh.line;
         if (w && SPOT_TASKS.includes(l.task)) {
@@ -10053,6 +10168,11 @@ const View3D = {
       const p = this.pointers.get(e.pointerId);
       if (!p) return;
       this.pointers.delete(e.pointerId);
+      if (e.type === 'pointerup' && this.dragZ && this.pointers.size === 0) {
+        const d = this.dragZ; this.dragZ = null;
+        zoneDone(d, this.moved); this.markDirty();
+        return;
+      }
       if (e.type === 'pointerup' && this.dragGh && this.pointers.size === 0) {
         const g = this.dragGh; this.dragGh = null;
         if (!this.moved) UI.ghostTap(g, e.shiftKey || e.ctrlKey || e.metaKey);
@@ -10126,16 +10246,19 @@ const Input = {
       if (this.pointers.size === 1) {
         this.moved = false;
         this.camStart = { x: R.cam.x, y: R.cam.y };
+        // A beaten zone (or a handle of the selected one) under the pointer: dragged to reshape it.
+        this.dragZ = e.button === 0 && G.running && !G.over && !Plan.tool && !G.ui.measuring ? zoneHit(e.offsetX, e.offsetY, toWorld(e.offsetX, e.offsetY), toScreen) : null;
+        if (this.dragZ) { const z = this.dragZ.z; this.dragZ.orig = { x: z.x, y: z.y, len: z.len, wid: z.wid, ang: z.ang }; this.dragZ.from = toWorld(e.offsetX, e.offsetY); }
         // While planning, a plan ghost under the pointer is tapped or dragged to its spot.
-        this.dragGh = e.button === 0 && G.running && Plan.planning && !Plan.tool ? ghostAt(e.offsetX, e.offsetY) : null;
+        this.dragGh = !this.dragZ && e.button === 0 && G.running && Plan.planning && !Plan.tool ? ghostAt(e.offsetX, e.offsetY) : null;
         if (this.dragGh) { const q = ghostScreen(this.dragGh), w = toScreen(this.dragGh.x, this.dragGh.y); this.dragGh.off = { x: q.x - w.x, y: q.y - w.y }; }
         // Right button held after step-off: where the selected unit goes, then drag to set its front.
         this.faceDrag = e.button === 2 && G.running && !G.over && !Plan.planning && G.ui.sel ? { at: toWorld(e.offsetX, e.offsetY), to: null } : null;
         G.ui.faceDrag = this.faceDrag;
         // A finger (or the left button) pressed on one of our pieces drags the unit to a new place.
-        this.dragU = !this.dragGh && e.button === 0 && G.running && !G.over && !Plan.tool && !G.ui.measuring ? UI.unitDragStart(pieceAt(e.offsetX, e.offsetY)) : null;
+        this.dragU = !this.dragZ && !this.dragGh && e.button === 0 && G.running && !G.over && !Plan.tool && !G.ui.measuring ? UI.unitDragStart(pieceAt(e.offsetX, e.offsetY)) : null;
         // While planning, a control measure under the finger is dragged instead of the map.
-        this.dragG = !this.dragU && !this.dragGh && G.running && Plan.planning && !Plan.tool && e.button !== 2 ? Plan.hitGraphic(e.offsetX, e.offsetY) : null;
+        this.dragG = !this.dragZ && !this.dragU && !this.dragGh && G.running && Plan.planning && !Plan.tool && e.button !== 2 ? Plan.hitGraphic(e.offsetX, e.offsetY) : null;
       } else if (this.pointers.size === 2) {
         this.moved = true;
         if (this.dragU) { this.dragU = null; G.ui.unitDrag = null; }
@@ -10152,7 +10275,9 @@ const Input = {
       p.x = e.offsetX; p.y = e.offsetY;
       if (this.pointers.size === 1) {
         if (Math.hypot(p.x - p.sx, p.y - p.sy) > 8) this.moved = true;
-        if (this.moved && this.dragGh) {
+        if (this.moved && this.dragZ) {
+          dragZone(this.dragZ, toWorld(p.x, p.y));
+        } else if (this.moved && this.dragGh) {
           const g = this.dragGh, l = g.line;
           if (SPOT_TASKS.includes(l.task)) {
             // Kept as an offset from the checkpoint (or objective), so the spot moves with it.
@@ -10192,6 +10317,11 @@ const Input = {
       const p = this.pointers.get(e.pointerId);
       if (!p) return;
       this.pointers.delete(e.pointerId);
+      if (e.type === 'pointerup' && this.dragZ && this.pointers.size === 0) {
+        const d = this.dragZ; this.dragZ = null;
+        zoneDone(d, this.moved);
+        return;
+      }
       if (e.type === 'pointerup' && this.dragGh && this.pointers.size === 0) {
         const g = this.dragGh; this.dragGh = null;
         if (!this.moved) UI.ghostTap(g, e.shiftKey || e.ctrlKey || e.metaKey);
@@ -10269,7 +10399,8 @@ const Input = {
       else if (k === '1' || k === '2' || k === '3') UI.selectTeam(+k);
       else if (k === '0' || k === '`') UI.select({ level: 'squad', squad: G.squads.blue });
       else if (k === 'Escape') {
-        if ($('planMenu')) UI.closePlanMenu();
+        if (G.ui.zoneSel) G.ui.zoneSel = null;
+        else if ($('planMenu')) UI.closePlanMenu();
         else if (G.ui.measuring) UI.setMeasuring(false);
         else if (Plan.tool) { Plan.tool = null; Plan.plStart = null; Plan.routeDraft = null; Plan.routeUnit = null; OPORD.refresh(); }
         else if (G.ui.pending) { G.ui.pending = null; UI.refreshOrders(); }
@@ -10278,6 +10409,15 @@ const Input = {
     });
   },
 };
+
+// A beaten zone let go: a tap selects it (its handles show) or clears it; a drag reshaped it.
+function zoneDone(d, moved) {
+  if (!moved) { G.ui.zoneSel = G.ui.zoneSel === d.z.key ? null : d.z.key; return; }
+  G.ui.zoneSel = d.z.key;
+  if (d.z.live) G.log(PLAN_UNITS[d.z.unit] + ': Shifting fire.', 'fire');
+  else OPORD.refresh();
+  View3D.markDirty();
+}
 
 // ---- src/main.js
 'use strict';

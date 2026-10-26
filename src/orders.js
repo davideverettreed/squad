@@ -404,8 +404,20 @@ function issueOrder(sel, type, arg) {
       G.toast(who + ': Bounding overwatch.');
       break;
     }
-    case 'suppress':
-      for (const s of members) { s.suppressPt = { x: arg.x, y: arg.y }; s.priorityId = null; if (s.fireControl === 'hold') s.fireControl = 'free'; }
+    case 'suppress': {
+      // Each team fires on its own beaten zone: several teams on one point side by side,
+      // 12 m apart across it; the leader joins the first team's zone.
+      const groups = new Map();
+      for (const s of members) { const k = s.team.num || (members.find(o => o.team.num) || s).team.num; if (!groups.has(k)) groups.set(k, []); groups.get(k).push(s); }
+      const keys = [...groups.keys()].sort(), c = centroid(members);
+      keys.forEach((k, i) => {
+        const men = groups.get(k), from = centroid(men), h = angleTo(c.x, c.y, arg.x, arg.y);
+        const o = arg.len || keys.length < 2 ? { x: 0, y: 0 } : rotateOffset((i - (keys.length - 1) / 2) * 12, 0, h);
+        const zone = { x: arg.x + o.x, y: arg.y + o.y, len: arg.len || ZONE.len, wid: arg.wid || ZONE.wid };
+        zone.ang = arg.ang != null ? arg.ang : angleTo(from.x, from.y, zone.x, zone.y);
+        for (const s of men) { s.suppressPt = zone; s.priorityId = null; if (s.fireControl === 'hold') s.fireControl = 'free'; }
+      });
+    }
       G.log(who + ': Suppressing, bearing ' + pad3(bearing(members[0].x, members[0].y, arg.x, arg.y)) + '.', 'fire');
       break;
     case 'lift':

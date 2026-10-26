@@ -219,6 +219,7 @@ const View3D = {
       Fog.draw(ctx);
       drawPlan(ctx); drawPlanGhosts(ctx); drawOrdersOverlay(ctx); drawProjectiles(ctx); drawEffects(ctx);
       drawCones(ctx); drawGhostFormation(ctx); drawNudge(ctx); drawUnitDrag(ctx); drawTapes(ctx);
+      drawBeatenZones(ctx);
       if (G.ui.showDest) drawDestinations(ctx);
     } finally { R.cam = save.cam; R.w = save.w; R.h = save.h; this.drawingDrape = false; }
     t.tex.needsUpdate = true;
@@ -462,7 +463,7 @@ const View3D = {
   // ------------------------------------------------------------ plan ghosts
   // Where the plan leaves each unit: a pale peg with the unit's name, to tap and plan on from.
   updateGhosts() {
-    const gs = Plan.planning ? Plan.projection().ghosts : [], k = this.pegScale();
+    const gs = Plan.planning ? Plan.projection().ghosts.filter(g => !g.aim) : [], k = this.pegScale();
     this.ghostList = gs;
     gs.forEach((gh, i) => {
       let m = this.ghostPegs[i];
@@ -599,13 +600,17 @@ const View3D = {
       this.pointers.set(e.pointerId, { x: e.offsetX, y: e.offsetY, sx: e.offsetX, sy: e.offsetY, button: e.button });
       this.moved = this.pointers.size > 1;
       this.drag = { turn: e.button === 2 || e.shiftKey };
+      // A beaten zone, or a handle of the selected one: dragged to reshape it.
+      const w0 = this.pointers.size === 1 && e.button === 0 && !e.shiftKey && G.running && !G.over && !Plan.tool ? this.groundAt(e.offsetX, e.offsetY) : null;
+      this.dragZ = w0 ? zoneHit(e.offsetX, e.offsetY, w0, (x, y) => this.screenOf(x, y)) : null;
+      if (this.dragZ) { const z = this.dragZ.z; this.dragZ.orig = { x: z.x, y: z.y, len: z.len, wid: z.wid, ang: z.ang }; this.dragZ.from = w0; }
       // While planning, a team's ghost under the pointer is dragged to give the team its spot.
-      this.dragGh = this.pointers.size === 1 && e.button === 0 && !e.shiftKey && G.running && Plan.planning && !Plan.tool ? this.ghostAt(e.offsetX, e.offsetY) : null;
+      this.dragGh = !this.dragZ && this.pointers.size === 1 && e.button === 0 && !e.shiftKey && G.running && Plan.planning && !Plan.tool ? this.ghostAt(e.offsetX, e.offsetY) : null;
       // A finger (or the left button) pressed on one of our pieces drags the unit to a new place.
-      this.dragU = !this.dragGh && this.pointers.size === 1 && e.button === 0 && !e.shiftKey && G.running && !G.over && !Plan.tool && !G.ui.measuring ? UI.unitDragStart(this.pieceAt(e.offsetX, e.offsetY)) : null;
+      this.dragU = !this.dragZ && !this.dragGh && this.pointers.size === 1 && e.button === 0 && !e.shiftKey && G.running && !G.over && !Plan.tool && !G.ui.measuring ? UI.unitDragStart(this.pieceAt(e.offsetX, e.offsetY)) : null;
       if (this.pointers.size > 1 && this.dragU) { this.dragU = null; G.ui.unitDrag = null; }
       // While planning, a control measure under the finger is dragged instead of the view.
-      this.dragG = !this.dragU && this.pointers.size === 1 && G.running && Plan.planning && !Plan.tool && e.button !== 2 ? this.hitGraphic(e.offsetX, e.offsetY) : null;
+      this.dragG = !this.dragZ && !this.dragU && this.pointers.size === 1 && G.running && Plan.planning && !Plan.tool && e.button !== 2 ? this.hitGraphic(e.offsetX, e.offsetY) : null;
       if (this.pointers.size === 2) this.pinch = this.twoFinger();
     });
     cv.addEventListener('pointermove', (e) => {
@@ -625,6 +630,9 @@ const View3D = {
         c.yaw += (now.a - this.pinch.a);
         c.pitch += (now.my - this.pinch.my) * 0.006;
         this.pinch = now;
+      } else if (this.pointers.size === 1 && this.moved && this.dragZ) {
+        const w = this.groundAt(p.x, p.y);
+        if (w) { dragZone(this.dragZ, w); this.markDirty(); }
       } else if (this.pointers.size === 1 && this.moved && this.dragGh) {
         const w = this.groundAt(p.x, p.y), l = this.dragGh.line;
         if (w && SPOT_TASKS.includes(l.task)) {
@@ -658,6 +666,11 @@ const View3D = {
       const p = this.pointers.get(e.pointerId);
       if (!p) return;
       this.pointers.delete(e.pointerId);
+      if (e.type === 'pointerup' && this.dragZ && this.pointers.size === 0) {
+        const d = this.dragZ; this.dragZ = null;
+        zoneDone(d, this.moved); this.markDirty();
+        return;
+      }
       if (e.type === 'pointerup' && this.dragGh && this.pointers.size === 0) {
         const g = this.dragGh; this.dragGh = null;
         if (!this.moved) UI.ghostTap(g, e.shiftKey || e.ctrlKey || e.metaKey);
