@@ -17,6 +17,8 @@ const GRAPHIC_KINDS = {
   rel:  { label: 'Release point', short: 'RP', numbered: true },
   trp:  { label: 'Target reference point', short: 'TRP', numbered: true },
 };
+// What placing a control measure means for a selected unit: its next step of the plan.
+const TOOL_STEPS = { cp: 'cp', rel: 'rel', aslt: 'aslt', fp: 'fp', sbf: 'sbf', obj: 'obj', trp: 'trp' };
 // Control measures grouped as the graphics manuals group them: points, lines and areas.
 const GRAPHIC_GROUPS = [
   ['Points', ['cp', 'rel', 'rly', 'ccp', 'trp', 'fp', 'sbf']],
@@ -190,6 +192,8 @@ const Plan = {
     const kind = this.tool, K = GRAPHIC_KINDS[kind];
     if (!kind) return false;
     if (K.multi) {
+      // A route drawn with a unit selected is that unit's route.
+      if (!this.routeDraft && !this.routeUnit && G.ui.sel) this.routeUnit = this.planUnit(G.ui.sel) || null;
       this.routeDraft = this.routeDraft || [];
       const last = this.routeDraft[this.routeDraft.length - 1];
       if (last && this.routeDraft.length > 1 && dist(last.x, last.y, w.x, w.y) < 18 / R.cam.zoom) return this.finishRoute();
@@ -205,9 +209,17 @@ const Plan = {
       if (K.single) this.tool = null;
     } else {
       // The tool stays on, so each tap places another; tap its button again (or Esc) to stop.
+      // With a unit selected, each one is also that unit's next step: checkpoint after
+      // checkpoint makes a march, each leg from the last.
+      const step = TOOL_STEPS[kind], sel = G.ui.sel;
+      if (step && sel && this.planUnit(sel)) {
+        this.addStep(sel, w, step);
+        G.toast(this.graphic(this.selected).name + ' placed, and ' + selName(sel) + ' moves on to it after its last step. Tap again for the next one, or tap ' + K.short + ' to stop.');
+        return true;
+      }
       const g = this.addGraphic(kind, [w]);
       this.selected = g.id;
-      G.toast(g.name + ' placed. Tap again for another, or tap ' + K.short + ' to stop.');
+      G.toast(g.name + ' placed. Tap again for another, or tap ' + K.short + ' to stop.' + (step ? ' Select a unit first to plan its move to each one.' : ''));
     }
     OPORD.refresh();
     return true;
@@ -284,6 +296,7 @@ const Plan = {
       case 'obj': g = this.addGraphic('obj', [w]); l = this.addLine({ unit, task: 'assault', target: g.id }); break;
       case 'trp': g = this.addGraphic('trp', [w]); l = this.addLine({ unit, task: 'suppress', target: g.id }); break;
       case 'aslt': g = this.addGraphic('aslt', [w]); l = this.addLine({ unit, task: 'move', where: g.id, mode }); break;
+      case 'rel': g = this.addGraphic('rel', [w]); l = this.addLine({ unit, task: 'move', where: g.id, mode }); break;
       case 'rte':
         this.tool = 'rte'; this.routeUnit = unit; this.routeDraft = [{ x: w.x, y: w.y }];
         G.toast('Route for ' + PLAN_UNITS[unit] + ': tap each waypoint, then Finish route.');
