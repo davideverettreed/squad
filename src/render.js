@@ -1345,6 +1345,14 @@ function drawOrdersOverlay(ctx) {
   const blue = G.squads.blue ? G.squads.blue.all.filter(s => s.active) : [];
   ctx.lineCap = 'round'; ctx.lineJoin = 'round';
 
+  // The selection halo follows the selected men's routes: soft gold bands, widest and
+  // faintest outside, stroked as one path per band so overlapping routes do not stack.
+  const haloed = blue.filter(s => s.path.length && selSet.has(s));
+  if (haloed.length) {
+    ctx.beginPath();
+    for (const s of haloed) [s, ...s.path].forEach((w, i) => { const q = toScreen(w.x, w.y); i ? ctx.lineTo(q.x, q.y) : ctx.moveTo(q.x, q.y); });
+    for (const [w, a] of [[22, 0.12], [14, 0.2], [7, 0.32]]) { ctx.strokeStyle = 'rgba(255,214,10,' + a + ')'; ctx.lineWidth = w; ctx.stroke(); }
+  }
   // Routes, with an arrowhead at the end. Assaults use the direction-of-attack arrow.
   for (const s of blue) {
     if (!s.path.length) continue;
