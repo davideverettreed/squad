@@ -46,7 +46,7 @@ const UI = {
         ['order', 'suppress', 'Suppress'], ['now', 'lift', 'Lift']] },
       { label: 'Weapons', items: [['order', 'launcher', '40mm'], ['order', 'frag', 'Frag']] },
       { label: 'Act', items: [['now', 'cover', 'Take cover'], ['now', 'fallback', 'Fall back'], ['now', 'halt', 'Halt'], ['order', 'face', 'Face']] },
-      { label: 'Formation', items: [...FORMATION_KEYS.map(k => ['formation', k, FORMATIONS[k].label]), ['spacing', 'closer', 'Closer −'], ['spacing', 'wider', 'Wider +']] },
+      { label: 'Formation', items: [...FORMATION_KEYS.map(k => ['formation', k, FORMATIONS[k].label]), ['spacing', 'closer', 'Closer (Z)'], ['spacing', 'wider', 'Wider (X)']] },
     ];
     const grid = $('orderGrid');
     for (const g of groups) {
