@@ -463,7 +463,7 @@ const View3D = {
   // ------------------------------------------------------------ plan ghosts
   // Where the plan leaves each unit: a pale peg with the unit's name, to tap and plan on from.
   updateGhosts() {
-    const gs = Plan.planning ? Plan.projection().ghosts.filter(g => !g.aim) : [], k = this.pegScale();
+    const gs = G.running && !G.over && G.squads.blue ? Plan.ghosts().filter(g => !g.aim) : [], k = this.pegScale();
     this.ghostList = gs;
     gs.forEach((gh, i) => {
       let m = this.ghostPegs[i];
@@ -605,7 +605,7 @@ const View3D = {
       this.dragZ = w0 ? zoneHit(e.offsetX, e.offsetY, w0, (x, y) => this.screenOf(x, y)) : null;
       if (this.dragZ) { const z = this.dragZ.z; this.dragZ.orig = { x: z.x, y: z.y, len: z.len, wid: z.wid, ang: z.ang }; this.dragZ.from = w0; }
       // While planning, a team's ghost under the pointer is dragged to give the team its spot.
-      this.dragGh = !this.dragZ && this.pointers.size === 1 && e.button === 0 && !e.shiftKey && G.running && Plan.planning && !Plan.tool ? this.ghostAt(e.offsetX, e.offsetY) : null;
+      this.dragGh = !this.dragZ && this.pointers.size === 1 && e.button === 0 && !e.shiftKey && G.running && !G.over && !Plan.tool ? this.ghostAt(e.offsetX, e.offsetY) : null;
       // A finger (or the left button) pressed on one of our pieces drags the unit to a new place.
       this.dragU = !this.dragZ && !this.dragGh && this.pointers.size === 1 && e.button === 0 && !e.shiftKey && G.running && !G.over && !Plan.tool && !G.ui.measuring ? UI.unitDragStart(this.pieceAt(e.offsetX, e.offsetY)) : null;
       if (this.pointers.size > 1 && this.dragU) { this.dragU = null; G.ui.unitDrag = null; }
@@ -635,7 +635,8 @@ const View3D = {
         if (w) { dragZone(this.dragZ, w); this.markDirty(); }
       } else if (this.pointers.size === 1 && this.moved && this.dragGh) {
         const w = this.groundAt(p.x, p.y), l = this.dragGh.line;
-        if (w && SPOT_TASKS.includes(l.task)) {
+        if (w && this.dragGh.live) { this.dragGh.to = w; G.ui.liveDrag = this.dragGh; this.markDirty(); }
+        else if (w && SPOT_TASKS.includes(l.task)) {
           const a = Plan.anchor(Plan.graphic(l.task === 'assault' || l.task === 'suppress' ? l.target : l.where));
           l.spots = l.spots || {}; l.spots[this.dragGh.unit] = { dx: w.x - a.x, dy: w.y - a.y };
           this.markDirty();
@@ -674,8 +675,7 @@ const View3D = {
       if (e.type === 'pointerup' && this.dragGh && this.pointers.size === 0) {
         const g = this.dragGh; this.dragGh = null;
         if (!this.moved) UI.ghostTap(g, e.shiftKey || e.ctrlKey || e.metaKey);
-        else if (!SPOT_TASKS.includes(g.line.task)) UI.toast('Team spots can be given on a move, a bound, an assault, a fighting position, a support by fire position or a suppress line.');
-        else OPORD.refresh();
+        else ghostDropped(g);
         return;
       }
       if (e.type === 'pointerup' && this.dragU && this.pointers.size === 0) {

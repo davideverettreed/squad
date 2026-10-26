@@ -1,6 +1,6 @@
 // Offline support: keep the game and its icons in a cache so it opens without a
 // connection. The build stamps CACHE with a version, so each release replaces the last.
-const CACHE = 'squad-e0a05d9183';
+const CACHE = 'squad-c16ffd959f';
 const FILES = ['./', './index.html', './manifest.webmanifest', './icons/icon-192.png', './icons/icon-512.png', './icons/maskable-512.png'];
 
 self.addEventListener('install', (e) => {

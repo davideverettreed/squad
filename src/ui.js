@@ -151,7 +151,7 @@ const UI = {
     const sq = G.squads.blue, t = sq.teams[Number(gh.unit[1]) - 1], now = performance.now(), last = this.lastGhostTap;
     this.lastGhostTap = { unit: gh.unit, t: now };
     let teams;
-    if (last && last.unit === gh.unit && now - last.t < 380) teams = Plan.projection().ghosts.filter(o => o.name === gh.name).map(o => sq.teams[Number(o.unit[1]) - 1]);
+    if (last && last.unit === gh.unit && now - last.t < 380) teams = Plan.ghosts().filter(o => o.name === gh.name && !o.aim).map(o => sq.teams[Number(o.unit[1]) - 1]);
     else if (add) {
       const cur = G.ui.sel && G.ui.sel.level === 'team' ? [G.ui.sel.team] : G.ui.sel && G.ui.sel.level === 'group' ? G.ui.sel.teams.slice() : [];
       teams = cur.includes(t) ? cur.filter(x => x !== t) : [...cur, t];
@@ -159,7 +159,8 @@ const UI = {
     teams.sort((a, b) => a.num - b.num);
     if (!teams.length) { this.select(null); return; }
     this.select(teams.length === 1 ? { level: 'team', team: teams[0], squad: sq } : { level: 'group', squad: sq, teams, except: null });
-    this.toast(selName(G.ui.sel) + ' at ' + gh.name + ': tap the map for the next step. Shift-click or double-click a ghost to pick more; drag one to set its spot.');
+    this.toast(Plan.planning ? selName(G.ui.sel) + ' at ' + gh.name + ': tap the map for the next step. Shift-click or double-click a ghost to pick more; drag one to set its spot.'
+      : selName(G.ui.sel) + ' selected. Drag its ghost to send it somewhere else.');
   },
   selectAllBut(n) {
     const t = G.squads.blue && G.squads.blue.teams[n - 1];

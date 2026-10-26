@@ -1183,8 +1183,10 @@ function drawObjects(ctx) {
 // While planning: a dashed arrow for each planned move, and a dashed ghost counter of each
 // unit where its last move ends. Tapping a ghost picks that unit to plan its next step.
 function drawPlanGhosts(ctx) {
-  if (!Plan.planning || !G.squads.blue) return;
-  const pr = Plan.projection();
+  if (!G.squads.blue || !G.running) return;
+  // Planning: the whole plan. After step-off the ghosts stay: the steps still to come, and
+  // where each team moving on its own orders is going (its men's own end points as dots).
+  const pr = { legs: Plan.planning ? Plan.projection().legs : [], ghosts: Plan.ghosts() };
   ctx.save();
   // Heavier on the sand table, where the drawing is seen at a slant.
   const lw = View3D.drawingDrape ? Math.max(3, 1.5 * R.cam.zoom) : 2, dl = lw * 3.5;
@@ -1207,6 +1209,11 @@ function drawPlanGhosts(ctx) {
   for (const gh of pr.ghosts) {
     const t = sq.teams[Number(gh.unit[1]) - 1];
     if (!t || gh.aim) continue;
+    if (gh.live) {
+      ctx.fillStyle = 'rgba(31,79,191,0.45)';
+      for (const e of gh.ends) { const p = toScreen(e.x, e.y); ctx.beginPath(); ctx.arc(p.x, p.y, View3D.drawingDrape ? Math.max(3, 0.9 * R.cam.zoom) : 3, 0, Math.PI * 2); ctx.fill(); }
+      continue;
+    }
     ctx.fillStyle = gh.final ? 'rgba(31,79,191,0.55)' : 'rgba(31,79,191,0.3)';
     // In a fighting position the men line up across its sector; elsewhere, the team's formation.
     const fp = gh.line.task === 'occupy' ? Plan.graphic(gh.line.where) : null, live = t.members.filter(s => s.active);
@@ -1312,9 +1319,9 @@ function drawBeatenZones(ctx) {
 }
 
 function ghostAt(sx, sy) {
-  if (!Plan.planning) return null;
+  if (!G.running || G.over || !G.squads.blue) return null;
   let best = null, bd = 20;
-  for (const gh of Plan.projection().ghosts) {
+  for (const gh of Plan.ghosts()) {
     if (gh.aim) continue; // a beaten zone is taken by its own area
     const q = ghostScreen(gh), d = Math.hypot(q.x - sx, q.y - sy);
     if (d < bd) { bd = d; best = gh; }

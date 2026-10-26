@@ -514,6 +514,8 @@ const Plan = {
     }
     for (const l of this.lines) {
       if (TASKS[l.task].noUnit) continue;
+      // After step-off only what is still to come: lines waiting, under way or held up.
+      if (!this.planning && !['pending', 'active', 'stalled'].includes(l.status)) continue;
       // Suppression: no one moves; each team's aim point on the target is its ghost.
       if (l.task === 'suppress') {
         const tg = this.graphic(l.target);
@@ -573,6 +575,53 @@ const Plan = {
       const o = rotateOffset((k - (units.length - 1) / 2) * gap, 0, h), l = lines[k];
       if (l) l.spots = Object.assign(l.spots || {}, { [u]: { dx: o.x, dy: o.y } });
     });
+  },
+
+  // Every ghost on the map. Planning: the plan's. After step-off: the plan's steps still to
+  // come, and where each team moving on an order of its own (not a plan line) is going.
+  ghosts() {
+    const out = this.projection().ghosts;
+    if (this.planning || !G.squads.blue) return out;
+    for (const t of G.squads.blue.teams) {
+      const movers = t.members.filter(s => commandable(s) && s.path.length);
+      if (!movers.length || movers.some(s => this.onLine(s, Object.keys(TASKS)))) continue;
+      const ends = movers.map(s => s.path[s.path.length - 1]), c = centroid(ends);
+      const g = { unit: 't' + t.num, x: c.x, y: c.y, name: 'its destination', live: true, ends, mode: movers[0].moveMode, final: true };
+      // Being dragged: shown where the pointer has it.
+      const d = G.ui.liveDrag;
+      if (d && d.unit === g.unit && d.to) { const dx = d.to.x - c.x, dy = d.to.y - c.y; g.x = d.to.x; g.y = d.to.y; g.ends = ends.map(e => ({ x: e.x + dx, y: e.y + dy })); }
+      out.push(g);
+    }
+    return out;
+  },
+
+  // A ghost of a line under way dragged to a new spot: the team goes there now.
+  reissueTeam(l, u) {
+    const sq = G.squads.blue, team = sq.teams[Number(u[1]) - 1];
+    if (!team || !team.members.some(commandable)) return;
+    const dg = this.graphic(l.task === 'assault' || l.task === 'suppress' ? l.target : l.where);
+    if (!dg) return;
+    const spot = this.teamSpots(l, this.unitSel(l.unit), this.anchor(dg)).spots[u];
+    if (!spot) return;
+    switch (l.task) {
+      case 'move': case 'sbf': case 'route': teamMove(team, spot.x, spot.y, l.mode); break;
+      case 'assault':
+        teamMove(team, spot.x, spot.y, 'walk');
+        for (const s of team.members.filter(commandable)) { s.assault = true; s.fireControl = 'free'; }
+        break;
+      case 'occupy': occupyPosition({ level: 'team', team, squad: sq }, dg, { [u]: spot }); break;
+      case 'bound': {
+        // The bounding drill carries on, with this team's end point moved.
+        const c = G.controllers.find(x => x instanceof BoundController && x.members.some(s => s.team === team));
+        if (c) {
+          c.dests = c.dests || c.elements.map(() => ({ x: c.dest.x, y: c.dest.y }));
+          c.elements.forEach((e, k) => { if (e.some(s => s.team === team)) c.dests[k] = spot; });
+          c.starts = c.starts || c.elements.map(e => centroid(e));
+        } else teamMove(team, spot.x, spot.y, 'rush');
+        break;
+      }
+    }
+    G.log(PLAN_UNITS[u] + ': New spot at ' + dg.name + '.', 'plan');
   },
 
   // Every beaten zone on the map: while planning, those of the suppress lines (kept in the

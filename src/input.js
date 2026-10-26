@@ -18,7 +18,7 @@ const Input = {
         this.dragZ = e.button === 0 && G.running && !G.over && !Plan.tool && !G.ui.measuring ? zoneHit(e.offsetX, e.offsetY, toWorld(e.offsetX, e.offsetY), toScreen) : null;
         if (this.dragZ) { const z = this.dragZ.z; this.dragZ.orig = { x: z.x, y: z.y, len: z.len, wid: z.wid, ang: z.ang }; this.dragZ.from = toWorld(e.offsetX, e.offsetY); }
         // While planning, a plan ghost under the pointer is tapped or dragged to its spot.
-        this.dragGh = !this.dragZ && e.button === 0 && G.running && Plan.planning && !Plan.tool ? ghostAt(e.offsetX, e.offsetY) : null;
+        this.dragGh = !this.dragZ && e.button === 0 && G.running && !G.over && !Plan.tool ? ghostAt(e.offsetX, e.offsetY) : null;
         if (this.dragGh) { const q = ghostScreen(this.dragGh), w = toScreen(this.dragGh.x, this.dragGh.y); this.dragGh.off = { x: q.x - w.x, y: q.y - w.y }; }
         // Right button held after step-off: where the selected unit goes, then drag to set its front.
         this.faceDrag = e.button === 2 && G.running && !G.over && !Plan.planning && G.ui.sel ? { at: toWorld(e.offsetX, e.offsetY), to: null } : null;
@@ -47,7 +47,8 @@ const Input = {
           dragZone(this.dragZ, toWorld(p.x, p.y));
         } else if (this.moved && this.dragGh) {
           const g = this.dragGh, l = g.line;
-          if (SPOT_TASKS.includes(l.task)) {
+          if (g.live) { g.to = toWorld(p.x - g.off.x, p.y - g.off.y); G.ui.liveDrag = g; }
+          else if (SPOT_TASKS.includes(l.task)) {
             // Kept as an offset from the checkpoint (or objective), so the spot moves with it.
             const w = toWorld(p.x - g.off.x, p.y - g.off.y), a = Plan.anchor(Plan.graphic(l.task === 'assault' || l.task === 'suppress' ? l.target : l.where));
             l.spots = l.spots || {}; l.spots[g.unit] = { dx: w.x - a.x, dy: w.y - a.y };
@@ -93,8 +94,7 @@ const Input = {
       if (e.type === 'pointerup' && this.dragGh && this.pointers.size === 0) {
         const g = this.dragGh; this.dragGh = null;
         if (!this.moved) UI.ghostTap(g, e.shiftKey || e.ctrlKey || e.metaKey);
-        else if (!SPOT_TASKS.includes(g.line.task)) UI.toast('Team spots can be given on a move, a bound, an assault, a fighting position, a support by fire position or a suppress line.');
-        else OPORD.refresh();
+        else ghostDropped(g);
         return;
       }
       if (e.type === 'pointerup' && this.faceDrag && this.pointers.size === 0) {
@@ -185,4 +185,19 @@ function zoneDone(d, moved) {
   if (d.z.live) G.log(PLAN_UNITS[d.z.unit] + ': Shifting fire.', 'fire');
   else OPORD.refresh();
   View3D.markDirty();
+}
+
+// A ghost let go after a drag. Planning, its spot is kept in the plan. After step-off a
+// step still to come keeps its new spot, a step under way sends the team there now, and a
+// team's own destination becomes a new move order (by radio).
+function ghostDropped(g) {
+  G.ui.liveDrag = null;
+  if (g.live) {
+    const t = G.squads.blue.teams[Number(g.unit[1]) - 1];
+    if (g.to && t) issueOrder({ level: 'team', team: t, squad: t.squad }, 'move', { x: g.to.x, y: g.to.y, mode: g.mode || 'walk' });
+    return;
+  }
+  if (!SPOT_TASKS.includes(g.line.task)) { UI.toast('Team spots can be given on a move, a bound, an assault, a fighting position, a support by fire position or a suppress line.'); return; }
+  if (!Plan.planning && g.line.status === 'active') Plan.reissueTeam(g.line, g.unit);
+  OPORD.refresh();
 }
