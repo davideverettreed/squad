@@ -807,7 +807,7 @@ const UI = {
     kv('Date', (sc.date ? sc.date + ', ' : '') + 'H-hour to H+' + fmtClock(dur) + ' (' + Math.max(1, Math.round(dur / 60)) + ' min)');
     kv('Location', (sc.place || m.R.label) + '<br><span class="wlink">◉ Grid ' + gridRef(c.x, c.y) + '</span>');
     const bn = '<span class="wlink">' + bi.nation + '</span>', rn = '<span class="wlink">' + ri.nation + '</span>';
-    kv('Result', result === 'victory' ? bn + ' victory' : result === 'escaped' ? 'Inconclusive: the ' + rn + ' force escaped' : rn + ' victory');
+    kv('Result', result === 'ammo' ? rn + ' victory: ' + blue.name + ' out of ammunition, withdrew' : result === 'victory' ? bn + ' victory' : result === 'escaped' ? 'Inconclusive: the ' + rn + ' force escaped' : rn + ' victory');
     th('Belligerents');
     pair(bn + (blue.kind === 'usmc' || /^usmc/.test(blue.kind) ? '<br>U.S. Marine Corps' : ''), rn);
     th('Commanders and leaders');
@@ -908,11 +908,11 @@ const UI = {
     const box = $('debriefBody');
     box.innerHTML = '';
     const won = result === 'victory';
-    $('debriefTitle').textContent = won ? 'Enemy defeated' : result === 'escaped' ? 'Enemy escaped' : 'Squad combat ineffective';
+    $('debriefTitle').textContent = won ? 'Enemy defeated' : result === 'escaped' ? 'Enemy escaped' : result === 'ammo' ? 'Out of ammunition: mission failed' : 'Squad combat ineffective';
     const wrap = el('div', 'dgrid');
     wrap.appendChild(this.battleInfobox(result));
     const side = el('div', 'dside');
-    side.appendChild(el('p', 'dsub', G.mission.label + '. ' + (won ? 'The enemy is destroyed or has withdrawn.' : result === 'escaped' ? 'The enemy got away before you could finish it.' : 'Your squad can no longer fight.') + ' Elapsed time ' + fmtClock(G.time) + '.'));
+    side.appendChild(el('p', 'dsub', G.mission.label + '. ' + (won ? 'The enemy is destroyed or has withdrawn.' : result === 'escaped' ? 'The enemy got away before you could finish it.' : result === 'ammo' ? 'Your squad ran out of ammunition with no resupply available, and fell back off the field.' : 'Your squad can no longer fight.') + ' Elapsed time ' + fmtClock(G.time) + '.'));
     if (Plan.timeAvail) {
       const aar = Plan.afterAction(result);
       const done = Plan.lines.filter(l => l.status === 'done').length;

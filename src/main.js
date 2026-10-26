@@ -91,6 +91,8 @@ function newMission() {
 // ---------------------------------------------------------------- morale and routing
 // A broken team falls back about 400 m away from the enemy and is out of the fight.
 function routePoint(s) {
+  // A squad out of ammunition makes for the edge of the sheet behind it.
+  if (s.side === 'blue' && s.squad.exit) return { x: s.squad.exit.x + gauss() * 10, y: s.squad.exit.y + gauss() * 10 };
   // An enemy that means to get away heads for the edge of the sheet.
   if (s.side === 'red' && s.team.escape) return { x: s.team.escape.x + gauss() * 10, y: s.team.escape.y + gauss() * 10 };
   if (s.side === 'red' && AI.escape) return { x: AI.escape.x + gauss() * 10, y: AI.escape.y + gauss() * 10 };
@@ -110,7 +112,7 @@ function startRouting(team, reason) {
     s.moveMode = 'rush';
   }
   releaseControllers(team.members);
-  if (team.side === 'blue' && team.members.some(s => s.active)) G.log(team.name + ' has broken and is falling back!', 'loss');
+  if (team.side === 'blue' && reason !== 'ammo' && team.members.some(s => s.active)) G.log(team.name + ' has broken and is falling back!', 'loss');
 }
 
 function rally(team) {
@@ -232,6 +234,9 @@ function update(dt) {
 // to destroy something, a Marine must reach it once the enemy is beaten.
 function checkEnd() {
   const M = G.mission, red = G.squads.red.all, blueUp = G.squads.blue.all.some(s => s.active && !s.routing);
+  // Out of ammunition, with no resupply to call: the squad falls back off the sheet.
+  if (M.ammoOutAt != null) { if (G.time - M.ammoOutAt > 12 || !G.squads.blue.all.some(s => s.active)) endMission('ammo'); return; }
+  if (blueUp && ammoSpent()) { ammoOut(); return; }
   if (!blueUp) { endMission('defeat'); return; }
   // An enemy getting away still counts while it is on the way.
   const redUp = red.some(s => s.active && (M.escape ? !s.routed : !s.routing));
@@ -258,10 +263,27 @@ function checkEnd() {
   endMission('victory');
 }
 
+// The squad's rifles are as good as dry: what its men (and its casualties, whose magazines
+// can be taken) carry is under 5% of the basic load it stepped off with.
+function ammoSpent() {
+  const sq = G.squads.blue, left = sq.all.filter(s => !s.routed).reduce((n, s) => n + s.ammoLeft, 0);
+  const start = sq.all.reduce((n, s) => n + (s.ammoStart || 0), 0);
+  return start > 0 && left < 0.05 * start;
+}
+function ammoOut() {
+  const sq = G.squads.blue, M = G.mission;
+  M.ammoOutAt = G.time;
+  G.log(sq.name + ' is out of ammunition. No resupply is available, by air or otherwise. Falling back.', 'loss');
+  // Back the way it came, to the edge of the sheet behind it.
+  const c = centroid(sq.all.filter(s => s.active)), t = threatCentroid('blue', sq.all.filter(s => s.active));
+  sq.exit = edgeFrom(c, angleTo(t.x, t.y, c.x, c.y));
+  for (const tm of [sq.hq, ...sq.teams]) startRouting(tm, 'ammo');
+}
+
 function endMission(result) {
   G.over = true; G.paused = true;
   G.revealAll = true;
-  G.log(result === 'victory' ? 'Enemy defeated.' : result === 'escaped' ? 'The enemy got away.' : 'Your squad is combat ineffective.', result === 'victory' ? 'kill' : 'loss');
+  G.log(result === 'victory' ? 'Enemy defeated.' : result === 'escaped' ? 'The enemy got away.' : result === 'ammo' ? 'Out of ammunition. Mission failed.' : 'Your squad is combat ineffective.', result === 'victory' ? 'kill' : 'loss');
   const id = G.missionId;
   setTimeout(() => { if (G.missionId !== id) return; UI.showDebrief(result); G.revealAll = false; }, 1200);
 }
