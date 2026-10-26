@@ -219,13 +219,18 @@ function threatCentroid(side, members) {
 // Elements take turns: one rushes forward past the others while the rest
 // lie in overwatch with fire at will, until every element reaches the objective.
 class BoundController {
-  constructor(elements, x, y, label) {
-    this.elements = elements.filter(e => e.some(commandable));
+  // dests: optionally, each element's own end point (a team's spot at the objective).
+  constructor(elements, x, y, label, dests) {
+    const keep = elements.map(e => e.some(commandable));
+    this.elements = elements.filter((e, k) => keep[k]);
+    this.dests = dests ? dests.filter((d, k) => keep[k]) : null;
     this.members = this.elements.flat();
     this.label = label;
     this.dest = { x, y };
     this.start = centroid(this.members);
+    this.starts = this.elements.map(e => centroid(e.filter(commandable)));
     this.total = Math.max(1, dist(this.start.x, this.start.y, x, y));
+    if (this.dests) this.total = Math.max(1, ...this.dests.map((d, k) => dist(this.starts[k].x, this.starts[k].y, d.x, d.y)));
     this.heading = angleTo(this.start.x, this.start.y, x, y);
     this.prog = this.elements.map(() => 0);
     this.boundLen = this.elements.length > 2 ? 35 : 25;
@@ -235,6 +240,11 @@ class BoundController {
   }
   slotFor(k, prog, i, m) {
     const n = this.elements.length;
+    // Each element on its own line from where it was to its own spot.
+    if (this.dests) {
+      const a = this.starts[k], b = this.dests[k], w = rotateOffset((i - (m - 1) / 2) * 6, 0, angleTo(a.x, a.y, b.x, b.y));
+      return { x: lerp(a.x, b.x, prog) + w.x, y: lerp(a.y, b.y, prog) + w.y };
+    }
     const lat = (k - (n - 1) / 2) * (n > 2 ? 24 : 12) + (i - (m - 1) / 2) * 6;
     const w = rotateOffset(lat, 0, this.heading);
     return { x: lerp(this.start.x, this.dest.x, prog) + w.x, y: lerp(this.start.y, this.dest.y, prog) + w.y };
@@ -267,7 +277,18 @@ class BoundController {
     const arrived = movers.every(s => !s.moving || s.pinned);
     if ((arrived && this.timer > 1) || this.timer > 40) {
       for (const s of movers) { s.path = []; s.homePosture = this.overwatchPosture(s); }
-      if (this.prog.every(p => p >= 1)) this.finish();
+      if (this.prog.every(p => p >= 1)) {
+        // The last bounds done: anyone well short of his place (held up by woods, a wall, fire)
+        // is sent on to it, a few times, before the bounds are called complete.
+        this.tries = (this.tries || 0) + 1;
+        let short = false;
+        if (this.tries <= 3) this.elements.forEach((e, k) => {
+          const live = e.filter(commandable);
+          live.forEach((s, i) => { const q = this.slotFor(k, 1, i, live.length); if (dist(s.x, s.y, q.x, q.y) > 15) { orderMove(s, q.x, q.y, 'walk'); short = true; } });
+        });
+        if (short) { this.idx = this.elements.findIndex(e => e.some(s => commandable(s) && s.moving)); if (this.idx < 0) this.idx = 0; this.timer = 0; return; }
+        this.finish();
+      }
       else { this.idx = (this.idx + 1) % this.elements.length; this.startBound(); }
     }
   }

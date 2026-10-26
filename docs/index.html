@@ -541,7 +541,7 @@ body:not(.roster-min) #btn3d, body:not(.roster-min) #ctl3d { margin-left: 0; }
         <h3>The order and the plan</h3>
         <p>Each mission opens with a five-paragraph order beside the map: <b>O</b>rientation, <b>S</b>ituation (SALUTE and DRAW-D), <b>M</b>ission, <b>E</b>xecution, <b>A</b>dmin &amp; Logistics, <b>C</b>ommand &amp; Signal. In Execution, place control measures on the map (CP, OBJ, SBF, ASLT POS, PL, CCP) and write the scheme of maneuver as lines: a trigger (at step-off, after or with the line above, on a signal, at a time, on contact), a unit, a task and a place. Draft a plan gives you a hasty attack to start from. The clock runs while you plan, at 4× speed, and the field is frozen: no one moves or fires until you step off. The enemy uses the time all the same: a defender digs in, and an enemy on the march is placed as far along its route at step-off as it would have walked. Use a third of the time available and leave the rest to the fire teams. Press Step off to execute. The Tracker shows each line; fire signals there. A line halted short by contact waits for you to press Resume. The plan is graded at step-off, and the grade sets the squad's confidence: steadiness under fire, staying power, and how fast it answers the radio. After step-off your orders go by radio and take a few seconds to be acknowledged. The debrief grades the mission on plan, result, casualties and time.</p>
         <h3>Mouse</h3>
-        <p>With a mouse, the left button selects and the right button acts. Left-click a man to select him, again for his team, again for the whole unit; left-click open ground to select nothing. Right-click the map for the action menu at that spot: move, rush or crawl there, bound, assault, suppress, fire 40mm, throw a grenade, or watch that way; right-click an enemy to engage him. Shift and right-click moves there at once. Hold the right button and drag to move there and face the way you drag. An order button (Walk, Assault, Suppress and the rest) arms that order: the next left click says where. While planning, right-click opens the plan menu. With a unit selected, the point tools also plan its moves: pick the squad (or a team), choose CP, and click checkpoint after checkpoint; each becomes its next step, marching from the last checkpoint to the next. RP, ASLT POS, FP, SBF, OBJ and TRP do the same with their own task, and a route drawn with RTE becomes that unit's route. With nothing selected the tools only draw. Each step shows a ghost of every team where it will stand when it arrives, with a dot for each man (fainter at earlier checkpoints). Drag a team's ghost to give it its own spot at that checkpoint; the spot is kept relative to the checkpoint, so dragging the checkpoint moves the whole squad's spots with it. Whole squad (key 0) selects every team at once. The Execution tab lists every control measure (points, lines, areas): click one to find it on the map, Edit to change its kind or name, ✕ to delete it. On the map, click a line anywhere along it or an area anywhere inside to edit it, or drag it by the middle to move all of it. Drag one of your units with the left button to send it.</p>
+        <p>With a mouse, the left button selects and the right button acts. Left-click a man to select him, again for his team, again for the whole unit; left-click open ground to select nothing. Right-click the map for the action menu at that spot: move, rush or crawl there, bound, assault, suppress, fire 40mm, throw a grenade, or watch that way; right-click an enemy to engage him. Shift and right-click moves there at once. Hold the right button and drag to move there and face the way you drag. An order button (Walk, Assault, Suppress and the rest) arms that order: the next left click says where. While planning, right-click opens the plan menu. With a unit selected, the point tools also plan its moves: pick the squad (or a team), choose CP, and click checkpoint after checkpoint; each becomes its next step, marching from the last checkpoint to the next. RP, ASLT POS, FP, SBF, OBJ and TRP do the same with their own task, and a route drawn with RTE becomes that unit's route. With nothing selected the tools only draw. Each step shows a ghost of every team where it will stand when it arrives, with a dot for each man (fainter at earlier checkpoints). Drag a team's ghost to give it its own spot at that checkpoint (on a move, a bound or an assault: a bound leads each team to its own spot, an assault sends each team through its own point); the spot is kept relative to the checkpoint, so dragging the checkpoint moves the whole squad's spots with it. Whole squad (key 0) selects every team at once. The Execution tab lists every control measure (points, lines, areas): click one to find it on the map, Edit to change its kind or name, ✕ to delete it. On the map, click a line anywhere along it or an area anywhere inside to edit it, or drag it by the middle to move all of it. Drag one of your units with the left button to send it.</p>
         <h3>Selecting</h3>
         <p>Tap a Marine to select that Marine. Tap again to select the fire team, and again for the whole squad. The Squad and fire team buttons above the orders do the same. Keys: <kbd>1</kbd> <kbd>2</kbd> <kbd>3</kbd> fire teams, <kbd>0</kbd> squad, <kbd>Esc</kbd> cancel.</p>
         <h3>Moving</h3>
@@ -3136,13 +3136,18 @@ function threatCentroid(side, members) {
 // Elements take turns: one rushes forward past the others while the rest
 // lie in overwatch with fire at will, until every element reaches the objective.
 class BoundController {
-  constructor(elements, x, y, label) {
-    this.elements = elements.filter(e => e.some(commandable));
+  // dests: optionally, each element's own end point (a team's spot at the objective).
+  constructor(elements, x, y, label, dests) {
+    const keep = elements.map(e => e.some(commandable));
+    this.elements = elements.filter((e, k) => keep[k]);
+    this.dests = dests ? dests.filter((d, k) => keep[k]) : null;
     this.members = this.elements.flat();
     this.label = label;
     this.dest = { x, y };
     this.start = centroid(this.members);
+    this.starts = this.elements.map(e => centroid(e.filter(commandable)));
     this.total = Math.max(1, dist(this.start.x, this.start.y, x, y));
+    if (this.dests) this.total = Math.max(1, ...this.dests.map((d, k) => dist(this.starts[k].x, this.starts[k].y, d.x, d.y)));
     this.heading = angleTo(this.start.x, this.start.y, x, y);
     this.prog = this.elements.map(() => 0);
     this.boundLen = this.elements.length > 2 ? 35 : 25;
@@ -3152,6 +3157,11 @@ class BoundController {
   }
   slotFor(k, prog, i, m) {
     const n = this.elements.length;
+    // Each element on its own line from where it was to its own spot.
+    if (this.dests) {
+      const a = this.starts[k], b = this.dests[k], w = rotateOffset((i - (m - 1) / 2) * 6, 0, angleTo(a.x, a.y, b.x, b.y));
+      return { x: lerp(a.x, b.x, prog) + w.x, y: lerp(a.y, b.y, prog) + w.y };
+    }
     const lat = (k - (n - 1) / 2) * (n > 2 ? 24 : 12) + (i - (m - 1) / 2) * 6;
     const w = rotateOffset(lat, 0, this.heading);
     return { x: lerp(this.start.x, this.dest.x, prog) + w.x, y: lerp(this.start.y, this.dest.y, prog) + w.y };
@@ -3184,7 +3194,18 @@ class BoundController {
     const arrived = movers.every(s => !s.moving || s.pinned);
     if ((arrived && this.timer > 1) || this.timer > 40) {
       for (const s of movers) { s.path = []; s.homePosture = this.overwatchPosture(s); }
-      if (this.prog.every(p => p >= 1)) this.finish();
+      if (this.prog.every(p => p >= 1)) {
+        // The last bounds done: anyone well short of his place (held up by woods, a wall, fire)
+        // is sent on to it, a few times, before the bounds are called complete.
+        this.tries = (this.tries || 0) + 1;
+        let short = false;
+        if (this.tries <= 3) this.elements.forEach((e, k) => {
+          const live = e.filter(commandable);
+          live.forEach((s, i) => { const q = this.slotFor(k, 1, i, live.length); if (dist(s.x, s.y, q.x, q.y) > 15) { orderMove(s, q.x, q.y, 'walk'); short = true; } });
+        });
+        if (short) { this.idx = this.elements.findIndex(e => e.some(s => commandable(s) && s.moving)); if (this.idx < 0) this.idx = 0; this.timer = 0; return; }
+        this.finish();
+      }
       else { this.idx = (this.idx + 1) % this.elements.length; this.startBound(); }
     }
   }
@@ -7714,6 +7735,8 @@ const GRAPHIC_KINDS = {
   rel:  { label: 'Release point', short: 'RP', numbered: true },
   trp:  { label: 'Target reference point', short: 'TRP', numbered: true },
 };
+// Plan lines whose teams can each be given their own spot by dragging their ghosts.
+const SPOT_TASKS = ['move', 'bound', 'assault'];
 // What placing a control measure means for a selected unit: its next step of the plan.
 const TOOL_STEPS = { cp: 'cp', rel: 'rel', aslt: 'aslt', fp: 'fp', sbf: 'sbf', obj: 'obj', trp: 'trp' };
 // Control measures grouped as the graphics manuals group them: points, lines and areas.
@@ -7944,6 +7967,35 @@ const Plan = {
     const units = l.unit === 'squad' ? sq.teams.filter(t => t.members.some(commandable)).map(t => 't' + t.num) : [l.unit];
     const spots = this.spotsFor(l, dest, centroid(members.filter(commandable)), units);
     for (const u of units) teamMove(sq.teams[Number(u[1]) - 1], spots[u].x, spots[u].y, l.mode);
+  },
+  // The teams of a line and each one's end point.
+  teamSpots(l, sel, dest) {
+    const sq = G.squads.blue, members = selMembers(sel);
+    const units = l.unit === 'squad' ? sq.teams.filter(t => t.members.some(commandable)).map(t => 't' + t.num) : [l.unit];
+    return { units, spots: this.spotsFor(l, dest, centroid(members.filter(commandable)), units) };
+  },
+  // Bounding overwatch where the teams have their own spots: each bounds toward its own.
+  boundToSpots(l, sel, dest) {
+    const { units, spots } = this.teamSpots(l, sel, dest);
+    if (l.unit !== 'squad') { issueOrder(sel, 'bound', spots[units[0]]); return; }
+    const members = selMembers(sel);
+    Plan.override(members, 'bound');
+    releaseControllers(members);
+    for (const s of members) s.launchQueue = null;
+    const elements = boundElements(sel);
+    const dests = elements.map(e => { const t = e.find(s => s.team.num); return t && spots['t' + t.team.num] ? spots['t' + t.team.num] : dest; });
+    G.controllers.push(new BoundController(elements, dest.x, dest.y, selName(sel), dests));
+    G.toast(selName(sel) + ': Bounding overwatch, each team to its spot.');
+  },
+  // An assault where the teams have their own spots: each fights through to its own.
+  assaultToSpots(l, sel, dest) {
+    const { units, spots } = this.teamSpots(l, sel, dest), sq = G.squads.blue;
+    const members = selMembers(sel);
+    Plan.override(members, 'assault');
+    releaseControllers(members);
+    for (const u of units) teamMove(sq.teams[Number(u[1]) - 1], spots[u].x, spots[u].y, 'walk');
+    for (const s of members.filter(commandable)) { s.assault = true; s.fireControl = 'free'; s.homePosture = 'kneel'; }
+    G.log(selName(sel) + ': Assault through!', 'fire');
   },
   // The plan unit for a selection: a Marine plans with his fire team, the SL with the squad.
   planUnit(sel) {
@@ -8290,8 +8342,14 @@ const Plan = {
           break;
         case 'route': routeMove(sel, where.pts, l.mode); break;
         case 'occupy': occupyPosition(sel, where); l.stage = 'moving'; break;
-        case 'bound': issueOrder(sel, 'bound', this.anchor(where)); break;
-        case 'assault': issueOrder(sel, 'assault', this.anchor(tgt)); break;
+        case 'bound':
+          if (l.spots && Object.keys(l.spots).length) this.boundToSpots(l, sel, this.anchor(where));
+          else issueOrder(sel, 'bound', this.anchor(where));
+          break;
+        case 'assault':
+          if (l.spots && Object.keys(l.spots).length) this.assaultToSpots(l, sel, this.anchor(tgt));
+          else issueOrder(sel, 'assault', this.anchor(tgt));
+          break;
         case 'sbf': groupMove(sel, this.anchor(where).x, this.anchor(where).y, l.mode); l.stage = 'moving'; break;
         case 'suppress': issueOrder(sel, 'suppress', this.anchor(tgt)); l.status = 'done'; break;
         case 'lift': issueOrder(sel, 'lift'); issueOrder(sel, 'halt'); l.status = 'done'; break;
@@ -8309,7 +8367,9 @@ const Plan = {
     // Stopped well short, by a halt on contact or by fire: the line waits for the leader.
     const dest = this.graphic(l.task === 'assault' ? l.target : l.where);
     if (dest) {
-      const c = centroid(m), a = this.anchor(dest);
+      // Where the teams were meant to end: their own spots, or the point.
+      const c = centroid(m), a = l.spots && Object.keys(l.spots).length
+        ? centroid(Object.values(this.teamSpots(l, this.unitSel(l.unit), this.anchor(dest)).spots)) : this.anchor(dest);
       if (dist(c.x, c.y, a.x, a.y) > 70) {
         l.status = 'stalled';
         G.log('Line ' + (this.lines.indexOf(l) + 1) + ': ' + PLAN_UNITS[l.unit] + ' halted short of ' + dest.name + '. Resume it from the Tracker.', 'warn');
@@ -9809,8 +9869,8 @@ const View3D = {
         this.pinch = now;
       } else if (this.pointers.size === 1 && this.moved && this.dragGh) {
         const w = this.groundAt(p.x, p.y), l = this.dragGh.line;
-        if (w && l.task === 'move') {
-          const a = Plan.anchor(Plan.graphic(l.where));
+        if (w && SPOT_TASKS.includes(l.task)) {
+          const a = Plan.anchor(Plan.graphic(l.task === 'assault' ? l.target : l.where));
           l.spots = l.spots || {}; l.spots[this.dragGh.unit] = { dx: w.x - a.x, dy: w.y - a.y };
           this.markDirty();
         }
@@ -9843,7 +9903,7 @@ const View3D = {
       if (e.type === 'pointerup' && this.dragGh && this.pointers.size === 0) {
         const g = this.dragGh; this.dragGh = null;
         if (!this.moved) UI.ghostTap(g, e.shiftKey || e.ctrlKey || e.metaKey);
-        else if (g.line.task !== 'move') UI.toast('Only a move to a checkpoint can be given team spots.');
+        else if (!SPOT_TASKS.includes(g.line.task)) UI.toast('Team spots can be given on a move, a bound or an assault.');
         else OPORD.refresh();
         return;
       }
@@ -9941,9 +10001,9 @@ const Input = {
         if (Math.hypot(p.x - p.sx, p.y - p.sy) > 8) this.moved = true;
         if (this.moved && this.dragGh) {
           const g = this.dragGh, l = g.line;
-          if (l.task === 'move') {
-            // Kept as an offset from the checkpoint, so the spot moves with it.
-            const w = toWorld(p.x - g.off.x, p.y - g.off.y), a = Plan.anchor(Plan.graphic(l.where));
+          if (SPOT_TASKS.includes(l.task)) {
+            // Kept as an offset from the checkpoint (or objective), so the spot moves with it.
+            const w = toWorld(p.x - g.off.x, p.y - g.off.y), a = Plan.anchor(Plan.graphic(l.task === 'assault' ? l.target : l.where));
             l.spots = l.spots || {}; l.spots[g.unit] = { dx: w.x - a.x, dy: w.y - a.y };
             g.x = w.x; g.y = w.y;
           }
@@ -9982,7 +10042,7 @@ const Input = {
       if (e.type === 'pointerup' && this.dragGh && this.pointers.size === 0) {
         const g = this.dragGh; this.dragGh = null;
         if (!this.moved) UI.ghostTap(g, e.shiftKey || e.ctrlKey || e.metaKey);
-        else if (g.line.task !== 'move') UI.toast('Only a move to a checkpoint can be given team spots.');
+        else if (!SPOT_TASKS.includes(g.line.task)) UI.toast('Team spots can be given on a move, a bound or an assault.');
         else OPORD.refresh();
         return;
       }

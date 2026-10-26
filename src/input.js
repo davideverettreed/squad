@@ -42,9 +42,9 @@ const Input = {
         if (Math.hypot(p.x - p.sx, p.y - p.sy) > 8) this.moved = true;
         if (this.moved && this.dragGh) {
           const g = this.dragGh, l = g.line;
-          if (l.task === 'move') {
-            // Kept as an offset from the checkpoint, so the spot moves with it.
-            const w = toWorld(p.x - g.off.x, p.y - g.off.y), a = Plan.anchor(Plan.graphic(l.where));
+          if (SPOT_TASKS.includes(l.task)) {
+            // Kept as an offset from the checkpoint (or objective), so the spot moves with it.
+            const w = toWorld(p.x - g.off.x, p.y - g.off.y), a = Plan.anchor(Plan.graphic(l.task === 'assault' ? l.target : l.where));
             l.spots = l.spots || {}; l.spots[g.unit] = { dx: w.x - a.x, dy: w.y - a.y };
             g.x = w.x; g.y = w.y;
           }
@@ -83,7 +83,7 @@ const Input = {
       if (e.type === 'pointerup' && this.dragGh && this.pointers.size === 0) {
         const g = this.dragGh; this.dragGh = null;
         if (!this.moved) UI.ghostTap(g, e.shiftKey || e.ctrlKey || e.metaKey);
-        else if (g.line.task !== 'move') UI.toast('Only a move to a checkpoint can be given team spots.');
+        else if (!SPOT_TASKS.includes(g.line.task)) UI.toast('Team spots can be given on a move, a bound or an assault.');
         else OPORD.refresh();
         return;
       }

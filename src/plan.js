@@ -17,6 +17,8 @@ const GRAPHIC_KINDS = {
   rel:  { label: 'Release point', short: 'RP', numbered: true },
   trp:  { label: 'Target reference point', short: 'TRP', numbered: true },
 };
+// Plan lines whose teams can each be given their own spot by dragging their ghosts.
+const SPOT_TASKS = ['move', 'bound', 'assault'];
 // What placing a control measure means for a selected unit: its next step of the plan.
 const TOOL_STEPS = { cp: 'cp', rel: 'rel', aslt: 'aslt', fp: 'fp', sbf: 'sbf', obj: 'obj', trp: 'trp' };
 // Control measures grouped as the graphics manuals group them: points, lines and areas.
@@ -247,6 +249,35 @@ const Plan = {
     const units = l.unit === 'squad' ? sq.teams.filter(t => t.members.some(commandable)).map(t => 't' + t.num) : [l.unit];
     const spots = this.spotsFor(l, dest, centroid(members.filter(commandable)), units);
     for (const u of units) teamMove(sq.teams[Number(u[1]) - 1], spots[u].x, spots[u].y, l.mode);
+  },
+  // The teams of a line and each one's end point.
+  teamSpots(l, sel, dest) {
+    const sq = G.squads.blue, members = selMembers(sel);
+    const units = l.unit === 'squad' ? sq.teams.filter(t => t.members.some(commandable)).map(t => 't' + t.num) : [l.unit];
+    return { units, spots: this.spotsFor(l, dest, centroid(members.filter(commandable)), units) };
+  },
+  // Bounding overwatch where the teams have their own spots: each bounds toward its own.
+  boundToSpots(l, sel, dest) {
+    const { units, spots } = this.teamSpots(l, sel, dest);
+    if (l.unit !== 'squad') { issueOrder(sel, 'bound', spots[units[0]]); return; }
+    const members = selMembers(sel);
+    Plan.override(members, 'bound');
+    releaseControllers(members);
+    for (const s of members) s.launchQueue = null;
+    const elements = boundElements(sel);
+    const dests = elements.map(e => { const t = e.find(s => s.team.num); return t && spots['t' + t.team.num] ? spots['t' + t.team.num] : dest; });
+    G.controllers.push(new BoundController(elements, dest.x, dest.y, selName(sel), dests));
+    G.toast(selName(sel) + ': Bounding overwatch, each team to its spot.');
+  },
+  // An assault where the teams have their own spots: each fights through to its own.
+  assaultToSpots(l, sel, dest) {
+    const { units, spots } = this.teamSpots(l, sel, dest), sq = G.squads.blue;
+    const members = selMembers(sel);
+    Plan.override(members, 'assault');
+    releaseControllers(members);
+    for (const u of units) teamMove(sq.teams[Number(u[1]) - 1], spots[u].x, spots[u].y, 'walk');
+    for (const s of members.filter(commandable)) { s.assault = true; s.fireControl = 'free'; s.homePosture = 'kneel'; }
+    G.log(selName(sel) + ': Assault through!', 'fire');
   },
   // The plan unit for a selection: a Marine plans with his fire team, the SL with the squad.
   planUnit(sel) {
@@ -593,8 +624,14 @@ const Plan = {
           break;
         case 'route': routeMove(sel, where.pts, l.mode); break;
         case 'occupy': occupyPosition(sel, where); l.stage = 'moving'; break;
-        case 'bound': issueOrder(sel, 'bound', this.anchor(where)); break;
-        case 'assault': issueOrder(sel, 'assault', this.anchor(tgt)); break;
+        case 'bound':
+          if (l.spots && Object.keys(l.spots).length) this.boundToSpots(l, sel, this.anchor(where));
+          else issueOrder(sel, 'bound', this.anchor(where));
+          break;
+        case 'assault':
+          if (l.spots && Object.keys(l.spots).length) this.assaultToSpots(l, sel, this.anchor(tgt));
+          else issueOrder(sel, 'assault', this.anchor(tgt));
+          break;
         case 'sbf': groupMove(sel, this.anchor(where).x, this.anchor(where).y, l.mode); l.stage = 'moving'; break;
         case 'suppress': issueOrder(sel, 'suppress', this.anchor(tgt)); l.status = 'done'; break;
         case 'lift': issueOrder(sel, 'lift'); issueOrder(sel, 'halt'); l.status = 'done'; break;
@@ -612,7 +649,9 @@ const Plan = {
     // Stopped well short, by a halt on contact or by fire: the line waits for the leader.
     const dest = this.graphic(l.task === 'assault' ? l.target : l.where);
     if (dest) {
-      const c = centroid(m), a = this.anchor(dest);
+      // Where the teams were meant to end: their own spots, or the point.
+      const c = centroid(m), a = l.spots && Object.keys(l.spots).length
+        ? centroid(Object.values(this.teamSpots(l, this.unitSel(l.unit), this.anchor(dest)).spots)) : this.anchor(dest);
       if (dist(c.x, c.y, a.x, a.y) > 70) {
         l.status = 'stalled';
         G.log('Line ' + (this.lines.indexOf(l) + 1) + ': ' + PLAN_UNITS[l.unit] + ' halted short of ' + dest.name + '. Resume it from the Tracker.', 'warn');

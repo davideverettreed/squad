@@ -582,8 +582,8 @@ const View3D = {
         this.pinch = now;
       } else if (this.pointers.size === 1 && this.moved && this.dragGh) {
         const w = this.groundAt(p.x, p.y), l = this.dragGh.line;
-        if (w && l.task === 'move') {
-          const a = Plan.anchor(Plan.graphic(l.where));
+        if (w && SPOT_TASKS.includes(l.task)) {
+          const a = Plan.anchor(Plan.graphic(l.task === 'assault' ? l.target : l.where));
           l.spots = l.spots || {}; l.spots[this.dragGh.unit] = { dx: w.x - a.x, dy: w.y - a.y };
           this.markDirty();
         }
@@ -616,7 +616,7 @@ const View3D = {
       if (e.type === 'pointerup' && this.dragGh && this.pointers.size === 0) {
         const g = this.dragGh; this.dragGh = null;
         if (!this.moved) UI.ghostTap(g, e.shiftKey || e.ctrlKey || e.metaKey);
-        else if (g.line.task !== 'move') UI.toast('Only a move to a checkpoint can be given team spots.');
+        else if (!SPOT_TASKS.includes(g.line.task)) UI.toast('Team spots can be given on a move, a bound or an assault.');
         else OPORD.refresh();
         return;
       }
