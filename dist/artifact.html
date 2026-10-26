@@ -527,7 +527,7 @@ body:not(.roster-min) #btn3d, body:not(.roster-min) #ctl3d { margin-left: 0; }
         <h3>The order and the plan</h3>
         <p>Each mission opens with a five-paragraph order beside the map: <b>O</b>rientation, <b>S</b>ituation (SALUTE and DRAW-D), <b>M</b>ission, <b>E</b>xecution, <b>A</b>dmin &amp; Logistics, <b>C</b>ommand &amp; Signal. In Execution, place control measures on the map (CP, OBJ, SBF, ASLT POS, PL, CCP) and write the scheme of maneuver as lines: a trigger (at step-off, after or with the line above, on a signal, at a time, on contact), a unit, a task and a place. Draft a plan gives you a hasty attack to start from. The clock runs while you plan, at 4× speed, and the field is frozen: no one moves or fires until you step off. The enemy uses the time all the same: a defender digs in, and an enemy on the march is placed as far along its route at step-off as it would have walked. Use a third of the time available and leave the rest to the fire teams. Press Step off to execute. The Tracker shows each line; fire signals there. A line halted short by contact waits for you to press Resume. The plan is graded at step-off, and the grade sets the squad's confidence: steadiness under fire, staying power, and how fast it answers the radio. After step-off your orders go by radio and take a few seconds to be acknowledged. The debrief grades the mission on plan, result, casualties and time.</p>
         <h3>Mouse</h3>
-        <p>With a mouse, the left button selects and the right button acts. Left-click a man to select him, again for his team, again for the whole unit; left-click open ground to select nothing. Right-click the map for the action menu at that spot: move, rush or crawl there, bound, assault, suppress, fire 40mm, throw a grenade, or watch that way; right-click an enemy to engage him. Shift and right-click moves there at once. Hold the right button and drag to move there and face the way you drag. An order button (Walk, Assault, Suppress and the rest) arms that order: the next left click says where. While planning, right-click opens the plan menu. With a unit selected, the point tools also plan its moves: pick the squad (or a team), choose CP, and click checkpoint after checkpoint; each becomes its next step, marching from the last checkpoint to the next. RP, ASLT POS, FP, SBF, OBJ and TRP do the same with their own task, and a route drawn with RTE becomes that unit's route. With nothing selected the tools only draw. Each step shows a ghost of every team where it will stand when it arrives, with a dot for each man (fainter at earlier checkpoints). Drag a team's ghost to give it its own spot at that checkpoint (on a move, a bound, an assault, a fighting position or a support by fire position: a bound leads each team to its own spot, an assault sends each team through its own point, a fighting position lines each team up across the sector at its spot, and a support by fire position sets each team at its spot before it opens fire); the spot is kept relative to the checkpoint, so dragging the checkpoint moves the whole squad's spots with it. Whole squad (key 0) selects every team at once. The Execution tab lists every control measure (points, lines, areas): click one to find it on the map, Edit to change its kind or name, ✕ to delete it. On the map, click a line anywhere along it or an area anywhere inside to edit it, or drag it by the middle to move all of it. Drag one of your units with the left button to send it.</p>
+        <p>With a mouse, the left button selects and the right button acts. Left-click a man to select him, again for his team, again for the whole unit; left-click open ground to select nothing. Right-click the map for the action menu at that spot: move, rush or crawl there, bound, assault, suppress, fire 40mm, throw a grenade, or watch that way; right-click an enemy to engage him. Shift and right-click moves there at once. Hold the right button and drag to move there and face the way you drag. An order button (Walk, Assault, Suppress and the rest) arms that order: the next left click says where. While planning, right-click opens the plan menu. With a unit selected, the point tools also plan its moves: pick the squad (or a team), choose CP, and click checkpoint after checkpoint; each becomes its next step, marching from the last checkpoint to the next. RP, ASLT POS, FP, SBF, OBJ and TRP do the same with their own task, and a route drawn with RTE becomes that unit's route. With nothing selected the tools only draw. Each step shows a ghost of every team where it will stand when it arrives, with a dot for each man (fainter at earlier checkpoints). Drag a team's ghost to give it its own spot at that checkpoint (on a move, a bound, an assault, a fighting position or a support by fire position: a bound leads each team to its own spot, an assault sends each team through its own point, a fighting position lines each team up across the sector at its spot, a support by fire position sets each team at its spot before it opens fire, and on a suppress line each team's crosshair is its aim point on the target, so the squad's fire can be spread across a tree line or a row of buildings); the spot is kept relative to the checkpoint, so dragging the checkpoint moves the whole squad's spots with it. Whole squad (key 0) selects every team at once. The Execution tab lists every control measure (points, lines, areas): click one to find it on the map, Edit to change its kind or name, ✕ to delete it. On the map, click a line anywhere along it or an area anywhere inside to edit it, or drag it by the middle to move all of it. Drag one of your units with the left button to send it.</p>
         <h3>Selecting</h3>
         <p>Tap a Marine to select that Marine. Tap again to select the fire team, and again for the whole squad. The Squad and fire team buttons above the orders do the same. Keys: <kbd>1</kbd> <kbd>2</kbd> <kbd>3</kbd> fire teams, <kbd>0</kbd> squad, <kbd>Esc</kbd> cancel.</p>
         <h3>Moving</h3>
@@ -6135,7 +6135,7 @@ function drawPlanGhosts(ctx) {
   const sq = G.squads.blue;
   for (const gh of pr.ghosts) {
     const t = sq.teams[Number(gh.unit[1]) - 1];
-    if (!t) continue;
+    if (!t || gh.aim) continue;
     ctx.fillStyle = gh.final ? 'rgba(31,79,191,0.55)' : 'rgba(31,79,191,0.3)';
     // In a fighting position the men line up across its sector; elsewhere, the team's formation.
     const fp = gh.line.task === 'occupy' ? Plan.graphic(gh.line.where) : null, live = t.members.filter(s => s.active);
@@ -6146,7 +6146,31 @@ function drawPlanGhosts(ctx) {
       ctx.beginPath(); ctx.arc(p.x, p.y, View3D.drawingDrape ? Math.max(3, 0.9 * R.cam.zoom) : 3, 0, Math.PI * 2); ctx.fill();
     });
   }
+  // Suppression: each team's aim point, a crosshair with a dashed line of fire to it.
+  for (const gh of pr.ghosts) {
+    if (!gh.aim) continue;
+    const q = toScreen(gh.x, gh.y), f = toScreen(gh.from.x, gh.from.y), r = View3D.drawingDrape ? Math.max(10, 2.5 * R.cam.zoom) : 11;
+    ctx.save();
+    ctx.strokeStyle = 'rgba(214,96,24,0.75)'; ctx.lineWidth = View3D.drawingDrape ? lw * 0.6 : 1.4; ctx.setLineDash([4, 5]);
+    ctx.beginPath(); ctx.moveTo(f.x, f.y); ctx.lineTo(q.x, q.y); ctx.stroke(); ctx.setLineDash([]);
+    ctx.strokeStyle = 'rgba(214,96,24,0.95)'; ctx.lineWidth = View3D.drawingDrape ? lw * 0.8 : 2;
+    ctx.beginPath(); ctx.arc(q.x, q.y, r, 0, Math.PI * 2);
+    ctx.moveTo(q.x - r * 1.5, q.y); ctx.lineTo(q.x - r * 0.4, q.y); ctx.moveTo(q.x + r * 0.4, q.y); ctx.lineTo(q.x + r * 1.5, q.y);
+    ctx.moveTo(q.x, q.y - r * 1.5); ctx.lineTo(q.x, q.y - r * 0.4); ctx.moveTo(q.x, q.y + r * 0.4); ctx.lineTo(q.x, q.y + r * 1.5);
+    ctx.stroke();
+    ctx.restore();
+  }
   if (!View3D.drawingDrape) for (const gh of pr.ghosts) {
+    if (gh.aim) {
+      // The team number beside its aim point (set off the TRP when on it, like any ghost).
+      const q = ghostScreen(gh), sl = G.ui.sel;
+      const picked = sl && (sl.level === 'squad' || (sl.level === 'team' && 't' + sl.team.num === gh.unit) || (sl.level === 'group' && sl.teams.some(t => 't' + t.num === gh.unit)));
+      if (picked) { ctx.fillStyle = 'rgba(255,214,10,0.35)'; ctx.beginPath(); ctx.arc(q.x, q.y, 14, 0, Math.PI * 2); ctx.fill(); }
+      ctx.font = '700 13px "Saira Condensed", "Arial Narrow", sans-serif'; ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+      ctx.lineWidth = 3; ctx.strokeStyle = 'rgba(247,245,236,0.95)'; ctx.strokeText(gh.unit[1] + ' FIRE', q.x, q.y);
+      ctx.fillStyle = 'rgb(176,70,14)'; ctx.fillText(gh.unit[1] + ' FIRE', q.x, q.y);
+      continue;
+    }
     const q = ghostScreen(gh), at = toScreen(gh.x, gh.y);
     // An earlier step is fainter than where the plan leaves the team.
     ctx.globalAlpha = gh.final ? 0.85 : 0.45;
@@ -7734,7 +7758,7 @@ const GRAPHIC_KINDS = {
   trp:  { label: 'Target reference point', short: 'TRP', numbered: true },
 };
 // Plan lines whose teams can each be given their own spot by dragging their ghosts.
-const SPOT_TASKS = ['move', 'bound', 'assault', 'occupy', 'sbf'];
+const SPOT_TASKS = ['move', 'bound', 'assault', 'occupy', 'sbf', 'suppress'];
 // What placing a control measure means for a selected unit: its next step of the plan.
 const TOOL_STEPS = { cp: 'cp', rel: 'rel', aslt: 'aslt', fp: 'fp', sbf: 'sbf', obj: 'obj', trp: 'trp' };
 // Control measures grouped as the graphics manuals group them: points, lines and areas.
@@ -8223,6 +8247,15 @@ const Plan = {
     }
     for (const l of this.lines) {
       if (TASKS[l.task].noUnit) continue;
+      // Suppression: no one moves; each team's aim point on the target is its ghost.
+      if (l.task === 'suppress') {
+        const tg = this.graphic(l.target);
+        const units = l.unit === 'squad' ? ['t1', 't2', 't3'].filter(u => pos[u]) : [l.unit].filter(u => pos[u]);
+        if (!tg || !units.length) continue;
+        const aims = this.aimsFor(l, this.anchor(tg), centroid(units.map(u => pos[u])), units);
+        for (const u of units) ghosts.push({ unit: u, x: aims[u].x, y: aims[u].y, name: tg.name, line: l, aim: true, from: { x: pos[u].x, y: pos[u].y }, final: false });
+        continue;
+      }
       let dest = null, via = null, g = null;
       if (l.task === 'assault') { g = this.graphic(l.target); if (g) dest = this.anchor(g); }
       else if (TASKS[l.task].where) {
@@ -8260,6 +8293,19 @@ const Plan = {
         const o = scaled(squadSlot(sq.formation, k, units.length), sq.spacing), w = rotateOffset(o.x, o.y, h);
         out[u] = { x: dest.x + w.x, y: dest.y + w.y };
       } else out[u] = { x: dest.x, y: dest.y };
+    });
+    return out;
+  },
+
+  // Where each team of a suppress line aims: its dragged aim point, or (a squad) the teams'
+  // fire spread 12 m apart across the target as seen from the squad, or the point itself.
+  aimsFor(l, dest, from, units) {
+    const out = {}, h = angleTo(from.x, from.y, dest.x, dest.y);
+    units.forEach((u, k) => {
+      const sp = l.spots && l.spots[u];
+      if (sp) { out[u] = { x: dest.x + sp.dx, y: dest.y + sp.dy }; return; }
+      const w = rotateOffset((k - (units.length - 1) / 2) * 12, 0, h);
+      out[u] = units.length > 1 ? { x: dest.x + w.x, y: dest.y + w.y } : { x: dest.x, y: dest.y };
     });
     return out;
   },
@@ -8353,7 +8399,15 @@ const Plan = {
           else groupMove(sel, this.anchor(where).x, this.anchor(where).y, l.mode);
           l.stage = 'moving';
           break;
-        case 'suppress': issueOrder(sel, 'suppress', this.anchor(tgt)); l.status = 'done'; break;
+        case 'suppress':
+          if (l.unit === 'squad' || (l.spots && Object.keys(l.spots).length)) {
+            // Each team on its own aim point.
+            const sq = G.squads.blue, units = l.unit === 'squad' ? sq.teams.filter(t => t.members.some(commandable)).map(t => 't' + t.num) : [l.unit];
+            const aims = this.aimsFor(l, this.anchor(tgt), centroid(m), units);
+            for (const u of units) issueOrder(this.unitSel(u), 'suppress', aims[u]);
+          } else issueOrder(sel, 'suppress', this.anchor(tgt));
+          l.status = 'done';
+          break;
         case 'lift': issueOrder(sel, 'lift'); issueOrder(sel, 'halt'); l.status = 'done'; break;
         case 'hold': issueOrder(sel, 'halt'); issueOrder(sel, 'posture', 'prone'); issueOrder(sel, 'fire', 'free'); l.status = 'done'; break;
       }
@@ -9724,8 +9778,10 @@ const View3D = {
         const f = this.flagTexture(PLAN_UNITS[gh.unit], '#1f4fbf');
         m.label.material.map = f.tex; m.label.material.needsUpdate = true; m.aspect = f.aspect; m.unit = gh.unit;
       }
-      const r = (gh.unit === 'squad' ? 9 : 6) * k, h = 7 * k;
+      const r = (gh.unit === 'squad' ? 9 : 6) * k, h = (gh.aim ? 3 : 7) * k;
       m.g.visible = true;
+      // An aim point (suppression) is a low amber marker; a team's place a blue peg.
+      m.body.material.color.setHex(gh.aim ? 0xffa040 : 0x80e0ff);
       // Beside the control measure it ends on, so each can be tapped on its own.
       const gx = gh.x + 12 * k, gy = gh.y - 12 * k;
       m.g.position.set(gx - MAP_W / 2, this.height(gx, gy), gy - MAP_H / 2);
@@ -9872,7 +9928,7 @@ const View3D = {
       } else if (this.pointers.size === 1 && this.moved && this.dragGh) {
         const w = this.groundAt(p.x, p.y), l = this.dragGh.line;
         if (w && SPOT_TASKS.includes(l.task)) {
-          const a = Plan.anchor(Plan.graphic(l.task === 'assault' ? l.target : l.where));
+          const a = Plan.anchor(Plan.graphic(l.task === 'assault' || l.task === 'suppress' ? l.target : l.where));
           l.spots = l.spots || {}; l.spots[this.dragGh.unit] = { dx: w.x - a.x, dy: w.y - a.y };
           this.markDirty();
         }
@@ -9905,7 +9961,7 @@ const View3D = {
       if (e.type === 'pointerup' && this.dragGh && this.pointers.size === 0) {
         const g = this.dragGh; this.dragGh = null;
         if (!this.moved) UI.ghostTap(g, e.shiftKey || e.ctrlKey || e.metaKey);
-        else if (!SPOT_TASKS.includes(g.line.task)) UI.toast('Team spots can be given on a move, a bound, an assault, a fighting position or a support by fire position.');
+        else if (!SPOT_TASKS.includes(g.line.task)) UI.toast('Team spots can be given on a move, a bound, an assault, a fighting position, a support by fire position or a suppress line.');
         else OPORD.refresh();
         return;
       }
@@ -10005,7 +10061,7 @@ const Input = {
           const g = this.dragGh, l = g.line;
           if (SPOT_TASKS.includes(l.task)) {
             // Kept as an offset from the checkpoint (or objective), so the spot moves with it.
-            const w = toWorld(p.x - g.off.x, p.y - g.off.y), a = Plan.anchor(Plan.graphic(l.task === 'assault' ? l.target : l.where));
+            const w = toWorld(p.x - g.off.x, p.y - g.off.y), a = Plan.anchor(Plan.graphic(l.task === 'assault' || l.task === 'suppress' ? l.target : l.where));
             l.spots = l.spots || {}; l.spots[g.unit] = { dx: w.x - a.x, dy: w.y - a.y };
             g.x = w.x; g.y = w.y;
           }
@@ -10044,7 +10100,7 @@ const Input = {
       if (e.type === 'pointerup' && this.dragGh && this.pointers.size === 0) {
         const g = this.dragGh; this.dragGh = null;
         if (!this.moved) UI.ghostTap(g, e.shiftKey || e.ctrlKey || e.metaKey);
-        else if (!SPOT_TASKS.includes(g.line.task)) UI.toast('Team spots can be given on a move, a bound, an assault, a fighting position or a support by fire position.');
+        else if (!SPOT_TASKS.includes(g.line.task)) UI.toast('Team spots can be given on a move, a bound, an assault, a fighting position, a support by fire position or a suppress line.');
         else OPORD.refresh();
         return;
       }

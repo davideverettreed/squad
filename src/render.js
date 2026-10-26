@@ -1205,7 +1205,7 @@ function drawPlanGhosts(ctx) {
   const sq = G.squads.blue;
   for (const gh of pr.ghosts) {
     const t = sq.teams[Number(gh.unit[1]) - 1];
-    if (!t) continue;
+    if (!t || gh.aim) continue;
     ctx.fillStyle = gh.final ? 'rgba(31,79,191,0.55)' : 'rgba(31,79,191,0.3)';
     // In a fighting position the men line up across its sector; elsewhere, the team's formation.
     const fp = gh.line.task === 'occupy' ? Plan.graphic(gh.line.where) : null, live = t.members.filter(s => s.active);
@@ -1216,7 +1216,31 @@ function drawPlanGhosts(ctx) {
       ctx.beginPath(); ctx.arc(p.x, p.y, View3D.drawingDrape ? Math.max(3, 0.9 * R.cam.zoom) : 3, 0, Math.PI * 2); ctx.fill();
     });
   }
+  // Suppression: each team's aim point, a crosshair with a dashed line of fire to it.
+  for (const gh of pr.ghosts) {
+    if (!gh.aim) continue;
+    const q = toScreen(gh.x, gh.y), f = toScreen(gh.from.x, gh.from.y), r = View3D.drawingDrape ? Math.max(10, 2.5 * R.cam.zoom) : 11;
+    ctx.save();
+    ctx.strokeStyle = 'rgba(214,96,24,0.75)'; ctx.lineWidth = View3D.drawingDrape ? lw * 0.6 : 1.4; ctx.setLineDash([4, 5]);
+    ctx.beginPath(); ctx.moveTo(f.x, f.y); ctx.lineTo(q.x, q.y); ctx.stroke(); ctx.setLineDash([]);
+    ctx.strokeStyle = 'rgba(214,96,24,0.95)'; ctx.lineWidth = View3D.drawingDrape ? lw * 0.8 : 2;
+    ctx.beginPath(); ctx.arc(q.x, q.y, r, 0, Math.PI * 2);
+    ctx.moveTo(q.x - r * 1.5, q.y); ctx.lineTo(q.x - r * 0.4, q.y); ctx.moveTo(q.x + r * 0.4, q.y); ctx.lineTo(q.x + r * 1.5, q.y);
+    ctx.moveTo(q.x, q.y - r * 1.5); ctx.lineTo(q.x, q.y - r * 0.4); ctx.moveTo(q.x, q.y + r * 0.4); ctx.lineTo(q.x, q.y + r * 1.5);
+    ctx.stroke();
+    ctx.restore();
+  }
   if (!View3D.drawingDrape) for (const gh of pr.ghosts) {
+    if (gh.aim) {
+      // The team number beside its aim point (set off the TRP when on it, like any ghost).
+      const q = ghostScreen(gh), sl = G.ui.sel;
+      const picked = sl && (sl.level === 'squad' || (sl.level === 'team' && 't' + sl.team.num === gh.unit) || (sl.level === 'group' && sl.teams.some(t => 't' + t.num === gh.unit)));
+      if (picked) { ctx.fillStyle = 'rgba(255,214,10,0.35)'; ctx.beginPath(); ctx.arc(q.x, q.y, 14, 0, Math.PI * 2); ctx.fill(); }
+      ctx.font = '700 13px "Saira Condensed", "Arial Narrow", sans-serif'; ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+      ctx.lineWidth = 3; ctx.strokeStyle = 'rgba(247,245,236,0.95)'; ctx.strokeText(gh.unit[1] + ' FIRE', q.x, q.y);
+      ctx.fillStyle = 'rgb(176,70,14)'; ctx.fillText(gh.unit[1] + ' FIRE', q.x, q.y);
+      continue;
+    }
     const q = ghostScreen(gh), at = toScreen(gh.x, gh.y);
     // An earlier step is fainter than where the plan leaves the team.
     ctx.globalAlpha = gh.final ? 0.85 : 0.45;

@@ -435,8 +435,10 @@ const View3D = {
         const f = this.flagTexture(PLAN_UNITS[gh.unit], '#1f4fbf');
         m.label.material.map = f.tex; m.label.material.needsUpdate = true; m.aspect = f.aspect; m.unit = gh.unit;
       }
-      const r = (gh.unit === 'squad' ? 9 : 6) * k, h = 7 * k;
+      const r = (gh.unit === 'squad' ? 9 : 6) * k, h = (gh.aim ? 3 : 7) * k;
       m.g.visible = true;
+      // An aim point (suppression) is a low amber marker; a team's place a blue peg.
+      m.body.material.color.setHex(gh.aim ? 0xffa040 : 0x80e0ff);
       // Beside the control measure it ends on, so each can be tapped on its own.
       const gx = gh.x + 12 * k, gy = gh.y - 12 * k;
       m.g.position.set(gx - MAP_W / 2, this.height(gx, gy), gy - MAP_H / 2);
@@ -583,7 +585,7 @@ const View3D = {
       } else if (this.pointers.size === 1 && this.moved && this.dragGh) {
         const w = this.groundAt(p.x, p.y), l = this.dragGh.line;
         if (w && SPOT_TASKS.includes(l.task)) {
-          const a = Plan.anchor(Plan.graphic(l.task === 'assault' ? l.target : l.where));
+          const a = Plan.anchor(Plan.graphic(l.task === 'assault' || l.task === 'suppress' ? l.target : l.where));
           l.spots = l.spots || {}; l.spots[this.dragGh.unit] = { dx: w.x - a.x, dy: w.y - a.y };
           this.markDirty();
         }
@@ -616,7 +618,7 @@ const View3D = {
       if (e.type === 'pointerup' && this.dragGh && this.pointers.size === 0) {
         const g = this.dragGh; this.dragGh = null;
         if (!this.moved) UI.ghostTap(g, e.shiftKey || e.ctrlKey || e.metaKey);
-        else if (!SPOT_TASKS.includes(g.line.task)) UI.toast('Team spots can be given on a move, a bound, an assault, a fighting position or a support by fire position.');
+        else if (!SPOT_TASKS.includes(g.line.task)) UI.toast('Team spots can be given on a move, a bound, an assault, a fighting position, a support by fire position or a suppress line.');
         else OPORD.refresh();
         return;
       }

@@ -18,7 +18,7 @@ const GRAPHIC_KINDS = {
   trp:  { label: 'Target reference point', short: 'TRP', numbered: true },
 };
 // Plan lines whose teams can each be given their own spot by dragging their ghosts.
-const SPOT_TASKS = ['move', 'bound', 'assault', 'occupy', 'sbf'];
+const SPOT_TASKS = ['move', 'bound', 'assault', 'occupy', 'sbf', 'suppress'];
 // What placing a control measure means for a selected unit: its next step of the plan.
 const TOOL_STEPS = { cp: 'cp', rel: 'rel', aslt: 'aslt', fp: 'fp', sbf: 'sbf', obj: 'obj', trp: 'trp' };
 // Control measures grouped as the graphics manuals group them: points, lines and areas.
@@ -507,6 +507,15 @@ const Plan = {
     }
     for (const l of this.lines) {
       if (TASKS[l.task].noUnit) continue;
+      // Suppression: no one moves; each team's aim point on the target is its ghost.
+      if (l.task === 'suppress') {
+        const tg = this.graphic(l.target);
+        const units = l.unit === 'squad' ? ['t1', 't2', 't3'].filter(u => pos[u]) : [l.unit].filter(u => pos[u]);
+        if (!tg || !units.length) continue;
+        const aims = this.aimsFor(l, this.anchor(tg), centroid(units.map(u => pos[u])), units);
+        for (const u of units) ghosts.push({ unit: u, x: aims[u].x, y: aims[u].y, name: tg.name, line: l, aim: true, from: { x: pos[u].x, y: pos[u].y }, final: false });
+        continue;
+      }
       let dest = null, via = null, g = null;
       if (l.task === 'assault') { g = this.graphic(l.target); if (g) dest = this.anchor(g); }
       else if (TASKS[l.task].where) {
@@ -544,6 +553,19 @@ const Plan = {
         const o = scaled(squadSlot(sq.formation, k, units.length), sq.spacing), w = rotateOffset(o.x, o.y, h);
         out[u] = { x: dest.x + w.x, y: dest.y + w.y };
       } else out[u] = { x: dest.x, y: dest.y };
+    });
+    return out;
+  },
+
+  // Where each team of a suppress line aims: its dragged aim point, or (a squad) the teams'
+  // fire spread 12 m apart across the target as seen from the squad, or the point itself.
+  aimsFor(l, dest, from, units) {
+    const out = {}, h = angleTo(from.x, from.y, dest.x, dest.y);
+    units.forEach((u, k) => {
+      const sp = l.spots && l.spots[u];
+      if (sp) { out[u] = { x: dest.x + sp.dx, y: dest.y + sp.dy }; return; }
+      const w = rotateOffset((k - (units.length - 1) / 2) * 12, 0, h);
+      out[u] = units.length > 1 ? { x: dest.x + w.x, y: dest.y + w.y } : { x: dest.x, y: dest.y };
     });
     return out;
   },
@@ -637,7 +659,15 @@ const Plan = {
           else groupMove(sel, this.anchor(where).x, this.anchor(where).y, l.mode);
           l.stage = 'moving';
           break;
-        case 'suppress': issueOrder(sel, 'suppress', this.anchor(tgt)); l.status = 'done'; break;
+        case 'suppress':
+          if (l.unit === 'squad' || (l.spots && Object.keys(l.spots).length)) {
+            // Each team on its own aim point.
+            const sq = G.squads.blue, units = l.unit === 'squad' ? sq.teams.filter(t => t.members.some(commandable)).map(t => 't' + t.num) : [l.unit];
+            const aims = this.aimsFor(l, this.anchor(tgt), centroid(m), units);
+            for (const u of units) issueOrder(this.unitSel(u), 'suppress', aims[u]);
+          } else issueOrder(sel, 'suppress', this.anchor(tgt));
+          l.status = 'done';
+          break;
         case 'lift': issueOrder(sel, 'lift'); issueOrder(sel, 'halt'); l.status = 'done'; break;
         case 'hold': issueOrder(sel, 'halt'); issueOrder(sel, 'posture', 'prone'); issueOrder(sel, 'fire', 'free'); l.status = 'done'; break;
       }
