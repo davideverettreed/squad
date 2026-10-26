@@ -43,6 +43,7 @@ function updateSpotting() {
         const off = Math.abs(angleDiff(o.look, angleTo(o.x, o.y, e.x, e.y)));
         p *= off <= o.coneHalf ? 1.25 : off < 1.75 ? 0.45 : 0.12;
         p *= 1 - o.supp / 120;
+        if (o.relaxed) p *= 0.3; // at rest, not on watch
         if (d < 25) p = Math.max(p, 0.5 * v);
         if (chance(Math.min(0.95, p))) { seenBy = o; break; }
       }

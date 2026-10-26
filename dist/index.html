@@ -514,7 +514,7 @@ body:not(.roster-min) #btn3d, body:not(.roster-min) #ctl3d { margin-left: 0; }
         <h3>Selecting</h3>
         <p>Tap a Marine to select that Marine. Tap again to select the fire team, and again for the whole squad. The Squad and fire team buttons above the orders do the same. Keys: <kbd>1</kbd> <kbd>2</kbd> <kbd>3</kbd> fire teams, <kbd>0</kbd> squad, <kbd>Esc</kbd> cancel.</p>
         <h3>Moving</h3>
-        <p>While planning, each planned move shows as a dashed blue arrow, and a dashed ghost of the unit stands where its last move ends. Tap a ghost to pick that unit there, then tap the map to plan its next step. Tap a control measure to change it into another kind (a checkpoint into an assault position, say), rename it, open it in the order or delete it; drag it to move it. While planning, nothing moves: select a unit and tap the map to open a menu that sets a checkpoint, a bound, a route, a fighting position, a support-by-fire position, an assault position, an objective or a target reference point at that spot and adds the line to the plan. Press on one of your pieces (finger or left button) and drag it: let go to open the plan menu at that spot while planning, or to send it there after step-off. After step-off, orders go by radio: tap the ground to move in the chosen mode (Walk unless you pick Rush or Crawl); tap twice quickly to rush. Double-click a fire team's button to select every other team instead. The squad leader moves with 1st Fire Team, but can still be selected alone, and the other teams move without him. W, A, S and D shift the selected unit forward, left, back and right while it keeps its front; Q and E turn it. A ghost shows where it will end up, the order goes out when you stop pressing, and once there the men take up whatever move they were on. Right-click also moves. Teams and the squad move in their formation. A walking team that takes fire, or sees a new enemy within 250 m, halts on its own, gets down and returns fire; rush, assault or bound to keep moving under fire. Rushing is fast but tiring and easy to spot. Crawling is slow but men can crawl while pinned.</p>
+        <p>While planning, each planned move shows as a dashed blue arrow, and a dashed ghost of the unit stands where its last move ends. Tap a ghost to pick that unit there, then tap the map to plan its next step. Tap a control measure to change it into another kind (a checkpoint into an assault position, say), rename it, open it in the order or delete it; drag it to move it. While planning, nothing moves: select a unit and tap the map to open a menu that sets a checkpoint, a bound, a route, a fighting position, a support-by-fire position, an assault position, an objective or a target reference point at that spot and adds the line to the plan. Press on one of your pieces (finger or left button) and drag it: let go to open the plan menu at that spot while planning, or to send it there after step-off. After step-off, orders go by radio: tap the ground to move in the chosen mode (Walk unless you pick Rush or Crawl); tap twice quickly to rush. Double-click a fire team's button to select every other team instead. The squad leader moves with 1st Fire Team, but can still be selected alone, and the other teams move without him. Closer and Wider (keys − and +) set the interval between the men of the selected team or squad, from half to three times the standard 7 m; in the fight they spread out or close up where they are. W, A, S and D shift the selected unit forward, left, back and right while it keeps its front; Q and E turn it. A ghost shows where it will end up, the order goes out when you stop pressing, and once there the men take up whatever move they were on. Right-click also moves. Teams and the squad move in their formation. A walking team that takes fire, or sees a new enemy within 250 m, halts on its own, gets down and returns fire; rush, assault or bound to keep moving under fire. Rushing is fast but tiring and easy to spot. Crawling is slow but men can crawl while pinned.</p>
         <h3>Fire and maneuver</h3>
         <p><b>Suppress</b> puts fire on an area, seen enemy or not. <b>Bound</b> sends the squad forward one fire team at a time while the others cover it (a fire team bounds in buddy pairs). <b>Assault</b> walks forward firing and throwing grenades. Tap a visible enemy to make the selection engage that target.</p>
         <h3>Reading the pieces</h3>
@@ -739,6 +739,8 @@ const OPFOR_BILLETS = {
   G:   { title: 'Grenadier',          weapon: 'AK74', launcher: 'GP25' },
   RPG: { title: 'Antitank Grenadier', weapon: 'AKS74U', launcher: 'RPG7' },
   MM:  { title: 'Marksman',           weapon: 'SVD' },
+  CR:  { title: 'Aircrewman',         weapon: 'AKS74U' },
+  CO:  { title: 'Commander',          weapon: 'AKS74U' },
 };
 const OPFOR_POOL = ['R', 'R', 'R', 'R', 'AR', 'MG', 'G', 'RPG', 'MM'];
 
@@ -1847,6 +1849,7 @@ class Team {
     this.side = side; this.squad = squad; this.num = num; this.name = name;
     this.members = [];
     this.formation = 'wedge';
+    this.spacing = 1; // interval between men, as a share of the standard (about 7 m)
     this.morale = squad.morale;
     this.lastFiredUpon = -99;
     this.threats = new Map(); // enemy id -> time it last fired at this team
@@ -1864,6 +1867,7 @@ class Squad {
     this.side = side; this.name = name; this.morale = morale;
     this.teams = []; this.hq = null; this.leader = null;
     this.formation = 'wedge';
+    this.spacing = 1; // interval between teams, as a share of the standard
     this.training = 1;
   }
   get all() { return [this.hq, ...this.teams].flatMap(t => t.members); }
@@ -1948,13 +1952,13 @@ function placeSquad(sq, map, x, y, heading) {
     s.facing = heading; s.look = heading;
   };
   sq.teams.forEach((t, k) => {
-    const a = rotateOffset(squadSlot(sq.formation, k, n).x, squadSlot(sq.formation, k, n).y, heading);
+    const q = scaled(squadSlot(sq.formation, k, n), sq.spacing), a = rotateOffset(q.x, q.y, heading);
     t.members.forEach((s, i) => {
-      const o = teamSlot(t.formation, i), w = rotateOffset(o.x, o.y, heading);
+      const o = scaled(teamSlot(t.formation, i), t.spacing), w = rotateOffset(o.x, o.y, heading);
       put(s, x + a.x + w.x, y + a.y + w.y);
     });
   });
-  const so = squadLeaderSlot(sq.formation), w = rotateOffset(so.x, so.y, heading);
+  const so = scaled(squadLeaderSlot(sq.formation), sq.spacing), w = rotateOffset(so.x, so.y, heading);
   put(sq.leader, x + w.x, y + w.y);
 }
 
@@ -2004,6 +2008,7 @@ function updateSpotting() {
         const off = Math.abs(angleDiff(o.look, angleTo(o.x, o.y, e.x, e.y)));
         p *= off <= o.coneHalf ? 1.25 : off < 1.75 ? 0.45 : 0.12;
         p *= 1 - o.supp / 120;
+        if (o.relaxed) p *= 0.3; // at rest, not on watch
         if (d < 25) p = Math.max(p, 0.5 * v);
         if (chance(Math.min(0.95, p))) { seenBy = o; break; }
       }
@@ -2543,6 +2548,8 @@ function groupBut(team) {
   const sq = team.squad;
   return { level: 'group', squad: sq, except: team, teams: sq.teams.filter(t => t !== team && t.members.some(s => s.active)) };
 }
+// A formation offset at a unit's chosen interval.
+function scaled(o, k) { return { x: o.x * (k || 1), y: o.y * (k || 1) }; }
 function commandable(s) { return s.active && !s.routing; }
 
 function setPosture(s, p) {
@@ -2596,7 +2603,7 @@ function teamMove(team, x, y, mode, heading, alone) {
     if (route) {
       act.forEach((s, i) => {
         if (!commandable(s)) return;
-        const o = teamSlot(team.formation, i);
+        const o = scaled(teamSlot(team.formation, i), team.spacing);
         s.path = G.map.offsetPath(s.x, s.y, route, o.x, o.y);
         s.moveMode = mode; s.faceAngle = null;
       });
@@ -2604,7 +2611,7 @@ function teamMove(team, x, y, mode, heading, alone) {
     }
   }
   act.forEach((s, i) => {
-    const o = teamSlot(team.formation, i), w = rotateOffset(o.x, o.y, heading);
+    const o = scaled(teamSlot(team.formation, i), team.spacing), w = rotateOffset(o.x, o.y, heading);
     orderMove(s, x + w.x, y + w.y, mode);
   });
 }
@@ -2615,12 +2622,12 @@ function squadMove(sq, x, y, mode) {
   const c = centroid(act), heading = angleTo(c.x, c.y, x, y);
   const teams = sq.teams.filter(t => t.members.some(commandable));
   teams.forEach((t, k) => {
-    const o = squadSlot(sq.formation, k, teams.length), w = rotateOffset(o.x, o.y, heading);
+    const o = scaled(squadSlot(sq.formation, k, teams.length), sq.spacing), w = rotateOffset(o.x, o.y, heading);
     teamMove(t, x + w.x, y + w.y, mode, heading, false);
   });
   const sl = sq.hq.members[0];
   if (commandable(sl)) {
-    const o = squadLeaderSlot(sq.formation), w = rotateOffset(o.x, o.y, heading);
+    const o = scaled(squadLeaderSlot(sq.formation), sq.spacing), w = rotateOffset(o.x, o.y, heading);
     orderMove(sl, x + w.x, y + w.y, mode);
   }
 }
@@ -2641,10 +2648,10 @@ function routeMove(sel, pts, mode) {
   for (const s of members) {
     let ox = 0, oy = 0;
     if (s.team.num) {
-      const i = s.team.members.filter(commandable).indexOf(s), o = teamSlot(s.team.formation, Math.max(0, i));
+      const i = s.team.members.filter(commandable).indexOf(s), o = scaled(teamSlot(s.team.formation, Math.max(0, i)), s.team.spacing);
       ox += o.x; oy += o.y;
-      if (sel.level === 'squad') { const k = teams.indexOf(s.team), q = squadSlot(sq.formation, Math.max(0, k), teams.length); ox += q.x; oy += q.y; }
-    } else if (sel.level === 'squad') { const q = squadLeaderSlot(sq.formation); ox = q.x; oy = q.y; }
+      if (sel.level === 'squad') { const k = teams.indexOf(s.team), q = scaled(squadSlot(sq.formation, Math.max(0, k), teams.length), sq.spacing); ox += q.x; oy += q.y; }
+    } else if (sel.level === 'squad') { const q = scaled(squadLeaderSlot(sq.formation), sq.spacing); ox = q.x; oy = q.y; }
     s.path = G.map.offsetPath(s.x, s.y, route, ox, oy);
     s.moveMode = mode; s.faceAngle = null; s.assault = false;
   }
@@ -2813,6 +2820,12 @@ function issueOrder(sel, type, arg) {
       else team.formation = arg;
       G.toast(who + ': formation ' + FORMATIONS[arg].label.toLowerCase() + '.');
       break;
+    case 'spacing': {
+      // Spread out or close up around the unit's center, keeping its front.
+      Nudge.apply(sel, { heading: members[0].facing, scale: arg.ratio, text: arg.text });
+      G.toast(who + ': ' + arg.text + '.');
+      break;
+    }
     case 'nudge':
       Nudge.apply(sel, arg);
       G.toast(who + ': ' + arg.text + '.');
@@ -2984,9 +2997,9 @@ const Nudge = {
   targets(n) {
     const h = n.heading, fx = Math.cos(h), fy = Math.sin(h), rx = -fy, ry = fx;
     const cx = n.c.x + fx * n.f + rx * n.r, cy = n.c.y + fy * n.f + ry * n.r;
-    const ca = Math.cos(n.rot), sa = Math.sin(n.rot);
+    const ca = Math.cos(n.rot), sa = Math.sin(n.rot), k = n.scale || 1;
     return n.men.map(s => {
-      const ox = s.x - n.c.x, oy = s.y - n.c.y;
+      const ox = (s.x - n.c.x) * k, oy = (s.y - n.c.y) * k;
       return { s, x: clamp(cx + ox * ca - oy * sa, 2, MAP_W - 2), y: clamp(cy + ox * sa + oy * ca, 2, MAP_H - 2) };
     });
   },
@@ -3010,14 +3023,14 @@ const Nudge = {
   apply(sel, arg) {
     const men = selMembers(sel).filter(commandable);
     if (!men.length) return;
-    const n = { men, c: centroid(men), heading: arg.heading, f: arg.f, r: arg.r, rot: arg.rot };
+    const n = { men, c: centroid(men), heading: arg.heading, f: arg.f || 0, r: arg.r || 0, rot: arg.rot || 0, scale: arg.scale || 1 };
     for (const t of this.targets(n)) {
       const s = t.s;
       if (!s.resume) s.resume = s.path.length ? { path: s.path.slice(), mode: s.moveMode, faceAngle: s.faceAngle } : null;
       s.path = G.map.findPath(s.x, s.y, t.x, t.y) || [{ x: t.x, y: t.y }];
       s.moveMode = 'walk';
-      s.holdFacing = arg.heading + arg.rot;
-      s.faceAngle = arg.heading + arg.rot;
+      s.holdFacing = arg.heading + (arg.rot || 0);
+      s.faceAngle = arg.heading + (arg.rot || 0);
       s.nudging = true;
     }
   },
@@ -3027,11 +3040,12 @@ const Nudge = {
 // Enemy squad AI. On contact the heaviest group becomes the base of fire and the
 // others try to flank and assault. It breaks contact after heavy losses.
 
-const AI = { mode: 'defend', objective: null, contact: false, withdrawing: false, timer: 0, lastContact: -99 };
+const AI = { mode: 'defend', objective: null, contact: false, withdrawing: false, timer: 0, lastContact: -99, routine: null, breakOff: false, escape: null };
 
-function initAI(mode, objective) {
+function initAI(mode, objective, extra) {
   AI.mode = mode; AI.objective = objective;
   AI.contact = false; AI.withdrawing = false; AI.timer = 2; AI.lastContact = -99;
+  AI.routine = extra && extra.routine || null; AI.breakOff = !!(extra && extra.breakOff); AI.escape = extra && extra.escape || null;
   for (const t of [G.squads.red.hq, ...G.squads.red.teams]) t.task = null;
 }
 
@@ -3081,21 +3095,57 @@ function assignTasks(sq) {
 // route as it would have walked in that time, at a walk over the ground, stopping short
 // of the squad's start so the fight still opens at range.
 function advanceDuringPlanning(seconds) {
-  if (AI.mode !== 'advance' || !AI.objective) return;
+  const exit = AI.routine && AI.routine.kind === 'exit';
+  if ((AI.mode !== 'advance' && !exit) || !AI.objective) return;
   const sq = G.squads.red, act = sq.all.filter(commandable);
   if (!act.length) return;
-  const c = centroid(act), route = G.map.findPath(c.x, c.y, AI.objective.x, AI.objective.y);
+  // Marching on the squad, it stops 600 m short; leaving the sheet, 300 m short of the edge.
+  const goal = exit ? AI.routine.pts[AI.routine.pts.length - 1] : AI.objective, stop = exit ? 300 : 600;
+  const c = centroid(act), route = G.map.findPath(c.x, c.y, goal.x, goal.y);
   if (!route || !route.length) return;
-  let left = Math.min(seconds * MOVE.walk.speed * 0.8, Math.max(0, dist(c.x, c.y, AI.objective.x, AI.objective.y) - 600));
+  let left = Math.min(seconds * MOVE.walk.speed * 0.8, Math.max(0, dist(c.x, c.y, goal.x, goal.y) - stop));
+  if (exit) AI.routine.i = AI.routine.pts.length - 1;
   let px = c.x, py = c.y;
   for (const p of route) {
     const d = dist(px, py, p.x, p.y);
     if (d >= left) { px += (p.x - px) * left / d; py += (p.y - py) * left / d; left = 0; break; }
     left -= d; px = p.x; py = p.y;
   }
-  const h = angleTo(px, py, AI.objective.x, AI.objective.y);
+  const h = angleTo(px, py, goal.x, goal.y);
   placeSquad(sq, G.map, px, py, h);
   for (const s of sq.all) s.path = [];
+}
+
+// The edge of the sheet along a bearing from a point.
+function edgeFrom(p, ang) {
+  let x = p.x, y = p.y;
+  for (let r = 0; r < MAP_W * 2; r += 20) { x = p.x + Math.cos(ang) * r; y = p.y + Math.sin(ang) * r; if (x < 15 || y < 15 || x > MAP_W - 15 || y > MAP_H - 15) break; }
+  return { x: clamp(x, 8, MAP_W - 8), y: clamp(y, 8, MAP_H - 8) };
+}
+
+// What the enemy does before contact: walk its patrol round or out and back, go from
+// place to place with a pause at each, or make its way off the sheet.
+function runRoutine(sq, act) {
+  const r = AI.routine, movers = r.teams ? r.teams.flatMap(t => t.members.filter(commandable)) : act;
+  if (!movers.length || movers.some(s => s.moving)) return;
+  if (r.pause > G.time) return;
+  if (r.kind === 'exit') {
+    if (r.i >= r.pts.length) {
+      // Off the sheet: those who made it are gone.
+      for (const s of movers) if (dist(s.x, s.y, r.pts[r.pts.length - 1].x, r.pts[r.pts.length - 1].y) < 40) { s.routed = true; s.escaped = true; s.path = []; }
+      return;
+    }
+    const p = r.pts[r.i++];
+    for (const s of movers) s.homePosture = 'kneel';
+    if (r.teams) for (const t of r.teams) teamMove(t, p.x, p.y, 'walk'); else squadMove(sq, p.x, p.y, 'walk');
+    return;
+  }
+  const p = r.pts[r.i];
+  if (r.kind === 'loop') r.i = (r.i + 1) % r.pts.length;
+  else if (r.kind === 'shuttle') { if (r.i + r.dir >= r.pts.length || r.i + r.dir < 0) r.dir = -r.dir; r.i += r.dir; }
+  else { r.i = (r.i + 1) % r.pts.length; r.pause = G.time + randRange(20, 60); }
+  for (const s of movers) s.homePosture = 'kneel';
+  if (r.teams) for (const t of r.teams) teamMove(t, p.x + gauss() * 8, p.y + gauss() * 8, 'walk'); else squadMove(sq, p.x, p.y, 'walk');
 }
 
 function updateAI(dt) {
@@ -3117,8 +3167,19 @@ function updateAI(dt) {
   if (contacts.length) AI.lastContact = G.time;
   const enemyC = contacts.length ? centroid(contacts) : null;
 
+  // Done at the water point (or wherever it stopped): it moves on, away from the squad.
+  const M = G.mission;
+  if (M && M.leaveAt != null && G.time >= M.leaveAt && !AI.contact && !(AI.routine && AI.routine.kind === 'exit')) {
+    M.leaveAt = null;
+    for (const s of act) s.relaxed = false;
+    const c = centroid(act), b = centroid(G.squads.blue.all), out = edgeFrom(c, angleTo(b.x, b.y, c.x, c.y));
+    AI.routine = { kind: 'exit', pts: [out], i: 0, pause: 0 }; AI.escape = out;
+    if (sq.all.some(s => G.known.blue.get(s.id)?.visible)) G.log('The enemy is moving off.', 'contact');
+  }
+
   if (!enemyC) {
     if (AI.contact && G.time - AI.lastContact > 40) { AI.contact = false; for (const t of sq.teams) t.task = null; }
+    if (!AI.contact && AI.routine) runRoutine(sq, act);
     if (!AI.contact && AI.mode === 'advance' && act.every(s => !s.moving)) {
       const c = centroid(act);
       if (dist(c.x, c.y, AI.objective.x, AI.objective.y) > 15) {
@@ -3131,6 +3192,16 @@ function updateAI(dt) {
 
   if (!AI.contact) {
     AI.contact = true;
+    // Men at rest come awake.
+    for (const s of sq.all) s.relaxed = false;
+    // A force out to watch, forage or get away breaks contact and makes for the edge.
+    if (AI.breakOff || (AI.routine && AI.routine.kind === 'exit')) {
+      const c = centroid(act);
+      AI.escape = AI.escape || edgeFrom(c, angleTo(enemyC.x, enemyC.y, c.x, c.y));
+      AI.withdrawing = true;
+      for (const t of [sq.hq, ...sq.teams]) startRouting(t, 'withdraw');
+      return;
+    }
     assignTasks(sq);
     if (AI.mode === 'advance') {
       for (const s of act) { s.path = []; }
@@ -3204,6 +3275,417 @@ function runTask(t, m, enemyC) {
       }
     }
   }
+}
+
+// ---- src/missions.js
+'use strict';
+// Missions: what the enemy is, where it is and what it is doing, what 1st Squad must do,
+// and how the mission is won or lost. Each mission picks a site on the sheet that suits
+// it (a farm, a village, a lake shore, a road, a hilltop, a bridge), sets the enemy there
+// in its activity, and writes its part of the order.
+
+// What kind of enemy, and how it is equipped and led.
+const OPFOR_KINDS = {
+  regular:   { unit: 'Regular infantry, uniformed and well equipped.', men: 'regular soldiers', pool: OPFOR_POOL, morale: [62, 82], training: 1, frags: [1, 2] },
+  irregular: { unit: 'Irregular fighters in mixed civilian and military clothing.', men: 'irregular fighters', pool: ['R', 'R', 'R', 'R', 'R', 'AR', 'RPG', 'G'], morale: [38, 62], training: 1.25, frags: [0, 1], akm: 0.7 },
+  recon:     { unit: 'Reconnaissance troops: light kit, good fieldcraft.', men: 'reconnaissance troops', pool: ['R', 'R', 'MM', 'AR'], morale: [70, 86], training: 0.9, frags: [2, 2] },
+  crew:      { unit: 'Helicopter aircrew with their personal weapons, and some infantry.', men: 'aircrew and guards', pool: ['CR', 'CR', 'CR', 'R'], morale: [45, 65], training: 1.15, frags: [0, 1] },
+};
+
+// Build the enemy force: a leader and groups of three to five men, n men in all.
+function buildOpfor(n, kindKey, extra) {
+  const K = OPFOR_KINDS[kindKey], name = n <= 5 ? 'Enemy team' : n <= 9 ? 'Enemy section' : n <= 13 ? 'Enemy squad' : 'Enemy reinforced squad';
+  const sq = new Squad('red', name, randRange(K.morale[0], K.morale[1]));
+  sq.training = K.training; sq.kind = kindKey;
+  const make = (key, team) => {
+    const b = OPFOR_BILLETS[key];
+    let weapon = b.alt && chance(K.akm || 0.35) ? b.alt : b.weapon;
+    const s = new Soldier('red', key, team, { title: b.title, name: b.title, weapon, launcher: b.launcher, frags: randInt(K.frags[0], K.frags[1]) });
+    team.members.push(s);
+    return s;
+  };
+  sq.hq = new Team('red', sq, 0, 'Enemy leader');
+  sq.leader = make(extra && extra.leader ? extra.leader : 'SL', sq.hq);
+  const rest = n - 1, groups = Math.max(1, Math.round(rest / 4));
+  let left = rest;
+  for (let k = 1; k <= groups; k++) {
+    const t = new Team('red', sq, k, 'Enemy group ' + k);
+    const size = k === groups ? left : Math.max(2, Math.round(rest / groups));
+    left -= size;
+    for (let i = 0; i < size; i++) make(i === 0 && size > 2 ? 'TL' : pick(K.pool), t);
+    if (t.members.length) sq.teams.push(t);
+  }
+  return sq;
+}
+
+// ---------------------------------------------------------------- sites on the sheet
+const Sites = {
+  inside(x, y, m) { return x >= m && y >= m && x <= MAP_W - m && y <= MAP_H - m; },
+  farm(m) { return shuffle(m.places.filter(p => p.kind === 'farm')).map(p => ({ x: p.x - 10, y: p.y + 6, name: p.name, kind: 'farm' })); },
+  village(m) { return shuffle(m.places.filter(p => p.kind === 'village')).map(p => ({ x: p.x, y: p.y, name: p.name.toUpperCase(), kind: 'village' })); },
+  peak(m) { return m.peaks.slice(0, 6).map(p => ({ x: p.x, y: p.y, name: 'Hill ' + Math.round(m.elevBase + p.e), kind: 'hill' })); },
+  // Ponds big enough to walk around, each with a ring of points along its shore.
+  pond(m) {
+    const seen = new Uint8Array(GW * GH), out = [];
+    for (let i = 0; i < GW * GH; i += 3) {
+      if (seen[i] || (m.ter[i] !== TER.POND && m.ter[i] !== TER.ICE)) continue;
+      const q = [i], cells = []; seen[i] = 1;
+      while (q.length) {
+        const c = q.pop(); cells.push(c);
+        const x = c % GW, y = Math.floor(c / GW);
+        for (const [dx, dy] of [[1, 0], [-1, 0], [0, 1], [0, -1]]) {
+          const j = (y + dy) * GW + x + dx;
+          if (m.inGrid(x + dx, y + dy) && !seen[j] && m.ter[j] === m.ter[i]) { seen[j] = 1; q.push(j); }
+        }
+      }
+      if (cells.length < 300) continue;
+      let sx = 0, sy = 0; for (const c of cells) { sx += c % GW; sy += Math.floor(c / GW); }
+      const cx = (sx / cells.length + 0.5) * CELL, cy = (sy / cells.length + 0.5) * CELL, ring = [];
+      for (let k = 0; k < 8; k++) {
+        const a = k / 8 * Math.PI * 2;
+        let r = 10;
+        while (r < 400 && (m.terAt(cx + Math.cos(a) * r, cy + Math.sin(a) * r) === TER.POND || m.terAt(cx + Math.cos(a) * r, cy + Math.sin(a) * r) === TER.ICE)) r += 4;
+        const px = clamp(cx + Math.cos(a) * (r + 18), 30, MAP_W - 30), py = clamp(cy + Math.sin(a) * (r + 18), 30, MAP_H - 30);
+        const n = m.nearestPassable(Math.floor(px / CELL), Math.floor(py / CELL));
+        ring.push({ x: (n.cx + 0.5) * CELL, y: (n.cy + 0.5) * CELL });
+      }
+      out.push({ x: cx, y: cy, name: 'the pond', kind: 'pond', ring, ha: cells.length * CELL * CELL / 10000 });
+    }
+    return shuffle(out);
+  },
+  // A stretch of road 500 to 800 m long, with its two ends and the road between.
+  road(m) {
+    const out = [];
+    for (const r of shuffle(m.roads.slice())) {
+      const pts = r.pts;
+      if (pts.length < 3) continue;
+      let len = 0; const cum = [0];
+      for (let i = 1; i < pts.length; i++) { len += dist(pts[i - 1].x, pts[i - 1].y, pts[i].x, pts[i].y); cum.push(len); }
+      if (len < 500) continue;
+      const want = Math.min(len, randRange(500, 800)), start = randRange(0, len - want);
+      const seg = pts.filter((p, i) => cum[i] >= start && cum[i] <= start + want);
+      if (seg.length < 2) continue;
+      const mid = seg[Math.floor(seg.length / 2)];
+      out.push({ x: mid.x, y: mid.y, name: r.kind === 'paved' ? 'the paved road' : 'the track', kind: 'road', a: seg[0], b: seg[seg.length - 1], path: seg });
+    }
+    return out;
+  },
+  crossing(m) {
+    if (!m.river) return [];
+    return shuffle([...m.river.bridges.map(b => ({ x: b.x, y: b.y, name: 'the bridge over the ' + m.river.name.toLowerCase().replace(/\b\w/g, c => c.toUpperCase()), kind: 'bridge' })),
+      ...m.river.fords.map(f => ({ x: f.x, y: f.y, name: 'the ford on the ' + m.river.name.toLowerCase().replace(/\b\w/g, c => c.toUpperCase()), kind: 'ford' }))]);
+  },
+  woods(m) {
+    const out = [];
+    for (let k = 0; k < 400 && out.length < 6; k++) {
+      const x = randRange(200, MAP_W - 200), y = randRange(200, MAP_H - 200);
+      let n = 0; for (let a = 0; a < 8; a++) if (m.terAt(x + Math.cos(a) * 30, y + Math.sin(a) * 30) === TER.WOODS) n++;
+      if (m.terAt(x, y) === TER.WOODS && n >= 6) out.push({ x, y, name: 'the woods', kind: 'woods' });
+    }
+    return out;
+  },
+  open(m) {
+    const out = [];
+    for (let k = 0; k < 40; k++) {
+      const x = randRange(250, MAP_W - 250), y = randRange(250, MAP_H - 250);
+      if (TERRAIN[m.terAt(x, y)].speed > 0) out.push({ x, y, name: 'open ground', kind: 'open' });
+    }
+    return out;
+  },
+};
+
+// ---------------------------------------------------------------- the missions
+// size: men in the enemy force. kind: OPFOR_KINDS key. site: the kinds of place, in order
+// of preference. setup: places the enemy and gives it its activity. draft: the kind of
+// plan the Draft button lays out. Texts take the site's name and grid.
+const MISSIONS = {
+  village: {
+    label: 'Village strongpoint', size: [8, 13], kind: 'regular', site: ['village', 'farm'], draft: 'attack', digIn: true,
+    activity: (s) => 'Holding the buildings of ' + s.name + ' and preparing positions, oriented toward you.',
+    task: (s, gr) => 'attacks to destroy OPFOR in ' + s.name + ' (grid ' + gr + ') in order to secure the village for the company',
+    likely: 'Defend', setup: (ctx) => holdAt(ctx, ctx.site, ctx.blue),
+  },
+  meeting: {
+    label: 'Meeting engagement', size: [6, 12], kind: 'regular', site: ['open'], draft: 'defense', mode: 'meeting',
+    activity: (s, dir) => 'Moving ' + dir + ' on foot toward your position in a loose wedge.',
+    task: (s, gr) => 'moves to contact to find, fix and destroy OPFOR advancing from vicinity grid ' + gr + ' in order to protect the company\'s flank',
+    likely: 'Attack', setup: (ctx) => { place(ctx, ctx.site); ctx.ai = { mode: 'advance', objective: ctx.blue }; },
+  },
+  farmRest: {
+    label: 'Enemy resting at a farm', size: [6, 12], kind: 'irregular', site: ['farm', 'village'], draft: 'attack',
+    activity: (s) => 'Resting at ' + s.name + ': weapons grounded, a fire lit, one or two sentries out. Not expecting contact.',
+    task: (s, gr) => 'attacks to destroy OPFOR resting at ' + s.name + ' (grid ' + gr + ') before it moves on',
+    likely: 'Defend', setup: (ctx) => restAt(ctx, ctx.site, 2),
+  },
+  lakePatrol: {
+    label: 'Patrol around a lake', size: [5, 9], kind: 'regular', site: ['pond', 'woods'], draft: 'attack',
+    activity: (s) => 'Patrolling the shore of ' + s.name + ' on foot, clockwise, a full circuit every half hour or so.',
+    task: (s, gr) => 'destroys the OPFOR patrol around ' + s.name + ' (grid ' + gr + ') in order to clear the lake shore for the company',
+    likely: 'Attack', setup: (ctx) => patrol(ctx, ctx.site.ring || circle(ctx.site, 160, 8), 'loop'),
+  },
+  roadPatrol: {
+    label: 'Road patrol', size: [6, 10], kind: 'regular', site: ['road'], draft: 'defense',
+    activity: (s) => 'Patrolling ' + s.name + ' on foot, out and back along the same stretch of road.',
+    task: (s, gr) => 'destroys the OPFOR patrol on ' + s.name + ' (grid ' + gr + ') in order to open the road',
+    likely: 'Attack', setup: (ctx) => patrol(ctx, ctx.site.path || [ctx.site.a, ctx.site.b], 'shuttle'),
+  },
+  camp: {
+    label: 'Enemy making camp', size: [8, 14], kind: 'regular', site: ['woods', 'farm', 'open'], draft: 'attack', digIn: true,
+    activity: (s) => 'Making camp at ' + s.name + ': tents going up, positions being dug around it. Sentries out.',
+    task: (s, gr) => 'attacks to destroy OPFOR making camp at ' + s.name + ' (grid ' + gr + ') before it is dug in',
+    likely: 'Defend', setup: (ctx) => { restAt(ctx, ctx.site, 3); ctx.objects.push({ kind: 'camp', x: ctx.site.x, y: ctx.site.y, name: 'Camp' }); },
+  },
+  townAttack: {
+    label: 'Enemy attacking a town', size: [10, 15], kind: 'irregular', site: ['village'], draft: 'attack',
+    activity: (s) => 'Has entered ' + s.name + ' and is moving house to house. Some hold buildings; others roam the streets.',
+    task: (s, gr) => 'attacks to destroy OPFOR in ' + s.name + ' (grid ' + gr + ') in order to free the town',
+    likely: 'Defend', setup: (ctx) => {
+      holdAt(ctx, ctx.site, ctx.blue);
+      roam(ctx, around(ctx.site, 120, 6), false, 1);
+    },
+  },
+  depot: {
+    label: 'Enemy supply depot', size: [6, 10], kind: 'regular', site: ['farm', 'woods', 'open'], draft: 'attack', digIn: true, reach: 'cache',
+    activity: (s) => 'Guarding a supply depot at ' + s.name + ': crates of ammunition and fuel under nets.',
+    task: (s, gr) => 'attacks to destroy OPFOR guarding the supply depot at ' + s.name + ' (grid ' + gr + ') and destroy the depot',
+    likely: 'Defend', setup: (ctx) => { ctx.objects.push({ kind: 'cache', x: ctx.site.x, y: ctx.site.y, name: 'Supply depot' }); holdAt(ctx, ctx.site, ctx.blue); },
+  },
+  helo: {
+    label: 'Downed helicopter', size: [4, 8], kind: 'crew', site: ['open', 'woods'], draft: 'attack', evac: [26, 36],
+    activity: (s) => 'An enemy helicopter is down at ' + s.name + '. Its crew and a few infantry are guarding the wreck and waiting for pickup.',
+    task: (s, gr, M) => 'moves to the crash site at ' + s.name + ' (grid ' + gr + ') and destroys the crew before it is lifted out, expected H+' + Math.round(M.evacAt / 60),
+    likely: 'Defend', setup: (ctx) => { ctx.objects.push({ kind: 'helo', x: ctx.site.x, y: ctx.site.y, name: 'Downed helicopter' }); holdAt(ctx, ctx.site, ctx.blue); },
+  },
+  reconTown: {
+    label: 'Enemy recon of a town', size: [4, 6], kind: 'recon', site: ['village', 'farm'], draft: 'attack', escape: 0.5,
+    activity: (s) => 'A small reconnaissance team is watching ' + s.name + ' from the ground around it, moving between hides.',
+    task: (s, gr) => 'finds and destroys the OPFOR reconnaissance team around ' + s.name + ' (grid ' + gr + ') before it can report',
+    likely: 'Withdraw', setup: (ctx) => roam(ctx, around(ctx.site, 220, 6), true),
+  },
+  ambush: {
+    label: 'Enemy ambush position', size: [7, 12], kind: 'regular', site: ['road'], draft: 'attack',
+    activity: (s) => 'Lying in ambush along ' + s.name + ', facing the road, waiting for traffic.',
+    task: (s, gr) => 'attacks to destroy the OPFOR ambush along ' + s.name + ' (grid ' + gr + ') in order to open the road',
+    likely: 'Defend', setup: (ctx) => {
+      const a = ctx.site.a || ctx.site, b = ctx.site.b || ctx.site, h = angleTo(a.x, a.y, b.x, b.y);
+      const side = chance(0.5) ? 1 : -1, off = { x: ctx.site.x + Math.cos(h + side * Math.PI / 2) * 35, y: ctx.site.y + Math.sin(h + side * Math.PI / 2) * 35 };
+      holdAt(ctx, off, ctx.site);
+    },
+  },
+  checkpoint: {
+    label: 'Road checkpoint', size: [4, 7], kind: 'irregular', site: ['road'], draft: 'attack',
+    activity: (s) => 'Manning a checkpoint on ' + s.name + ', stopping whoever comes along. Relaxed.',
+    task: (s, gr) => 'attacks to destroy the OPFOR checkpoint on ' + at(s, gr),
+    likely: 'Defend', setup: (ctx) => restAt(ctx, ctx.site, 2),
+  },
+  bridge: {
+    label: 'Bridge security', size: [6, 10], kind: 'regular', site: ['crossing', 'road'], draft: 'attack', digIn: true,
+    activity: (s) => 'Securing ' + s.name + ' with positions on both approaches.',
+    task: (s, gr) => 'attacks to destroy OPFOR at ' + s.name + ' (grid ' + gr + ') in order to seize the crossing',
+    likely: 'Defend', setup: (ctx) => holdAt(ctx, ctx.site, ctx.blue),
+  },
+  observationPost: {
+    label: 'Observation post', size: [4, 5], kind: 'recon', site: ['peak'], draft: 'attack',
+    activity: (s) => 'An observation post on ' + s.name + ', watching the ground toward you.',
+    task: (s, gr) => 'attacks to destroy the OPFOR observation post on ' + s.name + ' (grid ' + gr + ') in order to blind the enemy',
+    likely: 'Defend', setup: (ctx) => holdAt(ctx, ctx.site, ctx.blue),
+  },
+  hillStrongpoint: {
+    label: 'Hilltop strongpoint', size: [12, 15], kind: 'regular', site: ['peak'], draft: 'attack', digIn: true,
+    activity: (s) => 'A reinforced squad dug in on ' + s.name + ' with machine guns covering the slopes.',
+    task: (s, gr) => 'attacks to destroy OPFOR on ' + s.name + ' (grid ' + gr + ') in order to seize the high ground',
+    likely: 'Defend', setup: (ctx) => holdAt(ctx, ctx.site, ctx.blue),
+  },
+  withdrawal: {
+    label: 'Enemy withdrawal', size: [8, 14], kind: 'regular', site: ['open'], draft: 'attack', escape: 0.5, mode: 'chase',
+    activity: (s, dir) => 'Withdrawing away from you on foot, toward the far edge of the sheet. Some wounded.',
+    task: (s, gr) => 'pursues and destroys OPFOR withdrawing from vicinity grid ' + gr + ' before it gets off the sheet',
+    likely: 'Withdraw', setup: (ctx) => { place(ctx, ctx.site); exitAway(ctx); ctx.wounded = 0.15; },
+  },
+  crossingFront: {
+    label: 'Patrol crossing your front', size: [6, 10], kind: 'regular', site: ['open'], draft: 'defense', escape: 0.6,
+    activity: (s, dir) => 'A patrol moving across your front from one side of the sheet to the other.',
+    task: (s, gr) => 'intercepts and destroys the OPFOR patrol crossing vicinity grid ' + gr + ' before it leaves the sheet',
+    likely: 'Attack', setup: (ctx) => { place(ctx, ctx.site); exitAcross(ctx); },
+  },
+  commandPost: {
+    label: 'Command post raid', size: [6, 10], kind: 'regular', site: ['farm', 'village'], draft: 'attack', hvt: true,
+    activity: (s) => 'A command post at ' + s.name + ': a commander, his radio operator and a guard force.',
+    task: (s, gr) => 'raids the OPFOR command post at ' + s.name + ' (grid ' + gr + ') to kill or capture the commander',
+    likely: 'Defend', setup: (ctx) => holdAt(ctx, ctx.site, ctx.blue), leader: 'CO',
+  },
+  snipers: {
+    label: 'Sniper team', size: [4, 4], kind: 'recon', site: ['woods', 'peak'], draft: 'attack',
+    activity: (s) => 'A sniper team in ' + s.name + ', covering the open ground toward you.',
+    task: (s, gr) => 'destroys the OPFOR sniper team in ' + at(s, gr),
+    likely: 'Defend', setup: (ctx) => holdAt(ctx, ctx.site, ctx.blue), billets: ['MM', 'MM', 'R'],
+  },
+  treeLine: {
+    label: 'Tree line defense', size: [8, 12], kind: 'regular', site: ['woods'], draft: 'attack', digIn: true,
+    activity: (s) => 'Dug in along the edge of ' + s.name + ', facing the open ground.',
+    task: (s, gr) => 'attacks to destroy OPFOR in ' + s.name + ' (grid ' + gr + ') in order to clear the tree line',
+    likely: 'Defend', setup: (ctx) => holdAt(ctx, ctx.site, ctx.blue),
+  },
+  truck: {
+    label: 'Stalled truck', size: [4, 7], kind: 'irregular', site: ['road'], draft: 'attack', evac: [20, 30],
+    activity: (s) => 'A broken-down truck on ' + s.name + ' with its crew and guards working to get it running.',
+    task: (s, gr, M) => 'destroys OPFOR at the truck on ' + s.name + ' (grid ' + gr + ') before it is repaired and gone, expected H+' + Math.round(M.evacAt / 60),
+    likely: 'Defend', setup: (ctx) => { ctx.objects.push({ kind: 'truck', x: ctx.site.x, y: ctx.site.y, name: 'Truck' }); restAt(ctx, ctx.site, 2); },
+  },
+  waterPoint: {
+    label: 'Water point', size: [5, 8], kind: 'irregular', site: ['pond', 'crossing'], draft: 'attack', leaveAt: [22, 32], escape: 0.5,
+    activity: (s) => 'Filling water cans at ' + s.name + ', resting in the shade. Will move on when done.',
+    task: (s, gr, M) => 'destroys OPFOR at ' + s.name + ' (grid ' + gr + ') before it moves on, expected about H+' + Math.round(M.leaveAt / 60),
+    likely: 'Defend', setup: (ctx) => restAt(ctx, ctx.site.ring ? ctx.site.ring[0] : ctx.site, 1),
+  },
+  foragers: {
+    label: 'Foraging party', size: [4, 6], kind: 'irregular', site: ['village', 'farm'], draft: 'attack', escape: 0.5,
+    activity: (s) => 'A foraging party going through ' + s.name + ' for food and fuel.',
+    task: (s, gr) => 'destroys the OPFOR foraging party in ' + at(s, gr),
+    likely: 'Withdraw', setup: (ctx) => roam(ctx, around(ctx.site, 90, 6), true),
+  },
+  relay: {
+    label: 'Radio relay site', size: [4, 6], kind: 'regular', site: ['peak'], draft: 'attack', reach: 'relay',
+    activity: (s) => 'A radio relay on ' + s.name + ': an antenna mast and a small guard.',
+    task: (s, gr) => 'attacks to destroy OPFOR on ' + s.name + ' (grid ' + gr + ') and destroy the radio relay',
+    likely: 'Defend', setup: (ctx) => { ctx.objects.push({ kind: 'relay', x: ctx.site.x, y: ctx.site.y, name: 'Radio relay' }); holdAt(ctx, ctx.site, ctx.blue); },
+  },
+  stragglers: {
+    label: 'Stragglers at a farm', size: [6, 10], kind: 'irregular', site: ['farm', 'village'], draft: 'attack', morale: [28, 42],
+    activity: (s) => 'Stragglers from a beaten unit gathering at ' + s.name + '. Tired, some wounded, poorly led.',
+    task: (s, gr) => 'attacks to destroy OPFOR gathering at ' + s.name + ' (grid ' + gr + ') before it can reorganize',
+    likely: 'Withdraw', setup: (ctx) => { restAt(ctx, ctx.site, 1); ctx.wounded = 0.2; },
+  },
+  column: {
+    label: 'Foot column on the road', size: [10, 15], kind: 'regular', site: ['road'], draft: 'defense', escape: 0.5,
+    activity: (s) => 'A column on foot moving along ' + s.name + ' toward the edge of the sheet.',
+    task: (s, gr) => 'ambushes and destroys the OPFOR column on ' + s.name + ' (grid ' + gr + ') before it gets through',
+    likely: 'Attack', setup: (ctx) => { const a = ctx.site.a, b = ctx.site.b; place(ctx, a); exitVia(ctx, [b]); },
+  },
+  attack: {
+    label: 'Hasty attack', size: [6, 12], kind: 'regular', site: ['village', 'farm', 'peak', 'woods', 'open'], draft: 'attack', digIn: true,
+    activity: (s) => 'Defending ' + (s.kind === 'village' ? 'the buildings of ' : 'around ') + s.name + ', oriented toward you. Observed preparing positions.',
+    task: (s, gr) => 'attacks to destroy OPFOR vicinity grid ' + gr + ' in order to secure ' + s.name,
+    likely: 'Defend', setup: (ctx) => holdAt(ctx, ctx.site, ctx.blue),
+  },
+};
+const MISSION_KEYS = Object.keys(MISSIONS);
+// A site in an order: its name and grid, or just the grid in open country.
+function at(s, gr) { return s.kind === 'open' ? 'vicinity grid ' + gr : s.name + ' (grid ' + gr + ')'; }
+
+// ---------------------------------------------------------------- setting the enemy up
+function place(ctx, p) { placeSquad(ctx.red, G.map, p.x, p.y, angleTo(p.x, p.y, ctx.blue.x, ctx.blue.y)); }
+function holdAt(ctx, p, threat) {
+  placeSquad(ctx.red, G.map, p.x, p.y, angleTo(p.x, p.y, threat.x, threat.y));
+  setupDefense(ctx.red, threat);
+  ctx.ai = { mode: 'defend', objective: ctx.blue };
+}
+// At rest: the men sit about in a loose ring, relaxed and slow to notice anything; a few
+// sentries stand watch facing outward.
+function restAt(ctx, p, sentries) {
+  const sq = ctx.red, all = sq.all;
+  all.forEach((s, i) => {
+    const a = i / all.length * Math.PI * 2, r = randRange(6, 14);
+    const c = G.map.nearestPassable(Math.floor((p.x + Math.cos(a) * r) / CELL), Math.floor((p.y + Math.sin(a) * r) / CELL));
+    s.x = (c.cx + 0.5) * CELL; s.y = (c.cy + 0.5) * CELL;
+    s.facing = s.look = a; s.relaxed = true; s.homePosture = s.posture = 'prone';
+  });
+  for (const s of shuffle(all.slice()).slice(0, sentries)) {
+    const a = randRange(0, Math.PI * 2);
+    s.x = clamp(p.x + Math.cos(a) * 35, 5, MAP_W - 5); s.y = clamp(p.y + Math.sin(a) * 35, 5, MAP_H - 5);
+    const c = G.map.nearestPassable(Math.floor(s.x / CELL), Math.floor(s.y / CELL));
+    s.x = (c.cx + 0.5) * CELL; s.y = (c.cy + 0.5) * CELL;
+    s.relaxed = false; s.homePosture = s.posture = 'kneel'; s.facing = s.look = s.faceAngle = a;
+  }
+  ctx.ai = { mode: 'defend', objective: ctx.blue };
+}
+// Walking a route: round and round (loop) or out and back (shuttle).
+function patrol(ctx, pts, kind) {
+  pts = pts.filter(Boolean);
+  place(ctx, pts[0]);
+  ctx.ai = { mode: 'patrol', objective: ctx.blue, routine: { kind, pts, i: 1, dir: 1, pause: 0 } };
+}
+// Moving between points with pauses: men going house to house, or a recon team between hides.
+function roam(ctx, pts, breakOff, teamsOnly) {
+  if (!teamsOnly) place(ctx, pts[0]);
+  ctx.ai = Object.assign(ctx.ai || { mode: 'defend', objective: ctx.blue }, { routine: { kind: 'roam', pts, i: 1, pause: 0, teams: teamsOnly ? ctx.red.teams.slice(-teamsOnly) : null } });
+  if (breakOff) ctx.ai.breakOff = true;
+}
+// Leaving the sheet: straight away from the squad, across its front, or along a road.
+function edgePoint(from, ang) {
+  let x = from.x, y = from.y;
+  for (let r = 0; r < MAP_W * 2; r += 20) { x = from.x + Math.cos(ang) * r; y = from.y + Math.sin(ang) * r; if (x < 15 || y < 15 || x > MAP_W - 15 || y > MAP_H - 15) break; }
+  return { x: clamp(x, 10, MAP_W - 10), y: clamp(y, 10, MAP_H - 10) };
+}
+function exitVia(ctx, pts) {
+  const last = pts[pts.length - 1], prev = pts.length > 1 ? pts[pts.length - 2] : ctx.site;
+  const out = edgePoint(last, angleTo(prev.x, prev.y, last.x, last.y));
+  ctx.ai = { mode: 'patrol', objective: ctx.blue, routine: { kind: 'exit', pts: [...pts, out], i: 0, pause: 0 }, escape: out };
+}
+function exitAway(ctx) { exitVia(ctx, [edgePoint(ctx.site, angleTo(ctx.blue.x, ctx.blue.y, ctx.site.x, ctx.site.y))]); }
+function exitAcross(ctx) { const a = angleTo(ctx.blue.x, ctx.blue.y, ctx.site.x, ctx.site.y) + (chance(0.5) ? 1 : -1) * Math.PI / 2; exitVia(ctx, [edgePoint(ctx.site, a)]); }
+function circle(p, r, n) { const out = []; for (let k = 0; k < n; k++) { const a = k / n * Math.PI * 2; out.push({ x: clamp(p.x + Math.cos(a) * r, 30, MAP_W - 30), y: clamp(p.y + Math.sin(a) * r, 30, MAP_H - 30) }); } return out; }
+function around(p, r, n) { return shuffle(circle(p, r, n)).map(q => { const c = G.map.nearestPassable(Math.floor(q.x / CELL), Math.floor(q.y / CELL)); return { x: (c.cx + 0.5) * CELL, y: (c.cy + 0.5) * CELL }; }); }
+
+// ---------------------------------------------------------------- choosing and building a mission
+// Pick a mission (or take the one asked for), a site for it on this sheet and a start for
+// the squad 1.0 to 1.4 km from it, then build and place the enemy.
+function setupMission(key, blue) {
+  const m = G.map, ech = G.echelon, M0 = ech.margin;
+  const keys = key && MISSIONS[key] ? [key] : shuffle(MISSION_KEYS.slice());
+  for (const k of [...keys, 'attack']) {
+    const D = MISSIONS[k];
+    let sites = [];
+    for (const s of D.site) sites = sites.concat((Sites[s](m) || []).filter(p => Sites.inside(p.x, p.y, M0)));
+    if (!sites.length) continue;
+    const site = sites[0];
+    // The squad's start: on passable ground at the echelon's distance from the site.
+    let start = null;
+    for (let t = 0; t < 600 && !start; t++) {
+      const a = randRange(0, Math.PI * 2), d = randRange(ech.sep[0], ech.sep[1]);
+      const x = site.x + Math.cos(a) * d, y = site.y + Math.sin(a) * d;
+      if (Sites.inside(x, y, M0) && TERRAIN[m.terAt(x, y)].speed > 0) start = { x, y };
+    }
+    if (!start) continue;
+    const n = randInt(D.size[0], D.size[1]);
+    const red = buildOpfor(n, D.kind, { leader: D.leader });
+    if (D.morale) red.morale = randRange(D.morale[0], D.morale[1]);
+    if (D.billets) red.teams.forEach((t, i) => t.members.forEach((s, j) => {
+      const b = D.billets[(i * 4 + j) % D.billets.length], B = OPFOR_BILLETS[b];
+      s.billet = b; s.title = B.title; s.name = B.title; s.weaponKey = B.weapon; s.weapon = WEAPONS[B.weapon]; s.inMag = s.weapon.mag; s.mags = s.weapon.mags - 1; s.ammoStart = s.ammoLeft;
+    }));
+    placeSquad(blue, m, start.x, start.y, angleTo(start.x, start.y, site.x, site.y));
+    const ctx = { key: k, D, site, blue: start, red, objects: [], ai: null, wounded: 0 };
+    D.setup(ctx);
+    // Some of a beaten force are already hurt.
+    for (const s of red.all) if (ctx.wounded && chance(ctx.wounded)) s.health = 'light';
+    const M = { key: k, def: D, label: D.label, site, objects: ctx.objects, mode: D.mode || 'attack', digIn: !!D.digIn, reach: D.reach || null,
+      escape: D.escape || 0, hvt: D.hvt ? red.leader : null, kind: D.kind };
+    if (D.evac) M.evacAt = randInt(D.evac[0], D.evac[1]) * 60;
+    if (D.leaveAt) M.leaveAt = randInt(D.leaveAt[0], D.leaveAt[1]) * 60;
+    return { M, red, start, site, ai: ctx.ai };
+  }
+  return null;
+}
+
+// What the intelligence says about the enemy's size. Reports differ in quality, and the
+// order says how far to trust each: some are right, some are wrong, some do not say.
+function intelSize(n, kindKey) {
+  const K = OPFOR_KINDS[kindKey], men = K.men, r = rand();
+  if (r < 0.4) {
+    const lo = Math.max(3, n - randInt(0, 2)), hi = Math.max(lo + 1, n + randInt(0, 2));
+    return { text: 'OPFOR of ' + lo + '-' + hi + ' ' + men + '.', note: 'Confirmed by two sources. Considered reliable.', right: true };
+  }
+  if (r < 0.65) {
+    // A wrong count: off by several men, either way, from a single source.
+    const off = (chance(0.6) ? -1 : 1) * randInt(3, 5), c = Math.max(3, n + off);
+    return { text: 'OPFOR of ' + Math.max(3, c - 1) + '-' + (c + 1) + ' ' + men + '.', note: 'A single report, not confirmed. Treat with caution.', right: false };
+  }
+  if (r < 0.85) {
+    const floor = n <= 5 ? 'fire team' : n <= 9 ? 'section' : 'squad';
+    return { text: 'OPFOR at least ' + floor + '-sized.', note: 'Only part of the force was seen. It may be larger.', right: true, vague: true };
+  }
+  return { text: 'OPFOR of unknown size.', note: 'Contact was brief; no count was made.', right: null };
 }
 
 // ---- src/symbols.js
@@ -3952,6 +4434,7 @@ function render() {
   Fog.draw(ctx);
   drawEdgeLabels(ctx);
   drawPlan(ctx);
+  drawObjects(ctx);
   drawPlanGhosts(ctx);
   drawOrdersOverlay(ctx);
   drawProjectiles(ctx);
@@ -4401,6 +4884,41 @@ function drawTerrainMarks(ctx) {
   }
 }
 
+// The mission's objects: a downed helicopter, a supply depot, a camp, a truck, a radio
+// relay. Drawn in black as map symbols, with a label; on the sand table they stand in 3D.
+function drawObjects(ctx) {
+  if (!G.objects || View3D.drawingDrape) return;
+  const s = clamp(5 * R.cam.zoom, 9, 34);
+  ctx.save();
+  for (const o of G.objects) {
+    const q = toScreen(o.x, o.y);
+    if (q.x < -60 || q.y < -60 || q.x > R.w + 60 || q.y > R.h + 60) continue;
+    ctx.strokeStyle = MAP_INK; ctx.fillStyle = 'rgba(250,248,240,0.9)'; ctx.lineWidth = Math.max(1.5, s * 0.12);
+    ctx.beginPath();
+    if (o.kind === 'helo') {
+      ctx.ellipse(q.x, q.y, s * 0.9, s * 0.45, -0.3, 0, Math.PI * 2); ctx.fill(); ctx.stroke();
+      ctx.beginPath(); ctx.moveTo(q.x + s * 0.7, q.y - s * 0.25); ctx.lineTo(q.x + s * 1.8, q.y - s * 0.7); ctx.stroke();
+      ctx.beginPath(); ctx.moveTo(q.x - s * 1.4, q.y - s * 0.9); ctx.lineTo(q.x + s * 1.2, q.y + s * 0.6); ctx.moveTo(q.x - s * 1.1, q.y + s * 0.8); ctx.lineTo(q.x + s, q.y - s * 0.9); ctx.stroke();
+    } else if (o.kind === 'cache') {
+      for (const [dx, dy] of [[-0.6, 0.2], [0.6, 0.2], [0, -0.7]]) { ctx.fillRect(q.x + dx * s - s * 0.55, q.y + dy * s - s * 0.45, s * 1.1, s * 0.9); ctx.strokeRect(q.x + dx * s - s * 0.55, q.y + dy * s - s * 0.45, s * 1.1, s * 0.9); }
+    } else if (o.kind === 'camp') {
+      for (const [dx, dy] of [[-0.9, 0.3], [0.9, 0.3], [0, -0.6]]) { ctx.beginPath(); ctx.moveTo(q.x + dx * s - s * 0.55, q.y + dy * s + s * 0.4); ctx.lineTo(q.x + dx * s, q.y + dy * s - s * 0.5); ctx.lineTo(q.x + dx * s + s * 0.55, q.y + dy * s + s * 0.4); ctx.closePath(); ctx.fill(); ctx.stroke(); }
+      ctx.fillStyle = '#d8501e'; ctx.beginPath(); ctx.arc(q.x, q.y + s * 0.4, s * 0.18, 0, Math.PI * 2); ctx.fill();
+    } else if (o.kind === 'truck') {
+      ctx.fillRect(q.x - s, q.y - s * 0.4, s * 1.5, s * 0.8); ctx.strokeRect(q.x - s, q.y - s * 0.4, s * 1.5, s * 0.8);
+      ctx.fillRect(q.x + s * 0.55, q.y - s * 0.25, s * 0.5, s * 0.65); ctx.strokeRect(q.x + s * 0.55, q.y - s * 0.25, s * 0.5, s * 0.65);
+      ctx.fillStyle = MAP_INK; for (const dx of [-0.65, 0.1, 0.8]) { ctx.beginPath(); ctx.arc(q.x + dx * s, q.y + s * 0.5, s * 0.17, 0, Math.PI * 2); ctx.fill(); }
+    } else if (o.kind === 'relay') {
+      ctx.moveTo(q.x, q.y + s * 0.6); ctx.lineTo(q.x, q.y - s * 1.3); ctx.moveTo(q.x - s * 0.6, q.y + s * 0.6); ctx.lineTo(q.x, q.y - s * 0.2); ctx.lineTo(q.x + s * 0.6, q.y + s * 0.6); ctx.stroke();
+      ctx.beginPath(); ctx.arc(q.x, q.y - s * 1.3, s * 0.35, -2.5, -0.6); ctx.stroke(); ctx.beginPath(); ctx.arc(q.x, q.y - s * 1.3, s * 0.65, -2.5, -0.6); ctx.stroke();
+    }
+    ctx.font = '700 ' + Math.round(clamp(s * 0.8, 10, 16)) + 'px "Saira Condensed", "Arial Narrow", sans-serif';
+    ctx.textAlign = 'center'; ctx.textBaseline = 'top'; ctx.lineWidth = 3; ctx.strokeStyle = 'rgba(247,245,236,0.95)';
+    ctx.strokeText(o.name.toUpperCase(), q.x, q.y + s * 1.1); ctx.fillStyle = OVL.red; ctx.fillText(o.name.toUpperCase(), q.x, q.y + s * 1.1);
+  }
+  ctx.restore();
+}
+
 // While planning: a dashed arrow for each planned move, and a dashed ghost counter of each
 // unit where its last move ends. Tapping a ghost picks that unit to plan its next step.
 function drawPlanGhosts(ctx) {
@@ -4736,15 +5254,15 @@ function drawGhostFormation(ctx) {
   const slots = [];
   if (sel.level === 'team') {
     const act = sel.team.members.filter(commandable);
-    act.forEach((s, i) => slots.push({ s, o: teamSlot(form, i) }));
+    act.forEach((s, i) => slots.push({ s, o: scaled(teamSlot(form, i), sel.team.spacing) }));
   } else {
     const sq = sel.squad, teams = sq.teams.filter(t => t.members.some(commandable));
     teams.forEach((t, k) => {
-      const q = squadSlot(form, k, teams.length);
-      t.members.filter(commandable).forEach((s, i) => { const o = teamSlot(t.formation, i); slots.push({ s, o: { x: q.x + o.x, y: q.y + o.y } }); });
+      const q = scaled(squadSlot(form, k, teams.length), sq.spacing);
+      t.members.filter(commandable).forEach((s, i) => { const o = scaled(teamSlot(t.formation, i), t.spacing); slots.push({ s, o: { x: q.x + o.x, y: q.y + o.y } }); });
     });
     const sl = sq.hq.members[0];
-    if (sl && commandable(sl)) slots.push({ s: sl, o: squadLeaderSlot(form) });
+    if (sl && commandable(sl)) slots.push({ s: sl, o: scaled(squadLeaderSlot(form), sq.spacing) });
   }
   if (!slots.length) return;
   // Face the way the leader faces; center the ghost on the unit as it stands.
@@ -4912,7 +5430,7 @@ const UI = {
         ['order', 'suppress', 'Suppress'], ['now', 'lift', 'Lift']] },
       { label: 'Weapons', items: [['order', 'launcher', '40mm'], ['order', 'frag', 'Frag']] },
       { label: 'Act', items: [['now', 'cover', 'Take cover'], ['now', 'fallback', 'Fall back'], ['now', 'halt', 'Halt'], ['order', 'face', 'Face']] },
-      { label: 'Formation', items: FORMATION_KEYS.map(k => ['formation', k, FORMATIONS[k].label]) },
+      { label: 'Formation', items: [...FORMATION_KEYS.map(k => ['formation', k, FORMATIONS[k].label]), ['spacing', 'closer', 'Closer −'], ['spacing', 'wider', 'Wider +']] },
     ];
     const grid = $('orderGrid');
     for (const g of groups) {
@@ -4958,6 +5476,7 @@ const UI = {
     else if (kind === 'posture') issueOrder(sel, 'posture', val);
     else if (kind === 'fire') issueOrder(sel, 'fire', val);
     else if (kind === 'formation') issueOrder(sel, 'formation', val);
+    else if (kind === 'spacing') this.changeSpacing(val === 'wider' ? 1 : -1);
     this.refreshOrders();
   },
 
@@ -4973,6 +5492,7 @@ const UI = {
       else if (k === 'posture') on = posture === v;
       else if (k === 'fire') on = fire === v;
       else if (k === 'formation') { on = form === v; dis = dis || !form; }
+      else if (k === 'spacing') dis = dis || !sel || sel.level === 'soldier';
       else if (k === 'order') on = G.ui.pending === v;
       if (v === 'launcher') dis = dis || !m.some(s => s.launcher && s.lRounds > 0);
       b.classList.toggle('on', on);
@@ -5096,6 +5616,24 @@ const UI = {
     document.body.classList.toggle('orders-open', on);
     $('btnOrdersMore').textContent = on ? 'Orders ▾' : 'Orders ▴';
     $('btnOrdersMore').setAttribute('aria-expanded', on ? 'true' : 'false');
+  },
+
+  // ------------------------------------------------------------ dispersion
+  // Wider or closer intervals for the selected team(s) or squad: about 30% a step, from
+  // half to three times the standard. Planning, it sets the interval for later moves; in
+  // the fight the men also spread out or close up where they are.
+  changeSpacing(dir) {
+    const sel = G.ui.sel;
+    if (!sel || sel.level === 'soldier') { this.toast('Select a fire team or the squad to change its interval.'); return; }
+    const units = sel.level === 'squad' ? [sel.squad, ...sel.squad.teams] : sel.level === 'group' ? sel.teams : [sel.team];
+    const f = dir > 0 ? 1.3 : 1 / 1.3;
+    let ratio = 1;
+    for (const u of units) { const old = u.spacing || 1; u.spacing = clamp(old * f, 0.5, 3); if (u === units[0]) ratio = u.spacing / old; }
+    if (Math.abs(ratio - 1) < 0.01) { this.toast((dir > 0 ? 'Already at the widest' : 'Already at the closest') + ' interval.'); return; }
+    const m = Math.round(7 * units[units.length - 1].spacing);
+    const text = (dir > 0 ? 'spread out' : 'close up') + ', about ' + m + ' m between men';
+    if (Plan.planning) { this.toast(selName(sel) + ': ' + text + '.'); return; }
+    issueOrder(sel, 'spacing', { ratio, text });
   },
 
   // ------------------------------------------------------------ dragging a unit (touch)
@@ -5325,17 +5863,19 @@ const UI = {
     const box = $('briefBody');
     box.innerHTML = '';
     const sit = el('div', 'bsit');
-    sit.appendChild(el('h3', null, 'Mission type'));
+    sit.appendChild(el('h3', null, 'Mission'));
     const mp = el('p');
-    const modes = { attack: 'Attack. The enemy holds a position and digs in while you plan.',
-      meeting: 'Meeting engagement. The enemy is marching toward you. The field is frozen while you plan, but the longer you take, the closer it is when you step off.',
-      random: 'Either one, chosen at random.' };
+    // The mission: one of many, at random unless one is picked. The description is the
+    // enemy's activity as the order will give it, in general terms.
+    const blurb = (k) => k === 'random' ? 'Any of ' + MISSION_KEYS.length + ' missions, chosen at random. The order tells you what you face.'
+      : MISSIONS[k].activity({ name: 'the objective', kind: 'open' }, 'toward you') + ' Enemy ' + MISSIONS[k].size[0] + (MISSIONS[k].size[1] > MISSIONS[k].size[0] ? '-' + MISSIONS[k].size[1] : '') + ' men.';
     const modeSel = el('select'); modeSel.id = 'missionMode';
-    for (const [k, t] of [['random', 'Random'], ['attack', 'Attack a position'], ['meeting', 'Meeting engagement']]) {
+    for (const [k, t] of [['random', 'Random mission'], ...MISSION_KEYS.map(k => [k, MISSIONS[k].label]).sort((a, b) => a[1].localeCompare(b[1]))]) {
       const o = el('option', null, t); o.value = k; if (set.mode === k) o.selected = true; modeSel.appendChild(o);
     }
-    const desc = el('span', 'bdesc', modes[set.mode]);
-    modeSel.addEventListener('change', () => { set.mode = modeSel.value; desc.textContent = modes[set.mode]; });
+    if (!MISSIONS[set.mode]) set.mode = 'random';
+    const desc = el('span', 'bdesc', blurb(set.mode));
+    modeSel.addEventListener('change', () => { set.mode = modeSel.value; desc.textContent = blurb(set.mode); });
     mp.appendChild(modeSel); mp.appendChild(desc);
     sit.appendChild(mp);
     const rp = el('p');
@@ -5441,7 +5981,7 @@ const UI = {
     const pair = (a, b, cls) => { const r = tr(cls); const x = el('td'), y = el('td'); for (const [cell, v] of [[x, a], [y, b]]) { if (v instanceof Node) cell.appendChild(v); else cell.innerHTML = v; } r.appendChild(x); r.appendChild(y); return r; };
     const lines = (arr) => arr.filter(Boolean).join('<br>');
     th('Battle of ' + (name || gridRef(c.x, c.y)), 'wtitle');
-    th('Part of Sand Table Exercise ' + String(G.settings.seed).padStart(5, '0') + ', ' + m.R.label, 'wpart');
+    th(G.mission.label + ' · Sand Table Exercise ' + String(G.settings.seed).padStart(5, '0') + ', ' + m.R.label, 'wpart');
     // A sketch of the field: the sheet around the fight, each man where he ended.
     const cell = el('td', 'wimg'); cell.colSpan = 2;
     const cv = el('canvas'); cv.width = 320; cv.height = 210;
@@ -5469,21 +6009,22 @@ const UI = {
     const dur = Plan.stepOff != null ? G.time - Plan.stepOff : G.time;
     kv('Date', 'H-hour to H+' + fmtClock(dur) + ' (' + Math.max(1, Math.round(dur / 60)) + ' min)');
     kv('Location', m.R.label + '<br><span class="wlink">◉ Grid ' + gridRef(c.x, c.y) + '</span>');
-    kv('Result', result === 'victory' ? '<span class="wlink">United States</span> victory' : '<span class="wlink">Opposing force</span> victory');
+    kv('Result', result === 'victory' ? '<span class="wlink">United States</span> victory' : result === 'escaped' ? 'Inconclusive: the <span class="wlink">opposing force</span> escaped' : '<span class="wlink">Opposing force</span> victory');
     th('Belligerents');
     pair('<span class="wlink">United States</span><br>U.S. Marine Corps', '<span class="wlink">Opposing force</span>');
     th('Commanders and leaders');
     const sl = blue.leader, el0 = red.leader || red.all[0];
     pair('<span class="wlink">' + sl.rank + ' ' + sl.name + '</span>' + (sl.health === 'kia' ? ' †' : ''), '<span class="wlink">' + (el0 ? el0.title : 'Unknown') + '</span>' + (el0 && el0.health === 'kia' ? ' †' : ''));
     th('Units involved');
-    pair('<span class="wlink">1st Squad</span>, three fire teams', '<span class="wlink">Enemy squad</span>, ' + red.teams.length + ' groups');
+    pair('<span class="wlink">1st Squad</span>, three fire teams', '<span class="wlink">' + red.name + '</span>, ' + OPFOR_KINDS[red.kind || 'regular'].men);
     th('Strength');
     const arms = (sq) => {
       const n = new Map();
       for (const s of sq.all) { n.set(s.weapon.name, (n.get(s.weapon.name) || 0) + 1); if (s.launcher) n.set(s.launcher.name, (n.get(s.launcher.name) || 0) + 1); }
       return [...n].map(([w, k]) => k + ' ' + w);
     };
-    pair(lines([blue.all.length + ' Marines', ...arms(blue)]), lines([red.all.length + ' men', ...arms(red)]));
+    const sz = Plan.intel && Plan.intel.sizeReport;
+    pair(lines([blue.all.length + ' Marines', ...arms(blue)]), lines([red.all.length + ' men', ...arms(red), sz ? '<i>Reported: ' + sz.text.replace('OPFOR ', '') + '</i>' : '']));
     th('Casualties and losses');
     const loss = (sq, men) => {
       const kia = sq.all.filter(s => s.health === 'kia').length, ser = sq.all.filter(s => s.health === 'serious').length, wia = sq.all.filter(s => s.health === 'light').length, fled = sq.all.filter(s => s.routed || s.routing).length;
@@ -5504,11 +6045,11 @@ const UI = {
     const box = $('debriefBody');
     box.innerHTML = '';
     const won = result === 'victory';
-    $('debriefTitle').textContent = won ? 'Enemy defeated' : 'Squad combat ineffective';
+    $('debriefTitle').textContent = won ? 'Enemy defeated' : result === 'escaped' ? 'Enemy escaped' : 'Squad combat ineffective';
     const wrap = el('div', 'dgrid');
     wrap.appendChild(this.battleInfobox(result));
     const side = el('div', 'dside');
-    side.appendChild(el('p', 'dsub', (won ? 'The enemy is destroyed or has withdrawn.' : 'Your squad can no longer fight.') + ' Elapsed time ' + fmtClock(G.time) + '.'));
+    side.appendChild(el('p', 'dsub', G.mission.label + '. ' + (won ? 'The enemy is destroyed or has withdrawn.' : result === 'escaped' ? 'The enemy got away before you could finish it.' : 'Your squad can no longer fight.') + ' Elapsed time ' + fmtClock(G.time) + '.'));
     if (Plan.timeAvail) {
       const aar = Plan.afterAction(result);
       const done = Plan.lines.filter(l => l.status === 'done').length;
@@ -5604,9 +6145,10 @@ const Plan = {
     // The report is a little off, as reports are.
     this.reported = { x: clamp(G.enemyArea.x + gauss() * 50, 30, MAP_W - 30), y: clamp(G.enemyArea.y + gauss() * 50, 30, MAP_H - 30) };
     const sep = dist(centroid(G.squads.blue.all).x, centroid(G.squads.blue.all).y, this.reported.x, this.reported.y);
-    // Time available: in a meeting engagement, until the enemy could reach you; in an
-    // attack, until the enemy finishes digging in.
-    this.timeAvail = G.mode === 'meeting' ? Math.round(sep / 1.25 / 60) * 60 : G.echelon.attackTime * 60;
+    // Time available: in a meeting engagement, until the enemy could reach you; against a
+    // pickup or a repair, until it comes; otherwise the echelon's time for an attack.
+    const M = G.mission || {};
+    this.timeAvail = G.mode === 'meeting' ? Math.round(sep / 1.25 / 60) * 60 : M.evacAt || M.leaveAt || G.echelon.attackTime * 60;
     this.intel = this.makeIntel();
     this.terrain = this.keyTerrain();
     this.ao = this.aoFacts();
@@ -6154,7 +6696,7 @@ const Plan = {
 
   // How far the defenders have dug in: grows over the time available.
   digIn(s) {
-    if (s.side !== 'red' || G.mode !== 'attack' || !this.timeAvail) return 0;
+    if (s.side !== 'red' || !(G.mission && G.mission.digIn) || !this.timeAvail) return 0;
     return clamp(G.time / this.timeAvail, 0, 1);
   },
 
@@ -6173,12 +6715,13 @@ const Plan = {
     const near = this.placeNear(G.enemyArea, 450);
     const where = near ? (near.kind === 'village' ? 'in the buildings of ' + near.name : 'around ' + near.name) : 'in the open ground near the grid';
     const dirTo = compassWord(bearing(G.enemyArea.x, G.enemyArea.y, centroid(G.squads.blue.all).x, centroid(G.squads.blue.all).y));
+    const M = G.mission, D = M.def, sz = intelSize(n, M.kind);
     return {
-      size: 'Squad-sized element, estimated ' + Math.max(6, est - 1) + ' to ' + (est + 1) + ' men.',
-      activity: G.mode === 'attack' ? 'Defending ' + where + ', oriented generally ' + dirTo + ', toward you. Observed preparing positions.'
-        : 'Moving ' + dirTo + ' on foot ' + (near ? 'from ' + where : 'across country') + ', toward your position, in a loose wedge.',
+      size: sz.text + ' ' + sz.note,
+      sizeReport: sz,
+      activity: D.activity(M.site, dirTo),
       location: 'Vicinity grid ' + gridRef(this.reported.x, this.reported.y) + ' (report accurate to about 100 m).',
-      unit: 'Unknown. Dismounted OPFOR infantry. No markings observed.',
+      unit: OPFOR_KINDS[M.kind].unit + (M.hvt ? ' A commander is with them.' : ''),
       time: 'Observed ' + randInt(15, 40) + ' minutes before this order.',
       equipment: 'Rifles' + (shown.length ? ', ' + shown.join(' and ') : '') + '. Other weapons are possible.',
       near,
@@ -6194,12 +6737,13 @@ const Plan = {
   },
 
   drawD() {
-    const atk = G.mode === 'attack';
+    const M = G.mission, lk = M.def.likely, esc = M.escape || M.evacAt || M.leaveAt;
     return [
-      ['Defend', atk ? 'Most likely. Will defend from its present positions, improving them while you plan.' : 'Can go to ground and defend if it is fired on first.', atk],
+      ['Defend', lk === 'Defend' ? 'Most likely. Will fight from where it is' + (M.digIn ? ', improving its positions while you plan.' : '.') : 'Can go to ground and defend if it is fired on first.', lk === 'Defend'],
       ['Reinforce', 'No other enemy is known in the AO. Reinforcement is unlikely.', false],
-      ['Attack', atk ? 'Could counterattack your flank with one group if your assault stalls.' : 'Most likely. Will keep moving and attack on contact.', !atk],
-      ['Withdraw', 'Likely to break contact once it loses about half its men.', false],
+      ['Attack', lk === 'Attack' ? 'Most likely. Will keep moving and attack on contact.' : 'Could counterattack your flank with one group if your assault stalls.', lk === 'Attack'],
+      ['Withdraw', lk === 'Withdraw' ? 'Most likely. Will break contact and make for the edge of the sheet as soon as it is found.'
+        : esc ? 'Means to get away: ' + (M.evacAt ? 'it expects to be gone by about H+' + Math.round(M.evacAt / 60) + '.' : 'it is leaving the area.') : 'Likely to break contact once it loses about half its men.', lk === 'Withdraw'],
       ['Delay', 'Could delay from the next covered position if pressed.', false],
     ];
   },
@@ -6208,8 +6752,8 @@ const Plan = {
     const gr = gridRef(this.reported.x, this.reported.y), near = this.intel.near;
     const purpose = near ? (near.kind === 'village' ? 'secure the village of ' + near.name : near.kind === 'farm' ? 'secure ' + near.name : 'seize ' + near.name)
       : 'clear the area for the company';
-    if (G.mode === 'attack') return '1st Squad attacks NLT H+' + Math.round(this.timeAvail / 60) + ' to destroy OPFOR vicinity grid ' + gr + ' in order to ' + purpose + '.';
-    return '1st Squad moves to contact along bearing ' + pad3(G.axisBearing) + ' to find, fix and destroy OPFOR advancing from vicinity grid ' + gr + ' in order to ' + purpose + '.';
+    const M = G.mission;
+    return '1st Squad ' + M.def.task(M.site, gr, M) + (M.evacAt || M.leaveAt || G.mode === 'meeting' ? '' : ', NLT H+' + Math.round(this.timeAvail / 60)) + '.';
   },
 
   // Terrain facts along the line from the squad to the reported enemy, for the orientation.
@@ -6234,7 +6778,7 @@ const Plan = {
   // position on one flank and opens fire; only then do the other two fire teams move by a
   // covered route to an assault position on the other flank; a red star sends them in.
   draft() {
-    if (G.mode === 'meeting') return this.draftDefense();
+    if (G.mission && G.mission.def.draft === 'defense') return this.draftDefense();
     this.graphics = []; this.lines = [];
     const b = centroid(G.squads.blue.all), o = this.reported;
     const obj = this.addGraphic('obj', [o]);
@@ -6580,7 +7124,7 @@ const OPORD = {
   // ------------------------------------------------------------ 2. Situation
   situation(box) {
     const i = Plan.intel;
-    this.para(box, 'Enemy forces: SALUTE', null);
+    this.para(box, 'Enemy forces: SALUTE', G.mission.label + '.');
     for (const [k, v] of [['Size', i.size], ['Activity', i.activity], ['Location', i.location], ['Unit', i.unit], ['Time', i.time], ['Equipment', i.equipment]]) {
       this.factRow(box, k, v, k === 'Location' ? Plan.reported : null, 1.6);
     }
@@ -6592,7 +7136,9 @@ const OPORD = {
       box.appendChild(row);
     }
     this.para(box, 'Friendly forces', 'No higher or adjacent units are near you, and there is no indirect fire support. 1st Squad is on its own.');
-    this.para(box, 'Time available', fmtClock(Plan.timeAvail) + ' (' + (G.mode === 'attack' ? 'the enemy will have finished digging in by then' : 'the enemy could reach you by then') +
+    const M = G.mission, why = M.evacAt ? (M.key === 'helo' ? 'the pickup is expected then' : 'the truck should be running by then') : M.leaveAt ? 'the enemy should move on about then'
+      : G.mode === 'meeting' ? 'the enemy could reach you by then' : M.digIn ? 'the enemy will have finished digging in by then' : 'the enemy may move by then';
+    this.para(box, 'Time available', fmtClock(Plan.timeAvail) + ' (' + why +
       '). Use one third to plan; leave two thirds to the fire teams. The clock is running at ' + PLAN_RATE + '× while you plan.');
   },
 
@@ -6879,6 +7425,7 @@ const Radio = {
       case 'formation': return 'go to ' + FORMATIONS[arg].label.toLowerCase();
       case 'halt': return 'halt';
       case 'nudge': return arg.text;
+      case 'spacing': return arg.text;
       case 'cover': return 'take cover';
       case 'fallback': return 'fall back';
       case 'lift': return 'lift fire';
@@ -7063,6 +7610,7 @@ const View3D = {
     S.add(this.table);
     this.mapRef = m;
     this.clearPegs();
+    this.objRef = null;
     this.buildMarks();
     // Start behind the squad, looking toward the reported enemy.
     const c = centroid(G.squads.blue.all), e = Plan.reported || { x: MAP_W / 2, y: MAP_H / 2 };
@@ -7183,6 +7731,7 @@ const View3D = {
     this.updatePegs();
     this.updateMarks();
     this.updateGhosts();
+    this.updateObjects();
     this.renderer.render(this.scene, this.camera);
   },
 
@@ -7274,6 +7823,36 @@ const View3D = {
     }
     for (; n < this.lost.length; n++) this.lost[n].visible = false;
   },
+  // ------------------------------------------------------------ mission objects
+  updateObjects() {
+    if (this.objRef === G.objects) return;
+    for (const g of this.objMeshes || []) this.scene.remove(g);
+    this.objMeshes = []; this.objRef = G.objects;
+    const mat = (c) => new THREE.MeshLambertMaterial({ color: c });
+    for (const o of G.objects || []) {
+      const g = new THREE.Group(), add = (geo, c, x, y, z, ry) => { const m = new THREE.Mesh(geo, mat(c)); m.position.set(x, y, z); if (ry) m.rotation.y = ry; g.add(m); return m; };
+      if (o.kind === 'helo') {
+        add(new THREE.BoxGeometry(12, 3.5, 3.5), 0x4a5240, 0, 1.6, 0, 0.4).rotation.z = 0.15;
+        add(new THREE.BoxGeometry(8, 1, 1), 0x4a5240, 8, 2.4, -3.4, 0.4);
+        add(new THREE.BoxGeometry(16, 0.3, 0.8), 0x222222, 0, 3.6, 0, 1.2);
+      } else if (o.kind === 'cache') {
+        for (const [x, z, y] of [[-2, 0, 1], [2, 0, 1], [0, 2, 1], [0, 0, 3]]) add(new THREE.BoxGeometry(3, 2, 3), 0x6b5a3a, x, y, z);
+      } else if (o.kind === 'camp') {
+        for (const [x, z] of [[-6, 2], [5, 3], [0, -5]]) add(new THREE.ConeGeometry(2.6, 3.2, 4), 0x5a6b45, x, 1.6, z, 0.78);
+        add(new THREE.SphereGeometry(0.8, 8, 6), 0xd8501e, 0, 0.5, 1);
+      } else if (o.kind === 'truck') {
+        add(new THREE.BoxGeometry(7, 2.6, 2.6), 0x4d5a3d, -1, 1.9, 0, 0.3);
+        add(new THREE.BoxGeometry(2.4, 2.4, 2.5), 0x3e4a31, 3.6, 1.8, 1.1, 0.3);
+      } else if (o.kind === 'relay') {
+        add(new THREE.CylinderGeometry(0.25, 0.4, 18, 6), 0x333333, 0, 9, 0);
+        add(new THREE.BoxGeometry(2.5, 1.8, 2), 0x55604a, 2, 0.9, 1);
+      }
+      g.position.set(o.x - MAP_W / 2, this.height(o.x, o.y), o.y - MAP_H / 2);
+      g.scale.setScalar(1.5);
+      this.scene.add(g); this.objMeshes.push(g);
+    }
+  },
+
   // ------------------------------------------------------------ plan ghosts
   // Where the plan leaves each unit: a pale peg with the unit's name, to tap and plan on from.
   updateGhosts() {
@@ -7620,6 +8199,8 @@ const Input = {
       if (k === ' ') { e.preventDefault(); togglePause(); }
       else if (k === 'v' || k === 'V') $('btnCones').click();
       else if (k === 'm' || k === 'M') $('btnMeasure').click();
+      else if (k === '+' || k === '=') UI.changeSpacing(1);
+      else if (k === '-' || k === '_') UI.changeSpacing(-1);
       else if (k === 't' || k === 'T') View3D.toggle();
       else if (k === 'f' || k === 'F') { Fog.on = !Fog.on; UI.toast(Fog.on ? 'Fog of war shown.' : 'Fog of war hidden.'); }
       else if (k === '1' || k === '2' || k === '3') UI.selectTeam(+k);
@@ -7662,7 +8243,7 @@ function loadSettings() {
       const l = saved.loadout[k];
       if (l && WEAPONS[l.weapon] && USMC_BILLETS[k].weapons.includes(l.weapon)) Object.assign(s.loadout[k], l);
     }
-    if (saved.mode) s.mode = saved.mode;
+    if (saved.mode && (saved.mode === 'random' || MISSIONS[saved.mode])) s.mode = saved.mode;
     if (saved.region && (saved.region === 'random' || REGIONS[saved.region])) s.region = saved.region;
   }
   return s;
@@ -7681,40 +8262,15 @@ function newMission() {
   // Grid: a small 100 km digit and two principal digits for each kilometer line.
   G.grid = { e: randInt(10, 85), n: randInt(10, 85), le: randInt(1, 8), ln: randInt(1, 8) };
   const blue = buildUSMCSquad(set.loadout);
-  const red = buildOpforSquad();
+  // The mission: its site, the enemy and what it is doing, the squad's start.
+  const ms = setupMission(set.mode, blue);
+  const red = ms.red;
   G.squads = { blue, red };
-  const mode = set.mode === 'random' ? (chance(0.5) ? 'attack' : 'meeting') : set.mode;
-  G.mode = mode;
-
-  // The sides start apart by the echelon's distance (1.0-1.4 km for squads, beyond spotting range), on a random
-  // axis, both well inside the sheet.
-  const M = G.echelon.margin, inside = (x, y) => x >= M && y >= M && x <= MAP_W - M && y <= MAP_H - M;
-  let axis = 0, sep = G.echelon.sep[0], bx = M, by = M, rx = MAP_W - M, ry = MAP_H - M;
-  // Choose the distance first, then find a placement that fits, so long distances are as
-  // likely as short ones.
-  sep = randRange(G.echelon.sep[0], G.echelon.sep[1]);
-  for (let k = 0; k < 2000; k++) {
-    axis = randRange(0, Math.PI * 2);
-    bx = randRange(M, MAP_W - M); by = randRange(M, MAP_H - M);
-    rx = bx + Math.cos(axis) * sep; ry = by + Math.sin(axis) * sep;
-    if (inside(rx, ry)) break;
-  }
-  if (!inside(rx, ry)) { bx = M; by = M; rx = MAP_W - M; ry = MAP_H - M; axis = angleTo(bx, by, rx, ry); }
-  const toEnemy = axis;
-  placeSquad(blue, G.map, bx, by, toEnemy);
-  const blueStart = { x: bx, y: by };
-
-  if (mode === 'attack') {
-    // Defenders hold the nearest village or farm to their area, or the ground where they are.
-    const near = G.map.buildings.filter(b => dist((b.x0 + b.x1) / 2, (b.y0 + b.y1) / 2, rx, ry) < 300);
-    if (near.length && chance(0.75)) { const b = pick(near); rx = (b.x0 + b.x1) / 2; ry = (b.y0 + b.y1) / 2; }
-    placeSquad(red, G.map, rx, ry, toEnemy + Math.PI);
-    setupDefense(red, blueStart);
-  } else {
-    placeSquad(red, G.map, rx, ry, toEnemy + Math.PI);
-  }
-  G.enemyArea = { x: rx, y: ry };
-  G.axisBearing = bearing(bx, by, rx, ry);
+  G.mission = ms.M;
+  G.mode = ms.M.mode === 'meeting' ? 'meeting' : 'attack';
+  G.objects = ms.M.objects;
+  G.enemyArea = { x: ms.site.x, y: ms.site.y };
+  G.axisBearing = bearing(ms.start.x, ms.start.y, ms.site.x, ms.site.y);
 
   G.soldiers = [...blue.all, ...red.all];
   G.byId = new Map(G.soldiers.map(s => [s.id, s]));
@@ -7727,7 +8283,7 @@ function newMission() {
   $('debrief').hidden = true;
   G.ui.sel = null; G.ui.pending = null; G.ui.tapes = []; G.ui.tapeStart = null;
   for (const t of [blue.hq, ...blue.teams, red.hq, ...red.teams]) { t.routing = false; t.morale = t.squad.morale; }
-  initAI(mode === 'attack' ? 'defend' : 'advance', blueStart);
+  initAI(ms.ai.mode, ms.ai.objective, ms.ai);
 
   buildTerrain(G.map);
   fitCamera(centroid(blue.all), Math.max(R.minZoom, 1.3));
@@ -7746,6 +8302,8 @@ function newMission() {
 // ---------------------------------------------------------------- morale and routing
 // A broken team falls back about 400 m away from the enemy and is out of the fight.
 function routePoint(s) {
+  // An enemy that means to get away heads for the edge of the sheet.
+  if (s.side === 'red' && AI.escape) return { x: AI.escape.x + gauss() * 10, y: AI.escape.y + gauss() * 10 };
   const t = threatCentroid(s.side, [s]);
   const a = angleTo(t.x, t.y, s.x, s.y);
   return { x: clamp(s.x + Math.cos(a) * 400, 20, MAP_W - 20), y: clamp(s.y + Math.sin(a) * 400, 20, MAP_H - 20) };
@@ -7813,7 +8371,10 @@ function updateTeams(dt) {
       for (const s of t.members) {
         if (!s.routing || s.routed || !s.active) continue;
         if (!s.routeTo) s.routeTo = routePoint(s);
-        if (dist(s.x, s.y, s.routeTo.x, s.routeTo.y) < 8) { s.routed = true; s.path = []; }
+        if (dist(s.x, s.y, s.routeTo.x, s.routeTo.y) < 8) {
+          s.routed = true; s.path = [];
+          if (s.side === 'red' && AI.escape) s.escaped = true;
+        }
         else if (!s.moving) { s.path = G.map.findPath(s.x, s.y, s.routeTo.x, s.routeTo.y) || []; s.moveMode = 'rush'; }
       }
     }
@@ -7875,16 +8436,41 @@ function update(dt) {
   if (G.endT <= 0) { G.endT = 1; checkEnd(); }
 }
 
+// The mission ends when the squad can no longer fight, or when the enemy is beaten, or
+// when it gets away: lifted out, repaired and gone, or off the sheet. Where the mission is
+// to destroy something, a Marine must reach it once the enemy is beaten.
 function checkEnd() {
-  const up = (sq) => sq.all.some(s => s.active && !s.routing);
-  if (!up(G.squads.red)) endMission('victory');
-  else if (!up(G.squads.blue)) endMission('defeat');
+  const M = G.mission, red = G.squads.red.all, blueUp = G.squads.blue.all.some(s => s.active && !s.routing);
+  if (!blueUp) { endMission('defeat'); return; }
+  // An enemy getting away still counts while it is on the way.
+  const redUp = red.some(s => s.active && (M.escape ? !s.routed : !s.routing));
+  const escaped = red.filter(s => s.escaped).length;
+  if (M.escape && escaped >= Math.ceil(M.escape * red.length)) { endMission('escaped'); return; }
+  if (M.evacAt != null && G.time >= M.evacAt && redUp) {
+    G.log((M.key === 'helo' ? 'A helicopter has lifted the crew out.' : 'The truck is running and gone.') + ' The enemy got away.', 'loss');
+    endMission('escaped'); return;
+  }
+  if (M.hvt && !M.hvt.active && !M.hvtDown) {
+    M.hvtDown = true;
+    G.log('The enemy commander is down. His men are breaking.', 'kill');
+    for (const t of [G.squads.red.hq, ...G.squads.red.teams]) startRouting(t, 'withdraw');
+  }
+  if (redUp) return;
+  if (M.reach) {
+    const obj = G.objects.find(o => o.kind === M.reach);
+    if (obj && !G.squads.blue.all.some(s => s.active && dist(s.x, s.y, obj.x, obj.y) < 20)) {
+      if (!M.reachLogged) { M.reachLogged = true; G.log('OPFOR cleared. Get a Marine to the ' + obj.name.toLowerCase() + ' to destroy it.', 'plan'); }
+      return;
+    }
+    if (obj) G.log(obj.name + ' destroyed.', 'kill');
+  }
+  endMission('victory');
 }
 
 function endMission(result) {
   G.over = true; G.paused = true;
   G.revealAll = true;
-  G.log(result === 'victory' ? 'Enemy defeated.' : 'Your squad is combat ineffective.', result === 'victory' ? 'kill' : 'loss');
+  G.log(result === 'victory' ? 'Enemy defeated.' : result === 'escaped' ? 'The enemy got away.' : 'Your squad is combat ineffective.', result === 'victory' ? 'kill' : 'loss');
   const id = G.missionId;
   setTimeout(() => { if (G.missionId !== id) return; UI.showDebrief(result); G.revealAll = false; }, 1200);
 }

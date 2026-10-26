@@ -62,9 +62,10 @@ const Plan = {
     // The report is a little off, as reports are.
     this.reported = { x: clamp(G.enemyArea.x + gauss() * 50, 30, MAP_W - 30), y: clamp(G.enemyArea.y + gauss() * 50, 30, MAP_H - 30) };
     const sep = dist(centroid(G.squads.blue.all).x, centroid(G.squads.blue.all).y, this.reported.x, this.reported.y);
-    // Time available: in a meeting engagement, until the enemy could reach you; in an
-    // attack, until the enemy finishes digging in.
-    this.timeAvail = G.mode === 'meeting' ? Math.round(sep / 1.25 / 60) * 60 : G.echelon.attackTime * 60;
+    // Time available: in a meeting engagement, until the enemy could reach you; against a
+    // pickup or a repair, until it comes; otherwise the echelon's time for an attack.
+    const M = G.mission || {};
+    this.timeAvail = G.mode === 'meeting' ? Math.round(sep / 1.25 / 60) * 60 : M.evacAt || M.leaveAt || G.echelon.attackTime * 60;
     this.intel = this.makeIntel();
     this.terrain = this.keyTerrain();
     this.ao = this.aoFacts();
@@ -612,7 +613,7 @@ const Plan = {
 
   // How far the defenders have dug in: grows over the time available.
   digIn(s) {
-    if (s.side !== 'red' || G.mode !== 'attack' || !this.timeAvail) return 0;
+    if (s.side !== 'red' || !(G.mission && G.mission.digIn) || !this.timeAvail) return 0;
     return clamp(G.time / this.timeAvail, 0, 1);
   },
 
@@ -631,12 +632,13 @@ const Plan = {
     const near = this.placeNear(G.enemyArea, 450);
     const where = near ? (near.kind === 'village' ? 'in the buildings of ' + near.name : 'around ' + near.name) : 'in the open ground near the grid';
     const dirTo = compassWord(bearing(G.enemyArea.x, G.enemyArea.y, centroid(G.squads.blue.all).x, centroid(G.squads.blue.all).y));
+    const M = G.mission, D = M.def, sz = intelSize(n, M.kind);
     return {
-      size: 'Squad-sized element, estimated ' + Math.max(6, est - 1) + ' to ' + (est + 1) + ' men.',
-      activity: G.mode === 'attack' ? 'Defending ' + where + ', oriented generally ' + dirTo + ', toward you. Observed preparing positions.'
-        : 'Moving ' + dirTo + ' on foot ' + (near ? 'from ' + where : 'across country') + ', toward your position, in a loose wedge.',
+      size: sz.text + ' ' + sz.note,
+      sizeReport: sz,
+      activity: D.activity(M.site, dirTo),
       location: 'Vicinity grid ' + gridRef(this.reported.x, this.reported.y) + ' (report accurate to about 100 m).',
-      unit: 'Unknown. Dismounted OPFOR infantry. No markings observed.',
+      unit: OPFOR_KINDS[M.kind].unit + (M.hvt ? ' A commander is with them.' : ''),
       time: 'Observed ' + randInt(15, 40) + ' minutes before this order.',
       equipment: 'Rifles' + (shown.length ? ', ' + shown.join(' and ') : '') + '. Other weapons are possible.',
       near,
@@ -652,12 +654,13 @@ const Plan = {
   },
 
   drawD() {
-    const atk = G.mode === 'attack';
+    const M = G.mission, lk = M.def.likely, esc = M.escape || M.evacAt || M.leaveAt;
     return [
-      ['Defend', atk ? 'Most likely. Will defend from its present positions, improving them while you plan.' : 'Can go to ground and defend if it is fired on first.', atk],
+      ['Defend', lk === 'Defend' ? 'Most likely. Will fight from where it is' + (M.digIn ? ', improving its positions while you plan.' : '.') : 'Can go to ground and defend if it is fired on first.', lk === 'Defend'],
       ['Reinforce', 'No other enemy is known in the AO. Reinforcement is unlikely.', false],
-      ['Attack', atk ? 'Could counterattack your flank with one group if your assault stalls.' : 'Most likely. Will keep moving and attack on contact.', !atk],
-      ['Withdraw', 'Likely to break contact once it loses about half its men.', false],
+      ['Attack', lk === 'Attack' ? 'Most likely. Will keep moving and attack on contact.' : 'Could counterattack your flank with one group if your assault stalls.', lk === 'Attack'],
+      ['Withdraw', lk === 'Withdraw' ? 'Most likely. Will break contact and make for the edge of the sheet as soon as it is found.'
+        : esc ? 'Means to get away: ' + (M.evacAt ? 'it expects to be gone by about H+' + Math.round(M.evacAt / 60) + '.' : 'it is leaving the area.') : 'Likely to break contact once it loses about half its men.', lk === 'Withdraw'],
       ['Delay', 'Could delay from the next covered position if pressed.', false],
     ];
   },
@@ -666,8 +669,8 @@ const Plan = {
     const gr = gridRef(this.reported.x, this.reported.y), near = this.intel.near;
     const purpose = near ? (near.kind === 'village' ? 'secure the village of ' + near.name : near.kind === 'farm' ? 'secure ' + near.name : 'seize ' + near.name)
       : 'clear the area for the company';
-    if (G.mode === 'attack') return '1st Squad attacks NLT H+' + Math.round(this.timeAvail / 60) + ' to destroy OPFOR vicinity grid ' + gr + ' in order to ' + purpose + '.';
-    return '1st Squad moves to contact along bearing ' + pad3(G.axisBearing) + ' to find, fix and destroy OPFOR advancing from vicinity grid ' + gr + ' in order to ' + purpose + '.';
+    const M = G.mission;
+    return '1st Squad ' + M.def.task(M.site, gr, M) + (M.evacAt || M.leaveAt || G.mode === 'meeting' ? '' : ', NLT H+' + Math.round(this.timeAvail / 60)) + '.';
   },
 
   // Terrain facts along the line from the squad to the reported enemy, for the orientation.
@@ -692,7 +695,7 @@ const Plan = {
   // position on one flank and opens fire; only then do the other two fire teams move by a
   // covered route to an assault position on the other flank; a red star sends them in.
   draft() {
-    if (G.mode === 'meeting') return this.draftDefense();
+    if (G.mission && G.mission.def.draft === 'defense') return this.draftDefense();
     this.graphics = []; this.lines = [];
     const b = centroid(G.squads.blue.all), o = this.reported;
     const obj = this.addGraphic('obj', [o]);

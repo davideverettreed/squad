@@ -139,6 +139,7 @@ const View3D = {
     S.add(this.table);
     this.mapRef = m;
     this.clearPegs();
+    this.objRef = null;
     this.buildMarks();
     // Start behind the squad, looking toward the reported enemy.
     const c = centroid(G.squads.blue.all), e = Plan.reported || { x: MAP_W / 2, y: MAP_H / 2 };
@@ -259,6 +260,7 @@ const View3D = {
     this.updatePegs();
     this.updateMarks();
     this.updateGhosts();
+    this.updateObjects();
     this.renderer.render(this.scene, this.camera);
   },
 
@@ -350,6 +352,36 @@ const View3D = {
     }
     for (; n < this.lost.length; n++) this.lost[n].visible = false;
   },
+  // ------------------------------------------------------------ mission objects
+  updateObjects() {
+    if (this.objRef === G.objects) return;
+    for (const g of this.objMeshes || []) this.scene.remove(g);
+    this.objMeshes = []; this.objRef = G.objects;
+    const mat = (c) => new THREE.MeshLambertMaterial({ color: c });
+    for (const o of G.objects || []) {
+      const g = new THREE.Group(), add = (geo, c, x, y, z, ry) => { const m = new THREE.Mesh(geo, mat(c)); m.position.set(x, y, z); if (ry) m.rotation.y = ry; g.add(m); return m; };
+      if (o.kind === 'helo') {
+        add(new THREE.BoxGeometry(12, 3.5, 3.5), 0x4a5240, 0, 1.6, 0, 0.4).rotation.z = 0.15;
+        add(new THREE.BoxGeometry(8, 1, 1), 0x4a5240, 8, 2.4, -3.4, 0.4);
+        add(new THREE.BoxGeometry(16, 0.3, 0.8), 0x222222, 0, 3.6, 0, 1.2);
+      } else if (o.kind === 'cache') {
+        for (const [x, z, y] of [[-2, 0, 1], [2, 0, 1], [0, 2, 1], [0, 0, 3]]) add(new THREE.BoxGeometry(3, 2, 3), 0x6b5a3a, x, y, z);
+      } else if (o.kind === 'camp') {
+        for (const [x, z] of [[-6, 2], [5, 3], [0, -5]]) add(new THREE.ConeGeometry(2.6, 3.2, 4), 0x5a6b45, x, 1.6, z, 0.78);
+        add(new THREE.SphereGeometry(0.8, 8, 6), 0xd8501e, 0, 0.5, 1);
+      } else if (o.kind === 'truck') {
+        add(new THREE.BoxGeometry(7, 2.6, 2.6), 0x4d5a3d, -1, 1.9, 0, 0.3);
+        add(new THREE.BoxGeometry(2.4, 2.4, 2.5), 0x3e4a31, 3.6, 1.8, 1.1, 0.3);
+      } else if (o.kind === 'relay') {
+        add(new THREE.CylinderGeometry(0.25, 0.4, 18, 6), 0x333333, 0, 9, 0);
+        add(new THREE.BoxGeometry(2.5, 1.8, 2), 0x55604a, 2, 0.9, 1);
+      }
+      g.position.set(o.x - MAP_W / 2, this.height(o.x, o.y), o.y - MAP_H / 2);
+      g.scale.setScalar(1.5);
+      this.scene.add(g); this.objMeshes.push(g);
+    }
+  },
+
   // ------------------------------------------------------------ plan ghosts
   // Where the plan leaves each unit: a pale peg with the unit's name, to tap and plan on from.
   updateGhosts() {

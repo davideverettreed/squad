@@ -669,6 +669,7 @@ function render() {
   Fog.draw(ctx);
   drawEdgeLabels(ctx);
   drawPlan(ctx);
+  drawObjects(ctx);
   drawPlanGhosts(ctx);
   drawOrdersOverlay(ctx);
   drawProjectiles(ctx);
@@ -1118,6 +1119,41 @@ function drawTerrainMarks(ctx) {
   }
 }
 
+// The mission's objects: a downed helicopter, a supply depot, a camp, a truck, a radio
+// relay. Drawn in black as map symbols, with a label; on the sand table they stand in 3D.
+function drawObjects(ctx) {
+  if (!G.objects || View3D.drawingDrape) return;
+  const s = clamp(5 * R.cam.zoom, 9, 34);
+  ctx.save();
+  for (const o of G.objects) {
+    const q = toScreen(o.x, o.y);
+    if (q.x < -60 || q.y < -60 || q.x > R.w + 60 || q.y > R.h + 60) continue;
+    ctx.strokeStyle = MAP_INK; ctx.fillStyle = 'rgba(250,248,240,0.9)'; ctx.lineWidth = Math.max(1.5, s * 0.12);
+    ctx.beginPath();
+    if (o.kind === 'helo') {
+      ctx.ellipse(q.x, q.y, s * 0.9, s * 0.45, -0.3, 0, Math.PI * 2); ctx.fill(); ctx.stroke();
+      ctx.beginPath(); ctx.moveTo(q.x + s * 0.7, q.y - s * 0.25); ctx.lineTo(q.x + s * 1.8, q.y - s * 0.7); ctx.stroke();
+      ctx.beginPath(); ctx.moveTo(q.x - s * 1.4, q.y - s * 0.9); ctx.lineTo(q.x + s * 1.2, q.y + s * 0.6); ctx.moveTo(q.x - s * 1.1, q.y + s * 0.8); ctx.lineTo(q.x + s, q.y - s * 0.9); ctx.stroke();
+    } else if (o.kind === 'cache') {
+      for (const [dx, dy] of [[-0.6, 0.2], [0.6, 0.2], [0, -0.7]]) { ctx.fillRect(q.x + dx * s - s * 0.55, q.y + dy * s - s * 0.45, s * 1.1, s * 0.9); ctx.strokeRect(q.x + dx * s - s * 0.55, q.y + dy * s - s * 0.45, s * 1.1, s * 0.9); }
+    } else if (o.kind === 'camp') {
+      for (const [dx, dy] of [[-0.9, 0.3], [0.9, 0.3], [0, -0.6]]) { ctx.beginPath(); ctx.moveTo(q.x + dx * s - s * 0.55, q.y + dy * s + s * 0.4); ctx.lineTo(q.x + dx * s, q.y + dy * s - s * 0.5); ctx.lineTo(q.x + dx * s + s * 0.55, q.y + dy * s + s * 0.4); ctx.closePath(); ctx.fill(); ctx.stroke(); }
+      ctx.fillStyle = '#d8501e'; ctx.beginPath(); ctx.arc(q.x, q.y + s * 0.4, s * 0.18, 0, Math.PI * 2); ctx.fill();
+    } else if (o.kind === 'truck') {
+      ctx.fillRect(q.x - s, q.y - s * 0.4, s * 1.5, s * 0.8); ctx.strokeRect(q.x - s, q.y - s * 0.4, s * 1.5, s * 0.8);
+      ctx.fillRect(q.x + s * 0.55, q.y - s * 0.25, s * 0.5, s * 0.65); ctx.strokeRect(q.x + s * 0.55, q.y - s * 0.25, s * 0.5, s * 0.65);
+      ctx.fillStyle = MAP_INK; for (const dx of [-0.65, 0.1, 0.8]) { ctx.beginPath(); ctx.arc(q.x + dx * s, q.y + s * 0.5, s * 0.17, 0, Math.PI * 2); ctx.fill(); }
+    } else if (o.kind === 'relay') {
+      ctx.moveTo(q.x, q.y + s * 0.6); ctx.lineTo(q.x, q.y - s * 1.3); ctx.moveTo(q.x - s * 0.6, q.y + s * 0.6); ctx.lineTo(q.x, q.y - s * 0.2); ctx.lineTo(q.x + s * 0.6, q.y + s * 0.6); ctx.stroke();
+      ctx.beginPath(); ctx.arc(q.x, q.y - s * 1.3, s * 0.35, -2.5, -0.6); ctx.stroke(); ctx.beginPath(); ctx.arc(q.x, q.y - s * 1.3, s * 0.65, -2.5, -0.6); ctx.stroke();
+    }
+    ctx.font = '700 ' + Math.round(clamp(s * 0.8, 10, 16)) + 'px "Saira Condensed", "Arial Narrow", sans-serif';
+    ctx.textAlign = 'center'; ctx.textBaseline = 'top'; ctx.lineWidth = 3; ctx.strokeStyle = 'rgba(247,245,236,0.95)';
+    ctx.strokeText(o.name.toUpperCase(), q.x, q.y + s * 1.1); ctx.fillStyle = OVL.red; ctx.fillText(o.name.toUpperCase(), q.x, q.y + s * 1.1);
+  }
+  ctx.restore();
+}
+
 // While planning: a dashed arrow for each planned move, and a dashed ghost counter of each
 // unit where its last move ends. Tapping a ghost picks that unit to plan its next step.
 function drawPlanGhosts(ctx) {
@@ -1453,15 +1489,15 @@ function drawGhostFormation(ctx) {
   const slots = [];
   if (sel.level === 'team') {
     const act = sel.team.members.filter(commandable);
-    act.forEach((s, i) => slots.push({ s, o: teamSlot(form, i) }));
+    act.forEach((s, i) => slots.push({ s, o: scaled(teamSlot(form, i), sel.team.spacing) }));
   } else {
     const sq = sel.squad, teams = sq.teams.filter(t => t.members.some(commandable));
     teams.forEach((t, k) => {
-      const q = squadSlot(form, k, teams.length);
-      t.members.filter(commandable).forEach((s, i) => { const o = teamSlot(t.formation, i); slots.push({ s, o: { x: q.x + o.x, y: q.y + o.y } }); });
+      const q = scaled(squadSlot(form, k, teams.length), sq.spacing);
+      t.members.filter(commandable).forEach((s, i) => { const o = scaled(teamSlot(t.formation, i), t.spacing); slots.push({ s, o: { x: q.x + o.x, y: q.y + o.y } }); });
     });
     const sl = sq.hq.members[0];
-    if (sl && commandable(sl)) slots.push({ s: sl, o: squadLeaderSlot(form) });
+    if (sl && commandable(sl)) slots.push({ s: sl, o: scaled(squadLeaderSlot(form), sq.spacing) });
   }
   if (!slots.length) return;
   // Face the way the leader faces; center the ghost on the unit as it stands.

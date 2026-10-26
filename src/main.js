@@ -24,7 +24,7 @@ function loadSettings() {
       const l = saved.loadout[k];
       if (l && WEAPONS[l.weapon] && USMC_BILLETS[k].weapons.includes(l.weapon)) Object.assign(s.loadout[k], l);
     }
-    if (saved.mode) s.mode = saved.mode;
+    if (saved.mode && (saved.mode === 'random' || MISSIONS[saved.mode])) s.mode = saved.mode;
     if (saved.region && (saved.region === 'random' || REGIONS[saved.region])) s.region = saved.region;
   }
   return s;
@@ -43,40 +43,15 @@ function newMission() {
   // Grid: a small 100 km digit and two principal digits for each kilometer line.
   G.grid = { e: randInt(10, 85), n: randInt(10, 85), le: randInt(1, 8), ln: randInt(1, 8) };
   const blue = buildUSMCSquad(set.loadout);
-  const red = buildOpforSquad();
+  // The mission: its site, the enemy and what it is doing, the squad's start.
+  const ms = setupMission(set.mode, blue);
+  const red = ms.red;
   G.squads = { blue, red };
-  const mode = set.mode === 'random' ? (chance(0.5) ? 'attack' : 'meeting') : set.mode;
-  G.mode = mode;
-
-  // The sides start apart by the echelon's distance (1.0-1.4 km for squads, beyond spotting range), on a random
-  // axis, both well inside the sheet.
-  const M = G.echelon.margin, inside = (x, y) => x >= M && y >= M && x <= MAP_W - M && y <= MAP_H - M;
-  let axis = 0, sep = G.echelon.sep[0], bx = M, by = M, rx = MAP_W - M, ry = MAP_H - M;
-  // Choose the distance first, then find a placement that fits, so long distances are as
-  // likely as short ones.
-  sep = randRange(G.echelon.sep[0], G.echelon.sep[1]);
-  for (let k = 0; k < 2000; k++) {
-    axis = randRange(0, Math.PI * 2);
-    bx = randRange(M, MAP_W - M); by = randRange(M, MAP_H - M);
-    rx = bx + Math.cos(axis) * sep; ry = by + Math.sin(axis) * sep;
-    if (inside(rx, ry)) break;
-  }
-  if (!inside(rx, ry)) { bx = M; by = M; rx = MAP_W - M; ry = MAP_H - M; axis = angleTo(bx, by, rx, ry); }
-  const toEnemy = axis;
-  placeSquad(blue, G.map, bx, by, toEnemy);
-  const blueStart = { x: bx, y: by };
-
-  if (mode === 'attack') {
-    // Defenders hold the nearest village or farm to their area, or the ground where they are.
-    const near = G.map.buildings.filter(b => dist((b.x0 + b.x1) / 2, (b.y0 + b.y1) / 2, rx, ry) < 300);
-    if (near.length && chance(0.75)) { const b = pick(near); rx = (b.x0 + b.x1) / 2; ry = (b.y0 + b.y1) / 2; }
-    placeSquad(red, G.map, rx, ry, toEnemy + Math.PI);
-    setupDefense(red, blueStart);
-  } else {
-    placeSquad(red, G.map, rx, ry, toEnemy + Math.PI);
-  }
-  G.enemyArea = { x: rx, y: ry };
-  G.axisBearing = bearing(bx, by, rx, ry);
+  G.mission = ms.M;
+  G.mode = ms.M.mode === 'meeting' ? 'meeting' : 'attack';
+  G.objects = ms.M.objects;
+  G.enemyArea = { x: ms.site.x, y: ms.site.y };
+  G.axisBearing = bearing(ms.start.x, ms.start.y, ms.site.x, ms.site.y);
 
   G.soldiers = [...blue.all, ...red.all];
   G.byId = new Map(G.soldiers.map(s => [s.id, s]));
@@ -89,7 +64,7 @@ function newMission() {
   $('debrief').hidden = true;
   G.ui.sel = null; G.ui.pending = null; G.ui.tapes = []; G.ui.tapeStart = null;
   for (const t of [blue.hq, ...blue.teams, red.hq, ...red.teams]) { t.routing = false; t.morale = t.squad.morale; }
-  initAI(mode === 'attack' ? 'defend' : 'advance', blueStart);
+  initAI(ms.ai.mode, ms.ai.objective, ms.ai);
 
   buildTerrain(G.map);
   fitCamera(centroid(blue.all), Math.max(R.minZoom, 1.3));
@@ -108,6 +83,8 @@ function newMission() {
 // ---------------------------------------------------------------- morale and routing
 // A broken team falls back about 400 m away from the enemy and is out of the fight.
 function routePoint(s) {
+  // An enemy that means to get away heads for the edge of the sheet.
+  if (s.side === 'red' && AI.escape) return { x: AI.escape.x + gauss() * 10, y: AI.escape.y + gauss() * 10 };
   const t = threatCentroid(s.side, [s]);
   const a = angleTo(t.x, t.y, s.x, s.y);
   return { x: clamp(s.x + Math.cos(a) * 400, 20, MAP_W - 20), y: clamp(s.y + Math.sin(a) * 400, 20, MAP_H - 20) };
@@ -175,7 +152,10 @@ function updateTeams(dt) {
       for (const s of t.members) {
         if (!s.routing || s.routed || !s.active) continue;
         if (!s.routeTo) s.routeTo = routePoint(s);
-        if (dist(s.x, s.y, s.routeTo.x, s.routeTo.y) < 8) { s.routed = true; s.path = []; }
+        if (dist(s.x, s.y, s.routeTo.x, s.routeTo.y) < 8) {
+          s.routed = true; s.path = [];
+          if (s.side === 'red' && AI.escape) s.escaped = true;
+        }
         else if (!s.moving) { s.path = G.map.findPath(s.x, s.y, s.routeTo.x, s.routeTo.y) || []; s.moveMode = 'rush'; }
       }
     }
@@ -237,16 +217,41 @@ function update(dt) {
   if (G.endT <= 0) { G.endT = 1; checkEnd(); }
 }
 
+// The mission ends when the squad can no longer fight, or when the enemy is beaten, or
+// when it gets away: lifted out, repaired and gone, or off the sheet. Where the mission is
+// to destroy something, a Marine must reach it once the enemy is beaten.
 function checkEnd() {
-  const up = (sq) => sq.all.some(s => s.active && !s.routing);
-  if (!up(G.squads.red)) endMission('victory');
-  else if (!up(G.squads.blue)) endMission('defeat');
+  const M = G.mission, red = G.squads.red.all, blueUp = G.squads.blue.all.some(s => s.active && !s.routing);
+  if (!blueUp) { endMission('defeat'); return; }
+  // An enemy getting away still counts while it is on the way.
+  const redUp = red.some(s => s.active && (M.escape ? !s.routed : !s.routing));
+  const escaped = red.filter(s => s.escaped).length;
+  if (M.escape && escaped >= Math.ceil(M.escape * red.length)) { endMission('escaped'); return; }
+  if (M.evacAt != null && G.time >= M.evacAt && redUp) {
+    G.log((M.key === 'helo' ? 'A helicopter has lifted the crew out.' : 'The truck is running and gone.') + ' The enemy got away.', 'loss');
+    endMission('escaped'); return;
+  }
+  if (M.hvt && !M.hvt.active && !M.hvtDown) {
+    M.hvtDown = true;
+    G.log('The enemy commander is down. His men are breaking.', 'kill');
+    for (const t of [G.squads.red.hq, ...G.squads.red.teams]) startRouting(t, 'withdraw');
+  }
+  if (redUp) return;
+  if (M.reach) {
+    const obj = G.objects.find(o => o.kind === M.reach);
+    if (obj && !G.squads.blue.all.some(s => s.active && dist(s.x, s.y, obj.x, obj.y) < 20)) {
+      if (!M.reachLogged) { M.reachLogged = true; G.log('OPFOR cleared. Get a Marine to the ' + obj.name.toLowerCase() + ' to destroy it.', 'plan'); }
+      return;
+    }
+    if (obj) G.log(obj.name + ' destroyed.', 'kill');
+  }
+  endMission('victory');
 }
 
 function endMission(result) {
   G.over = true; G.paused = true;
   G.revealAll = true;
-  G.log(result === 'victory' ? 'Enemy defeated.' : 'Your squad is combat ineffective.', result === 'victory' ? 'kill' : 'loss');
+  G.log(result === 'victory' ? 'Enemy defeated.' : result === 'escaped' ? 'The enemy got away.' : 'Your squad is combat ineffective.', result === 'victory' ? 'kill' : 'loss');
   const id = G.missionId;
   setTimeout(() => { if (G.missionId !== id) return; UI.showDebrief(result); G.revealAll = false; }, 1200);
 }

@@ -49,6 +49,7 @@ const Radio = {
       case 'formation': return 'go to ' + FORMATIONS[arg].label.toLowerCase();
       case 'halt': return 'halt';
       case 'nudge': return arg.text;
+      case 'spacing': return arg.text;
       case 'cover': return 'take cover';
       case 'fallback': return 'fall back';
       case 'lift': return 'lift fire';

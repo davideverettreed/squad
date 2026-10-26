@@ -26,6 +26,8 @@ function groupBut(team) {
   const sq = team.squad;
   return { level: 'group', squad: sq, except: team, teams: sq.teams.filter(t => t !== team && t.members.some(s => s.active)) };
 }
+// A formation offset at a unit's chosen interval.
+function scaled(o, k) { return { x: o.x * (k || 1), y: o.y * (k || 1) }; }
 function commandable(s) { return s.active && !s.routing; }
 
 function setPosture(s, p) {
@@ -79,7 +81,7 @@ function teamMove(team, x, y, mode, heading, alone) {
     if (route) {
       act.forEach((s, i) => {
         if (!commandable(s)) return;
-        const o = teamSlot(team.formation, i);
+        const o = scaled(teamSlot(team.formation, i), team.spacing);
         s.path = G.map.offsetPath(s.x, s.y, route, o.x, o.y);
         s.moveMode = mode; s.faceAngle = null;
       });
@@ -87,7 +89,7 @@ function teamMove(team, x, y, mode, heading, alone) {
     }
   }
   act.forEach((s, i) => {
-    const o = teamSlot(team.formation, i), w = rotateOffset(o.x, o.y, heading);
+    const o = scaled(teamSlot(team.formation, i), team.spacing), w = rotateOffset(o.x, o.y, heading);
     orderMove(s, x + w.x, y + w.y, mode);
   });
 }
@@ -98,12 +100,12 @@ function squadMove(sq, x, y, mode) {
   const c = centroid(act), heading = angleTo(c.x, c.y, x, y);
   const teams = sq.teams.filter(t => t.members.some(commandable));
   teams.forEach((t, k) => {
-    const o = squadSlot(sq.formation, k, teams.length), w = rotateOffset(o.x, o.y, heading);
+    const o = scaled(squadSlot(sq.formation, k, teams.length), sq.spacing), w = rotateOffset(o.x, o.y, heading);
     teamMove(t, x + w.x, y + w.y, mode, heading, false);
   });
   const sl = sq.hq.members[0];
   if (commandable(sl)) {
-    const o = squadLeaderSlot(sq.formation), w = rotateOffset(o.x, o.y, heading);
+    const o = scaled(squadLeaderSlot(sq.formation), sq.spacing), w = rotateOffset(o.x, o.y, heading);
     orderMove(sl, x + w.x, y + w.y, mode);
   }
 }
@@ -124,10 +126,10 @@ function routeMove(sel, pts, mode) {
   for (const s of members) {
     let ox = 0, oy = 0;
     if (s.team.num) {
-      const i = s.team.members.filter(commandable).indexOf(s), o = teamSlot(s.team.formation, Math.max(0, i));
+      const i = s.team.members.filter(commandable).indexOf(s), o = scaled(teamSlot(s.team.formation, Math.max(0, i)), s.team.spacing);
       ox += o.x; oy += o.y;
-      if (sel.level === 'squad') { const k = teams.indexOf(s.team), q = squadSlot(sq.formation, Math.max(0, k), teams.length); ox += q.x; oy += q.y; }
-    } else if (sel.level === 'squad') { const q = squadLeaderSlot(sq.formation); ox = q.x; oy = q.y; }
+      if (sel.level === 'squad') { const k = teams.indexOf(s.team), q = scaled(squadSlot(sq.formation, Math.max(0, k), teams.length), sq.spacing); ox += q.x; oy += q.y; }
+    } else if (sel.level === 'squad') { const q = scaled(squadLeaderSlot(sq.formation), sq.spacing); ox = q.x; oy = q.y; }
     s.path = G.map.offsetPath(s.x, s.y, route, ox, oy);
     s.moveMode = mode; s.faceAngle = null; s.assault = false;
   }
@@ -296,6 +298,12 @@ function issueOrder(sel, type, arg) {
       else team.formation = arg;
       G.toast(who + ': formation ' + FORMATIONS[arg].label.toLowerCase() + '.');
       break;
+    case 'spacing': {
+      // Spread out or close up around the unit's center, keeping its front.
+      Nudge.apply(sel, { heading: members[0].facing, scale: arg.ratio, text: arg.text });
+      G.toast(who + ': ' + arg.text + '.');
+      break;
+    }
     case 'nudge':
       Nudge.apply(sel, arg);
       G.toast(who + ': ' + arg.text + '.');
@@ -467,9 +475,9 @@ const Nudge = {
   targets(n) {
     const h = n.heading, fx = Math.cos(h), fy = Math.sin(h), rx = -fy, ry = fx;
     const cx = n.c.x + fx * n.f + rx * n.r, cy = n.c.y + fy * n.f + ry * n.r;
-    const ca = Math.cos(n.rot), sa = Math.sin(n.rot);
+    const ca = Math.cos(n.rot), sa = Math.sin(n.rot), k = n.scale || 1;
     return n.men.map(s => {
-      const ox = s.x - n.c.x, oy = s.y - n.c.y;
+      const ox = (s.x - n.c.x) * k, oy = (s.y - n.c.y) * k;
       return { s, x: clamp(cx + ox * ca - oy * sa, 2, MAP_W - 2), y: clamp(cy + ox * sa + oy * ca, 2, MAP_H - 2) };
     });
   },
@@ -493,14 +501,14 @@ const Nudge = {
   apply(sel, arg) {
     const men = selMembers(sel).filter(commandable);
     if (!men.length) return;
-    const n = { men, c: centroid(men), heading: arg.heading, f: arg.f, r: arg.r, rot: arg.rot };
+    const n = { men, c: centroid(men), heading: arg.heading, f: arg.f || 0, r: arg.r || 0, rot: arg.rot || 0, scale: arg.scale || 1 };
     for (const t of this.targets(n)) {
       const s = t.s;
       if (!s.resume) s.resume = s.path.length ? { path: s.path.slice(), mode: s.moveMode, faceAngle: s.faceAngle } : null;
       s.path = G.map.findPath(s.x, s.y, t.x, t.y) || [{ x: t.x, y: t.y }];
       s.moveMode = 'walk';
-      s.holdFacing = arg.heading + arg.rot;
-      s.faceAngle = arg.heading + arg.rot;
+      s.holdFacing = arg.heading + (arg.rot || 0);
+      s.faceAngle = arg.heading + (arg.rot || 0);
       s.nudging = true;
     }
   },

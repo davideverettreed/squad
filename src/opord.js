@@ -257,7 +257,7 @@ const OPORD = {
   // ------------------------------------------------------------ 2. Situation
   situation(box) {
     const i = Plan.intel;
-    this.para(box, 'Enemy forces: SALUTE', null);
+    this.para(box, 'Enemy forces: SALUTE', G.mission.label + '.');
     for (const [k, v] of [['Size', i.size], ['Activity', i.activity], ['Location', i.location], ['Unit', i.unit], ['Time', i.time], ['Equipment', i.equipment]]) {
       this.factRow(box, k, v, k === 'Location' ? Plan.reported : null, 1.6);
     }
@@ -269,7 +269,9 @@ const OPORD = {
       box.appendChild(row);
     }
     this.para(box, 'Friendly forces', 'No higher or adjacent units are near you, and there is no indirect fire support. 1st Squad is on its own.');
-    this.para(box, 'Time available', fmtClock(Plan.timeAvail) + ' (' + (G.mode === 'attack' ? 'the enemy will have finished digging in by then' : 'the enemy could reach you by then') +
+    const M = G.mission, why = M.evacAt ? (M.key === 'helo' ? 'the pickup is expected then' : 'the truck should be running by then') : M.leaveAt ? 'the enemy should move on about then'
+      : G.mode === 'meeting' ? 'the enemy could reach you by then' : M.digIn ? 'the enemy will have finished digging in by then' : 'the enemy may move by then';
+    this.para(box, 'Time available', fmtClock(Plan.timeAvail) + ' (' + why +
       '). Use one third to plan; leave two thirds to the fire teams. The clock is running at ' + PLAN_RATE + '× while you plan.');
   },
 

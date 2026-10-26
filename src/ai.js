@@ -2,11 +2,12 @@
 // Enemy squad AI. On contact the heaviest group becomes the base of fire and the
 // others try to flank and assault. It breaks contact after heavy losses.
 
-const AI = { mode: 'defend', objective: null, contact: false, withdrawing: false, timer: 0, lastContact: -99 };
+const AI = { mode: 'defend', objective: null, contact: false, withdrawing: false, timer: 0, lastContact: -99, routine: null, breakOff: false, escape: null };
 
-function initAI(mode, objective) {
+function initAI(mode, objective, extra) {
   AI.mode = mode; AI.objective = objective;
   AI.contact = false; AI.withdrawing = false; AI.timer = 2; AI.lastContact = -99;
+  AI.routine = extra && extra.routine || null; AI.breakOff = !!(extra && extra.breakOff); AI.escape = extra && extra.escape || null;
   for (const t of [G.squads.red.hq, ...G.squads.red.teams]) t.task = null;
 }
 
@@ -56,21 +57,57 @@ function assignTasks(sq) {
 // route as it would have walked in that time, at a walk over the ground, stopping short
 // of the squad's start so the fight still opens at range.
 function advanceDuringPlanning(seconds) {
-  if (AI.mode !== 'advance' || !AI.objective) return;
+  const exit = AI.routine && AI.routine.kind === 'exit';
+  if ((AI.mode !== 'advance' && !exit) || !AI.objective) return;
   const sq = G.squads.red, act = sq.all.filter(commandable);
   if (!act.length) return;
-  const c = centroid(act), route = G.map.findPath(c.x, c.y, AI.objective.x, AI.objective.y);
+  // Marching on the squad, it stops 600 m short; leaving the sheet, 300 m short of the edge.
+  const goal = exit ? AI.routine.pts[AI.routine.pts.length - 1] : AI.objective, stop = exit ? 300 : 600;
+  const c = centroid(act), route = G.map.findPath(c.x, c.y, goal.x, goal.y);
   if (!route || !route.length) return;
-  let left = Math.min(seconds * MOVE.walk.speed * 0.8, Math.max(0, dist(c.x, c.y, AI.objective.x, AI.objective.y) - 600));
+  let left = Math.min(seconds * MOVE.walk.speed * 0.8, Math.max(0, dist(c.x, c.y, goal.x, goal.y) - stop));
+  if (exit) AI.routine.i = AI.routine.pts.length - 1;
   let px = c.x, py = c.y;
   for (const p of route) {
     const d = dist(px, py, p.x, p.y);
     if (d >= left) { px += (p.x - px) * left / d; py += (p.y - py) * left / d; left = 0; break; }
     left -= d; px = p.x; py = p.y;
   }
-  const h = angleTo(px, py, AI.objective.x, AI.objective.y);
+  const h = angleTo(px, py, goal.x, goal.y);
   placeSquad(sq, G.map, px, py, h);
   for (const s of sq.all) s.path = [];
+}
+
+// The edge of the sheet along a bearing from a point.
+function edgeFrom(p, ang) {
+  let x = p.x, y = p.y;
+  for (let r = 0; r < MAP_W * 2; r += 20) { x = p.x + Math.cos(ang) * r; y = p.y + Math.sin(ang) * r; if (x < 15 || y < 15 || x > MAP_W - 15 || y > MAP_H - 15) break; }
+  return { x: clamp(x, 8, MAP_W - 8), y: clamp(y, 8, MAP_H - 8) };
+}
+
+// What the enemy does before contact: walk its patrol round or out and back, go from
+// place to place with a pause at each, or make its way off the sheet.
+function runRoutine(sq, act) {
+  const r = AI.routine, movers = r.teams ? r.teams.flatMap(t => t.members.filter(commandable)) : act;
+  if (!movers.length || movers.some(s => s.moving)) return;
+  if (r.pause > G.time) return;
+  if (r.kind === 'exit') {
+    if (r.i >= r.pts.length) {
+      // Off the sheet: those who made it are gone.
+      for (const s of movers) if (dist(s.x, s.y, r.pts[r.pts.length - 1].x, r.pts[r.pts.length - 1].y) < 40) { s.routed = true; s.escaped = true; s.path = []; }
+      return;
+    }
+    const p = r.pts[r.i++];
+    for (const s of movers) s.homePosture = 'kneel';
+    if (r.teams) for (const t of r.teams) teamMove(t, p.x, p.y, 'walk'); else squadMove(sq, p.x, p.y, 'walk');
+    return;
+  }
+  const p = r.pts[r.i];
+  if (r.kind === 'loop') r.i = (r.i + 1) % r.pts.length;
+  else if (r.kind === 'shuttle') { if (r.i + r.dir >= r.pts.length || r.i + r.dir < 0) r.dir = -r.dir; r.i += r.dir; }
+  else { r.i = (r.i + 1) % r.pts.length; r.pause = G.time + randRange(20, 60); }
+  for (const s of movers) s.homePosture = 'kneel';
+  if (r.teams) for (const t of r.teams) teamMove(t, p.x + gauss() * 8, p.y + gauss() * 8, 'walk'); else squadMove(sq, p.x, p.y, 'walk');
 }
 
 function updateAI(dt) {
@@ -92,8 +129,19 @@ function updateAI(dt) {
   if (contacts.length) AI.lastContact = G.time;
   const enemyC = contacts.length ? centroid(contacts) : null;
 
+  // Done at the water point (or wherever it stopped): it moves on, away from the squad.
+  const M = G.mission;
+  if (M && M.leaveAt != null && G.time >= M.leaveAt && !AI.contact && !(AI.routine && AI.routine.kind === 'exit')) {
+    M.leaveAt = null;
+    for (const s of act) s.relaxed = false;
+    const c = centroid(act), b = centroid(G.squads.blue.all), out = edgeFrom(c, angleTo(b.x, b.y, c.x, c.y));
+    AI.routine = { kind: 'exit', pts: [out], i: 0, pause: 0 }; AI.escape = out;
+    if (sq.all.some(s => G.known.blue.get(s.id)?.visible)) G.log('The enemy is moving off.', 'contact');
+  }
+
   if (!enemyC) {
     if (AI.contact && G.time - AI.lastContact > 40) { AI.contact = false; for (const t of sq.teams) t.task = null; }
+    if (!AI.contact && AI.routine) runRoutine(sq, act);
     if (!AI.contact && AI.mode === 'advance' && act.every(s => !s.moving)) {
       const c = centroid(act);
       if (dist(c.x, c.y, AI.objective.x, AI.objective.y) > 15) {
@@ -106,6 +154,16 @@ function updateAI(dt) {
 
   if (!AI.contact) {
     AI.contact = true;
+    // Men at rest come awake.
+    for (const s of sq.all) s.relaxed = false;
+    // A force out to watch, forage or get away breaks contact and makes for the edge.
+    if (AI.breakOff || (AI.routine && AI.routine.kind === 'exit')) {
+      const c = centroid(act);
+      AI.escape = AI.escape || edgeFrom(c, angleTo(enemyC.x, enemyC.y, c.x, c.y));
+      AI.withdrawing = true;
+      for (const t of [sq.hq, ...sq.teams]) startRouting(t, 'withdraw');
+      return;
+    }
     assignTasks(sq);
     if (AI.mode === 'advance') {
       for (const s of act) { s.path = []; }

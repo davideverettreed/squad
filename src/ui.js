@@ -46,7 +46,7 @@ const UI = {
         ['order', 'suppress', 'Suppress'], ['now', 'lift', 'Lift']] },
       { label: 'Weapons', items: [['order', 'launcher', '40mm'], ['order', 'frag', 'Frag']] },
       { label: 'Act', items: [['now', 'cover', 'Take cover'], ['now', 'fallback', 'Fall back'], ['now', 'halt', 'Halt'], ['order', 'face', 'Face']] },
-      { label: 'Formation', items: FORMATION_KEYS.map(k => ['formation', k, FORMATIONS[k].label]) },
+      { label: 'Formation', items: [...FORMATION_KEYS.map(k => ['formation', k, FORMATIONS[k].label]), ['spacing', 'closer', 'Closer −'], ['spacing', 'wider', 'Wider +']] },
     ];
     const grid = $('orderGrid');
     for (const g of groups) {
@@ -92,6 +92,7 @@ const UI = {
     else if (kind === 'posture') issueOrder(sel, 'posture', val);
     else if (kind === 'fire') issueOrder(sel, 'fire', val);
     else if (kind === 'formation') issueOrder(sel, 'formation', val);
+    else if (kind === 'spacing') this.changeSpacing(val === 'wider' ? 1 : -1);
     this.refreshOrders();
   },
 
@@ -107,6 +108,7 @@ const UI = {
       else if (k === 'posture') on = posture === v;
       else if (k === 'fire') on = fire === v;
       else if (k === 'formation') { on = form === v; dis = dis || !form; }
+      else if (k === 'spacing') dis = dis || !sel || sel.level === 'soldier';
       else if (k === 'order') on = G.ui.pending === v;
       if (v === 'launcher') dis = dis || !m.some(s => s.launcher && s.lRounds > 0);
       b.classList.toggle('on', on);
@@ -230,6 +232,24 @@ const UI = {
     document.body.classList.toggle('orders-open', on);
     $('btnOrdersMore').textContent = on ? 'Orders ▾' : 'Orders ▴';
     $('btnOrdersMore').setAttribute('aria-expanded', on ? 'true' : 'false');
+  },
+
+  // ------------------------------------------------------------ dispersion
+  // Wider or closer intervals for the selected team(s) or squad: about 30% a step, from
+  // half to three times the standard. Planning, it sets the interval for later moves; in
+  // the fight the men also spread out or close up where they are.
+  changeSpacing(dir) {
+    const sel = G.ui.sel;
+    if (!sel || sel.level === 'soldier') { this.toast('Select a fire team or the squad to change its interval.'); return; }
+    const units = sel.level === 'squad' ? [sel.squad, ...sel.squad.teams] : sel.level === 'group' ? sel.teams : [sel.team];
+    const f = dir > 0 ? 1.3 : 1 / 1.3;
+    let ratio = 1;
+    for (const u of units) { const old = u.spacing || 1; u.spacing = clamp(old * f, 0.5, 3); if (u === units[0]) ratio = u.spacing / old; }
+    if (Math.abs(ratio - 1) < 0.01) { this.toast((dir > 0 ? 'Already at the widest' : 'Already at the closest') + ' interval.'); return; }
+    const m = Math.round(7 * units[units.length - 1].spacing);
+    const text = (dir > 0 ? 'spread out' : 'close up') + ', about ' + m + ' m between men';
+    if (Plan.planning) { this.toast(selName(sel) + ': ' + text + '.'); return; }
+    issueOrder(sel, 'spacing', { ratio, text });
   },
 
   // ------------------------------------------------------------ dragging a unit (touch)
@@ -459,17 +479,19 @@ const UI = {
     const box = $('briefBody');
     box.innerHTML = '';
     const sit = el('div', 'bsit');
-    sit.appendChild(el('h3', null, 'Mission type'));
+    sit.appendChild(el('h3', null, 'Mission'));
     const mp = el('p');
-    const modes = { attack: 'Attack. The enemy holds a position and digs in while you plan.',
-      meeting: 'Meeting engagement. The enemy is marching toward you. The field is frozen while you plan, but the longer you take, the closer it is when you step off.',
-      random: 'Either one, chosen at random.' };
+    // The mission: one of many, at random unless one is picked. The description is the
+    // enemy's activity as the order will give it, in general terms.
+    const blurb = (k) => k === 'random' ? 'Any of ' + MISSION_KEYS.length + ' missions, chosen at random. The order tells you what you face.'
+      : MISSIONS[k].activity({ name: 'the objective', kind: 'open' }, 'toward you') + ' Enemy ' + MISSIONS[k].size[0] + (MISSIONS[k].size[1] > MISSIONS[k].size[0] ? '-' + MISSIONS[k].size[1] : '') + ' men.';
     const modeSel = el('select'); modeSel.id = 'missionMode';
-    for (const [k, t] of [['random', 'Random'], ['attack', 'Attack a position'], ['meeting', 'Meeting engagement']]) {
+    for (const [k, t] of [['random', 'Random mission'], ...MISSION_KEYS.map(k => [k, MISSIONS[k].label]).sort((a, b) => a[1].localeCompare(b[1]))]) {
       const o = el('option', null, t); o.value = k; if (set.mode === k) o.selected = true; modeSel.appendChild(o);
     }
-    const desc = el('span', 'bdesc', modes[set.mode]);
-    modeSel.addEventListener('change', () => { set.mode = modeSel.value; desc.textContent = modes[set.mode]; });
+    if (!MISSIONS[set.mode]) set.mode = 'random';
+    const desc = el('span', 'bdesc', blurb(set.mode));
+    modeSel.addEventListener('change', () => { set.mode = modeSel.value; desc.textContent = blurb(set.mode); });
     mp.appendChild(modeSel); mp.appendChild(desc);
     sit.appendChild(mp);
     const rp = el('p');
@@ -575,7 +597,7 @@ const UI = {
     const pair = (a, b, cls) => { const r = tr(cls); const x = el('td'), y = el('td'); for (const [cell, v] of [[x, a], [y, b]]) { if (v instanceof Node) cell.appendChild(v); else cell.innerHTML = v; } r.appendChild(x); r.appendChild(y); return r; };
     const lines = (arr) => arr.filter(Boolean).join('<br>');
     th('Battle of ' + (name || gridRef(c.x, c.y)), 'wtitle');
-    th('Part of Sand Table Exercise ' + String(G.settings.seed).padStart(5, '0') + ', ' + m.R.label, 'wpart');
+    th(G.mission.label + ' · Sand Table Exercise ' + String(G.settings.seed).padStart(5, '0') + ', ' + m.R.label, 'wpart');
     // A sketch of the field: the sheet around the fight, each man where he ended.
     const cell = el('td', 'wimg'); cell.colSpan = 2;
     const cv = el('canvas'); cv.width = 320; cv.height = 210;
@@ -603,21 +625,22 @@ const UI = {
     const dur = Plan.stepOff != null ? G.time - Plan.stepOff : G.time;
     kv('Date', 'H-hour to H+' + fmtClock(dur) + ' (' + Math.max(1, Math.round(dur / 60)) + ' min)');
     kv('Location', m.R.label + '<br><span class="wlink">◉ Grid ' + gridRef(c.x, c.y) + '</span>');
-    kv('Result', result === 'victory' ? '<span class="wlink">United States</span> victory' : '<span class="wlink">Opposing force</span> victory');
+    kv('Result', result === 'victory' ? '<span class="wlink">United States</span> victory' : result === 'escaped' ? 'Inconclusive: the <span class="wlink">opposing force</span> escaped' : '<span class="wlink">Opposing force</span> victory');
     th('Belligerents');
     pair('<span class="wlink">United States</span><br>U.S. Marine Corps', '<span class="wlink">Opposing force</span>');
     th('Commanders and leaders');
     const sl = blue.leader, el0 = red.leader || red.all[0];
     pair('<span class="wlink">' + sl.rank + ' ' + sl.name + '</span>' + (sl.health === 'kia' ? ' †' : ''), '<span class="wlink">' + (el0 ? el0.title : 'Unknown') + '</span>' + (el0 && el0.health === 'kia' ? ' †' : ''));
     th('Units involved');
-    pair('<span class="wlink">1st Squad</span>, three fire teams', '<span class="wlink">Enemy squad</span>, ' + red.teams.length + ' groups');
+    pair('<span class="wlink">1st Squad</span>, three fire teams', '<span class="wlink">' + red.name + '</span>, ' + OPFOR_KINDS[red.kind || 'regular'].men);
     th('Strength');
     const arms = (sq) => {
       const n = new Map();
       for (const s of sq.all) { n.set(s.weapon.name, (n.get(s.weapon.name) || 0) + 1); if (s.launcher) n.set(s.launcher.name, (n.get(s.launcher.name) || 0) + 1); }
       return [...n].map(([w, k]) => k + ' ' + w);
     };
-    pair(lines([blue.all.length + ' Marines', ...arms(blue)]), lines([red.all.length + ' men', ...arms(red)]));
+    const sz = Plan.intel && Plan.intel.sizeReport;
+    pair(lines([blue.all.length + ' Marines', ...arms(blue)]), lines([red.all.length + ' men', ...arms(red), sz ? '<i>Reported: ' + sz.text.replace('OPFOR ', '') + '</i>' : '']));
     th('Casualties and losses');
     const loss = (sq, men) => {
       const kia = sq.all.filter(s => s.health === 'kia').length, ser = sq.all.filter(s => s.health === 'serious').length, wia = sq.all.filter(s => s.health === 'light').length, fled = sq.all.filter(s => s.routed || s.routing).length;
@@ -638,11 +661,11 @@ const UI = {
     const box = $('debriefBody');
     box.innerHTML = '';
     const won = result === 'victory';
-    $('debriefTitle').textContent = won ? 'Enemy defeated' : 'Squad combat ineffective';
+    $('debriefTitle').textContent = won ? 'Enemy defeated' : result === 'escaped' ? 'Enemy escaped' : 'Squad combat ineffective';
     const wrap = el('div', 'dgrid');
     wrap.appendChild(this.battleInfobox(result));
     const side = el('div', 'dside');
-    side.appendChild(el('p', 'dsub', (won ? 'The enemy is destroyed or has withdrawn.' : 'Your squad can no longer fight.') + ' Elapsed time ' + fmtClock(G.time) + '.'));
+    side.appendChild(el('p', 'dsub', G.mission.label + '. ' + (won ? 'The enemy is destroyed or has withdrawn.' : result === 'escaped' ? 'The enemy got away before you could finish it.' : 'Your squad can no longer fight.') + ' Elapsed time ' + fmtClock(G.time) + '.'));
     if (Plan.timeAvail) {
       const aar = Plan.afterAction(result);
       const done = Plan.lines.filter(l => l.status === 'done').length;

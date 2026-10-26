@@ -83,6 +83,7 @@ class Team {
     this.side = side; this.squad = squad; this.num = num; this.name = name;
     this.members = [];
     this.formation = 'wedge';
+    this.spacing = 1; // interval between men, as a share of the standard (about 7 m)
     this.morale = squad.morale;
     this.lastFiredUpon = -99;
     this.threats = new Map(); // enemy id -> time it last fired at this team
@@ -100,6 +101,7 @@ class Squad {
     this.side = side; this.name = name; this.morale = morale;
     this.teams = []; this.hq = null; this.leader = null;
     this.formation = 'wedge';
+    this.spacing = 1; // interval between teams, as a share of the standard
     this.training = 1;
   }
   get all() { return [this.hq, ...this.teams].flatMap(t => t.members); }
@@ -184,12 +186,12 @@ function placeSquad(sq, map, x, y, heading) {
     s.facing = heading; s.look = heading;
   };
   sq.teams.forEach((t, k) => {
-    const a = rotateOffset(squadSlot(sq.formation, k, n).x, squadSlot(sq.formation, k, n).y, heading);
+    const q = scaled(squadSlot(sq.formation, k, n), sq.spacing), a = rotateOffset(q.x, q.y, heading);
     t.members.forEach((s, i) => {
-      const o = teamSlot(t.formation, i), w = rotateOffset(o.x, o.y, heading);
+      const o = scaled(teamSlot(t.formation, i), t.spacing), w = rotateOffset(o.x, o.y, heading);
       put(s, x + a.x + w.x, y + a.y + w.y);
     });
   });
-  const so = squadLeaderSlot(sq.formation), w = rotateOffset(so.x, so.y, heading);
+  const so = scaled(squadLeaderSlot(sq.formation), sq.spacing), w = rotateOffset(so.x, so.y, heading);
   put(sq.leader, x + w.x, y + w.y);
 }

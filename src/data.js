@@ -131,6 +131,8 @@ const OPFOR_BILLETS = {
   G:   { title: 'Grenadier',          weapon: 'AK74', launcher: 'GP25' },
   RPG: { title: 'Antitank Grenadier', weapon: 'AKS74U', launcher: 'RPG7' },
   MM:  { title: 'Marksman',           weapon: 'SVD' },
+  CR:  { title: 'Aircrewman',         weapon: 'AKS74U' },
+  CO:  { title: 'Commander',          weapon: 'AKS74U' },
 };
 const OPFOR_POOL = ['R', 'R', 'R', 'R', 'AR', 'MG', 'G', 'RPG', 'MM'];
 
