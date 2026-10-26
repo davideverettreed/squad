@@ -7340,6 +7340,13 @@ const UI = {
         '. Planning took ' + fmtClock(used) + ' of ' + fmtClock(Plan.timeAvail) + ' available (one third is ' + fmtClock(Plan.timeAvail / 3) + '). ' +
         done + ' of ' + Plan.lines.length + ' plan lines completed.'));
     }
+    // Ammunition used by each side, against the basic load it started with.
+    const ammo = (sq, who) => {
+      const fired = sq.all.reduce((n, s) => n + s.shots, 0), left = sq.all.reduce((n, s) => n + s.ammoLeft, 0), start = sq.all.reduce((n, s) => n + (s.ammoStart || 0), 0);
+      const pct = start ? Math.round(clamp(1 - left / start, 0, 1) * 100) : 0;
+      return who + ' fired ' + fired.toLocaleString() + ' rounds, ' + pct + '% of its basic load (' + left.toLocaleString() + ' of ' + start.toLocaleString() + ' left)';
+    };
+    side.appendChild(el('p', 'dsub', 'Ammunition: ' + ammo(G.squads.blue, G.squads.blue.name) + '. ' + ammo(G.squads.red, 'The enemy') + '.'));
     wrap.appendChild(side);
     box.appendChild(wrap);
     $('debrief').hidden = false;
