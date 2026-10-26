@@ -405,6 +405,8 @@ body:not(.roster-min) #btn3d, body:not(.roster-min) #ctl3d { margin-left: 0; }
 .wbox .wdtable th, .wbox .wdtable td { padding: 2px 4px; border: 1px solid #c8ccd1; width: auto; text-align: right; }
 .wbox .wdtable th:first-child, .wbox .wdtable td:first-child { text-align: left; }
 .wbox .wdtable th { background: #eaecf0; }
+.wbox .wdsec { margin-top: 14px; padding-top: 6px; border-top: 2px solid #a2a9b1; font-size: 13.5px; }
+.wbox .wdtable small { color: #54595d; }
 .wbox .wdtable .wdtotal td { font-weight: 700; background: #f1f2f4; }
 .wbox tr:not(.wkv) > td { width: 50%; border-top: 1px solid #c8ccd1; }
 .wbox tr:not(.wkv) > td + td { border-left: 1px solid #c8ccd1; }

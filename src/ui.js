@@ -781,7 +781,7 @@ const UI = {
     th('Hits and kills by weapon');
     pair(overview('blue'), overview('red'));
     const det = tr(), dc = el('td', 'wdetail'); dc.colSpan = 2; det.appendChild(dc);
-    const d = el('details'); d.appendChild(el('summary', null, 'In detail: every weapon'));
+    const d = el('details'); d.appendChild(el('summary', null, 'In detail: every weapon and every soldier'));
     for (const [side, sq] of [['blue', blue], ['red', red]]) {
       d.appendChild(el('div', 'wdhead', side === 'blue' ? blue.name + ' (' + bi.nation + ')' : red.name + ' (' + ri.nation + ')'));
       const t = el('table', 'wdtable'), h = el('tr');
@@ -796,7 +796,33 @@ const UI = {
       if (!list.length) { const r = el('tr'), c = el('td', null, 'No fire.'); c.colSpan = 7; r.appendChild(c); t.appendChild(r); }
       d.appendChild(t);
     }
-    d.appendChild(el('div', 'wcap', 'Fired counts rounds, grenades, rockets and blows. A man wounded by one weapon and later killed by another counts under both.'));
+    // Every man who fired or scored: who he was, what he carried, what he did, how he ended.
+    d.appendChild(el('div', 'wdhead wdsec', 'By soldier'));
+    for (const [side, sq] of [['blue', blue], ['red', red]]) {
+      d.appendChild(el('div', 'wdhead', side === 'blue' ? blue.name : red.name));
+      const t = el('table', 'wdtable'), h = el('tr');
+      for (const c of ['Soldier', 'Weapon', 'Fired', 'Hits', 'Killed', 'Serious', 'Wounded', 'Fate']) h.appendChild(el('th', null, c));
+      t.appendChild(h);
+      const sc = (s) => s.score || { kia: 0, serious: 0, light: 0 };
+      // Rounds, launcher rounds and grenades together.
+      const fired = (s) => s.shots + Math.max(0, (s.lStart || 0) - s.lRounds) + Math.max(0, (s.fragsStart || 0) - s.frags);
+      const men = sq.all.filter(s => fired(s) || s.hits || side === 'blue')
+        .sort((a, b) => sc(b).kia - sc(a).kia || b.hits - a.hits || fired(b) - fired(a));
+      for (const s of men) {
+        const r = el('tr'), k = sc(s);
+        const who = side === 'blue' ? s.label + '<br><small>' + s.title + ', ' + s.team.short + '</small>' : s.title + '<br><small>' + (s.team.num ? s.team.name.replace(/^Enemy /, '') : 'command') + '</small>';
+        const fate = s.health === 'kia' ? 'Killed' : s.health === 'serious' ? 'Casualty' : s.escaped ? 'Got away' : s.routed || s.routing ? 'Fled' : s.health === 'light' ? 'Wounded' : 'Fighting';
+        const cells = [who, s.weapon.name + (s.launcher ? ', ' + s.launcher.name : ''), fired(s), s.hits, k.kia, k.serious, k.light, fate];
+        cells.forEach((v, i) => { const c = el('td'); if (i === 0) c.innerHTML = v; else c.textContent = String(v); r.appendChild(c); });
+        t.appendChild(r);
+      }
+      if (!men.length) { const r = el('tr'), c = el('td', null, 'No one fired.'); c.colSpan = 8; r.appendChild(c); t.appendChild(r); }
+      if (side === 'red' && men.length < sq.all.length) {
+        const r = el('tr'), c = el('td', null, (sq.all.length - men.length) + ' others never fired.'); c.colSpan = 8; r.appendChild(c); t.appendChild(r);
+      }
+      d.appendChild(t);
+    }
+    d.appendChild(el('div', 'wcap', 'Fired counts rounds, grenades, rockets and blows. A man wounded by one weapon (or one soldier) and later killed by another counts under both.'));
     dc.appendChild(d);
     return box;
   },

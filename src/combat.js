@@ -119,12 +119,15 @@ function updateLook(s, dt) {
 // ---------------------------------------------------------------- direct fire
 function pickTarget(s) {
   const known = G.known[s.side];
+  // How far he will engage: his weapon's reach, or his launcher's if it carries farther
+  // (an M79 grenadier whose own arm is a pistol).
+  const reach = Math.max(s.weapon.range, s.launcher && s.lRounds > 0 ? s.launcher.range : 0) * 1.2;
   if (s.priorityId) {
     const e = G.byId.get(s.priorityId), k = known.get(s.priorityId);
     if (!e || !e.active) s.priorityId = null;
     else if (k && k.visible) {
       const exp = exposure(s, e);
-      if (exp > 0 && dist(s.x, s.y, e.x, e.y) <= s.weapon.range * 1.2) return { e, exp };
+      if (exp > 0 && dist(s.x, s.y, e.x, e.y) <= reach) return { e, exp };
     }
   }
   const cands = [];
@@ -133,7 +136,7 @@ function pickTarget(s) {
     const e = G.byId.get(k.id);
     if (!e || !e.active) continue;
     const d = dist(s.x, s.y, e.x, e.y);
-    if (d > s.weapon.range * 1.2) continue;
+    if (d > reach) continue;
     if (s.fireControl === 'return' && !(s.team.threats.get(e.id) > G.time - 15) && d > 40) continue;
     let sc = d;
     if (G.time - e.lastFired < 3) sc *= 0.6;
@@ -180,8 +183,11 @@ function updateCombat(s, dt) {
     s.targetId = e.id;
     if (s.launcher && s.lRounds > 0 && s.launchCD <= 0 && !s.moving && d >= s.launcher.min && d <= s.launcher.range) {
       const clustered = G.soldiers.some(o => o !== e && o.side === e.side && o.active && dist(o.x, o.y, e.x, e.y) < 8);
-      if (tgt.exp < 0.6 || clustered || chance(0.25)) { launchAt(s, e.x, e.y); s.fireCD = 2; return; }
+      // Out of reach of his own arm, the launcher is all he has.
+      const beyond = d > s.weapon.range * 1.2;
+      if (beyond || tgt.exp < 0.6 || clustered || chance(0.25)) { launchAt(s, e.x, e.y); s.fireCD = 2; return; }
     }
+    if (d > s.weapon.range * 1.2) { s.fireCD = 1; return; }
     if (s.frags > 0 && s.fragCD <= 0 && d >= 8 && d <= s.grenade.range && (tgt.exp < 0.6 || s.assault) && fragSafe(s, e.x, e.y) && chance(0.6)) {
       throwFrag(s, e.x, e.y);
       s.fireCD = 1.5;
@@ -450,6 +456,8 @@ function applyHit(t, shooter, blast, dmg, src) {
   // Tally what each weapon did to the enemy (not to friends).
   const tally = src && shooter && shooter.side !== t.side ? wstat(shooter, src) : null;
   if (tally) tally.hits++;
+  // And what each man did: his own tally of the enemy hit, killed and wounded.
+  const mine = tally ? (shooter.score = shooter.score || { kia: 0, serious: 0, light: 0 }) : null;
   const m = blast ? 1.1 : dmg != null ? dmg : shooter && shooter.weapon ? shooter.weapon.dmg || 1 : 1;
   const r = rand();
   let res;
@@ -457,11 +465,11 @@ function applyHit(t, shooter, blast, dmg, src) {
     const k = clamp(0.4 * m, 0.1, 0.7), sv = clamp(0.6 * Math.sqrt(m), 0.2, 0.9);
     res = r < k ? 'kia' : r < k + sv ? 'serious' : 'light';
     if (res === 'light') { t.supp = Math.min(100, t.supp + 30); t.lastHitAt = G.time; return; }
-    if (tally) tally[res]++;
+    if (tally) { tally[res]++; mine[res]++; }
   } else {
     const k = clamp(0.25 * Math.pow(m, 1.3), 0.03, 0.6), sv = clamp(0.37 * Math.pow(m, 0.7), 0.1, 0.55);
     res = r < k ? 'kia' : r < k + sv ? 'serious' : 'light';
-    if (tally) tally[res]++;
+    if (tally) { tally[res]++; mine[res]++; }
   }
   t.health = res; t.lastHitAt = G.time;
   G.stats[t.side][res]++;

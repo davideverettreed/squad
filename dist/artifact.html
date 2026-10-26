@@ -412,6 +412,8 @@ body:not(.roster-min) #btn3d, body:not(.roster-min) #ctl3d { margin-left: 0; }
 .wbox .wdtable th, .wbox .wdtable td { padding: 2px 4px; border: 1px solid #c8ccd1; width: auto; text-align: right; }
 .wbox .wdtable th:first-child, .wbox .wdtable td:first-child { text-align: left; }
 .wbox .wdtable th { background: #eaecf0; }
+.wbox .wdsec { margin-top: 14px; padding-top: 6px; border-top: 2px solid #a2a9b1; font-size: 13.5px; }
+.wbox .wdtable small { color: #54595d; }
 .wbox .wdtable .wdtotal td { font-weight: 700; background: #f1f2f4; }
 .wbox tr:not(.wkv) > td { width: 50%; border-top: 1px solid #c8ccd1; }
 .wbox tr:not(.wkv) > td + td { border-left: 1px solid #c8ccd1; }
@@ -2333,12 +2335,15 @@ function updateLook(s, dt) {
 // ---------------------------------------------------------------- direct fire
 function pickTarget(s) {
   const known = G.known[s.side];
+  // How far he will engage: his weapon's reach, or his launcher's if it carries farther
+  // (an M79 grenadier whose own arm is a pistol).
+  const reach = Math.max(s.weapon.range, s.launcher && s.lRounds > 0 ? s.launcher.range : 0) * 1.2;
   if (s.priorityId) {
     const e = G.byId.get(s.priorityId), k = known.get(s.priorityId);
     if (!e || !e.active) s.priorityId = null;
     else if (k && k.visible) {
       const exp = exposure(s, e);
-      if (exp > 0 && dist(s.x, s.y, e.x, e.y) <= s.weapon.range * 1.2) return { e, exp };
+      if (exp > 0 && dist(s.x, s.y, e.x, e.y) <= reach) return { e, exp };
     }
   }
   const cands = [];
@@ -2347,7 +2352,7 @@ function pickTarget(s) {
     const e = G.byId.get(k.id);
     if (!e || !e.active) continue;
     const d = dist(s.x, s.y, e.x, e.y);
-    if (d > s.weapon.range * 1.2) continue;
+    if (d > reach) continue;
     if (s.fireControl === 'return' && !(s.team.threats.get(e.id) > G.time - 15) && d > 40) continue;
     let sc = d;
     if (G.time - e.lastFired < 3) sc *= 0.6;
@@ -2394,8 +2399,11 @@ function updateCombat(s, dt) {
     s.targetId = e.id;
     if (s.launcher && s.lRounds > 0 && s.launchCD <= 0 && !s.moving && d >= s.launcher.min && d <= s.launcher.range) {
       const clustered = G.soldiers.some(o => o !== e && o.side === e.side && o.active && dist(o.x, o.y, e.x, e.y) < 8);
-      if (tgt.exp < 0.6 || clustered || chance(0.25)) { launchAt(s, e.x, e.y); s.fireCD = 2; return; }
+      // Out of reach of his own arm, the launcher is all he has.
+      const beyond = d > s.weapon.range * 1.2;
+      if (beyond || tgt.exp < 0.6 || clustered || chance(0.25)) { launchAt(s, e.x, e.y); s.fireCD = 2; return; }
     }
+    if (d > s.weapon.range * 1.2) { s.fireCD = 1; return; }
     if (s.frags > 0 && s.fragCD <= 0 && d >= 8 && d <= s.grenade.range && (tgt.exp < 0.6 || s.assault) && fragSafe(s, e.x, e.y) && chance(0.6)) {
       throwFrag(s, e.x, e.y);
       s.fireCD = 1.5;
@@ -2664,6 +2672,8 @@ function applyHit(t, shooter, blast, dmg, src) {
   // Tally what each weapon did to the enemy (not to friends).
   const tally = src && shooter && shooter.side !== t.side ? wstat(shooter, src) : null;
   if (tally) tally.hits++;
+  // And what each man did: his own tally of the enemy hit, killed and wounded.
+  const mine = tally ? (shooter.score = shooter.score || { kia: 0, serious: 0, light: 0 }) : null;
   const m = blast ? 1.1 : dmg != null ? dmg : shooter && shooter.weapon ? shooter.weapon.dmg || 1 : 1;
   const r = rand();
   let res;
@@ -2671,11 +2681,11 @@ function applyHit(t, shooter, blast, dmg, src) {
     const k = clamp(0.4 * m, 0.1, 0.7), sv = clamp(0.6 * Math.sqrt(m), 0.2, 0.9);
     res = r < k ? 'kia' : r < k + sv ? 'serious' : 'light';
     if (res === 'light') { t.supp = Math.min(100, t.supp + 30); t.lastHitAt = G.time; return; }
-    if (tally) tally[res]++;
+    if (tally) { tally[res]++; mine[res]++; }
   } else {
     const k = clamp(0.25 * Math.pow(m, 1.3), 0.03, 0.6), sv = clamp(0.37 * Math.pow(m, 0.7), 0.1, 0.55);
     res = r < k ? 'kia' : r < k + sv ? 'serious' : 'light';
-    if (tally) tally[res]++;
+    if (tally) { tally[res]++; mine[res]++; }
   }
   t.health = res; t.lastHitAt = G.time;
   G.stats[t.side][res]++;
@@ -7350,7 +7360,7 @@ const UI = {
     th('Hits and kills by weapon');
     pair(overview('blue'), overview('red'));
     const det = tr(), dc = el('td', 'wdetail'); dc.colSpan = 2; det.appendChild(dc);
-    const d = el('details'); d.appendChild(el('summary', null, 'In detail: every weapon'));
+    const d = el('details'); d.appendChild(el('summary', null, 'In detail: every weapon and every soldier'));
     for (const [side, sq] of [['blue', blue], ['red', red]]) {
       d.appendChild(el('div', 'wdhead', side === 'blue' ? blue.name + ' (' + bi.nation + ')' : red.name + ' (' + ri.nation + ')'));
       const t = el('table', 'wdtable'), h = el('tr');
@@ -7365,7 +7375,33 @@ const UI = {
       if (!list.length) { const r = el('tr'), c = el('td', null, 'No fire.'); c.colSpan = 7; r.appendChild(c); t.appendChild(r); }
       d.appendChild(t);
     }
-    d.appendChild(el('div', 'wcap', 'Fired counts rounds, grenades, rockets and blows. A man wounded by one weapon and later killed by another counts under both.'));
+    // Every man who fired or scored: who he was, what he carried, what he did, how he ended.
+    d.appendChild(el('div', 'wdhead wdsec', 'By soldier'));
+    for (const [side, sq] of [['blue', blue], ['red', red]]) {
+      d.appendChild(el('div', 'wdhead', side === 'blue' ? blue.name : red.name));
+      const t = el('table', 'wdtable'), h = el('tr');
+      for (const c of ['Soldier', 'Weapon', 'Fired', 'Hits', 'Killed', 'Serious', 'Wounded', 'Fate']) h.appendChild(el('th', null, c));
+      t.appendChild(h);
+      const sc = (s) => s.score || { kia: 0, serious: 0, light: 0 };
+      // Rounds, launcher rounds and grenades together.
+      const fired = (s) => s.shots + Math.max(0, (s.lStart || 0) - s.lRounds) + Math.max(0, (s.fragsStart || 0) - s.frags);
+      const men = sq.all.filter(s => fired(s) || s.hits || side === 'blue')
+        .sort((a, b) => sc(b).kia - sc(a).kia || b.hits - a.hits || fired(b) - fired(a));
+      for (const s of men) {
+        const r = el('tr'), k = sc(s);
+        const who = side === 'blue' ? s.label + '<br><small>' + s.title + ', ' + s.team.short + '</small>' : s.title + '<br><small>' + (s.team.num ? s.team.name.replace(/^Enemy /, '') : 'command') + '</small>';
+        const fate = s.health === 'kia' ? 'Killed' : s.health === 'serious' ? 'Casualty' : s.escaped ? 'Got away' : s.routed || s.routing ? 'Fled' : s.health === 'light' ? 'Wounded' : 'Fighting';
+        const cells = [who, s.weapon.name + (s.launcher ? ', ' + s.launcher.name : ''), fired(s), s.hits, k.kia, k.serious, k.light, fate];
+        cells.forEach((v, i) => { const c = el('td'); if (i === 0) c.innerHTML = v; else c.textContent = String(v); r.appendChild(c); });
+        t.appendChild(r);
+      }
+      if (!men.length) { const r = el('tr'), c = el('td', null, 'No one fired.'); c.colSpan = 8; r.appendChild(c); t.appendChild(r); }
+      if (side === 'red' && men.length < sq.all.length) {
+        const r = el('tr'), c = el('td', null, (sq.all.length - men.length) + ' others never fired.'); c.colSpan = 8; r.appendChild(c); t.appendChild(r);
+      }
+      d.appendChild(t);
+    }
+    d.appendChild(el('div', 'wcap', 'Fired counts rounds, grenades, rockets and blows. A man wounded by one weapon (or one soldier) and later killed by another counts under both.'));
     dc.appendChild(d);
     return box;
   },
