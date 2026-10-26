@@ -7340,6 +7340,14 @@ const UI = {
       return who + ' fired ' + fired.toLocaleString() + ' rounds, ' + pct + '% of its basic load (' + left.toLocaleString() + ' of ' + start.toLocaleString() + ' left)';
     };
     side.appendChild(el('p', 'dsub', 'Ammunition: ' + ammo(G.squads.blue, G.squads.blue.name) + '. ' + ammo(G.squads.red, 'The enemy') + '.'));
+    // Hits scored by each side, and what they did to the other.
+    const effect = (sq, foe, who) => {
+      const fired = sq.all.reduce((n, s) => n + s.shots, 0), hits = sq.all.reduce((n, s) => n + s.hits, 0);
+      const kia = foe.all.filter(s => s.health === 'kia').length, ser = foe.all.filter(s => s.health === 'serious').length, wia = foe.all.filter(s => s.health === 'light').length;
+      return who + ' scored ' + hits + ' hit' + (hits === 1 ? '' : 's') + (fired ? ' (' + (hits / fired * 100).toFixed(1) + '% of rounds)' : '') +
+        ': ' + kia + ' killed, ' + ser + ' seriously wounded, ' + wia + ' wounded';
+    };
+    side.appendChild(el('p', 'dsub', 'Hits and kills: ' + effect(G.squads.blue, G.squads.red, G.squads.blue.name) + '. ' + effect(G.squads.red, G.squads.blue, 'The enemy') + '.'));
     wrap.appendChild(side);
     box.appendChild(wrap);
     $('debrief').hidden = false;
