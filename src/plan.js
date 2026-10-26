@@ -18,7 +18,7 @@ const GRAPHIC_KINDS = {
   trp:  { label: 'Target reference point', short: 'TRP', numbered: true },
 };
 // Plan lines whose teams can each be given their own spot by dragging their ghosts.
-const SPOT_TASKS = ['move', 'bound', 'assault', 'occupy', 'sbf', 'suppress'];
+const SPOT_TASKS = ['move', 'route', 'bound', 'assault', 'occupy', 'sbf', 'suppress'];
 // What placing a control measure means for a selected unit: its next step of the plan.
 const TOOL_STEPS = { cp: 'cp', rel: 'rel', aslt: 'aslt', fp: 'fp', sbf: 'sbf', obj: 'obj', trp: 'trp' };
 // Control measures grouped as the graphics manuals group them: points, lines and areas.
@@ -195,7 +195,7 @@ const Plan = {
     if (!kind) return false;
     if (K.multi) {
       // A route drawn with a unit selected is that unit's route.
-      if (!this.routeDraft && !this.routeUnit && G.ui.sel) this.routeUnit = this.planUnit(G.ui.sel) || null;
+      if (!this.routeDraft && !this.routeUnit && G.ui.sel) this.routeUnit = G.ui.sel.level === 'group' ? G.ui.sel.teams.map(t => 't' + t.num) : this.planUnit(G.ui.sel) || null;
       this.routeDraft = this.routeDraft || [];
       const last = this.routeDraft[this.routeDraft.length - 1];
       if (last && this.routeDraft.length > 1 && dist(last.x, last.y, w.x, w.y) < 18 / R.cam.zoom) return this.finishRoute();
@@ -214,7 +214,7 @@ const Plan = {
       // With a unit selected, each one is also that unit's next step: checkpoint after
       // checkpoint makes a march, each leg from the last.
       const step = TOOL_STEPS[kind], sel = G.ui.sel;
-      if (step && sel && this.planUnit(sel)) {
+      if (step && sel && (this.planUnit(sel) || sel.level === 'group')) {
         this.addStep(sel, w, step);
         G.toast(this.graphic(this.selected).name + ' placed, and ' + selName(sel) + ' moves on to it after its last step. Tap again for the next one, or tap ' + K.short + ' to stop.');
         return true;
@@ -232,8 +232,11 @@ const Plan = {
       const g = this.addGraphic('rte', pts); this.selected = g.id;
       // A route begun from the map menu also becomes a line of the plan for that unit.
       if (this.routeUnit) {
-        this.addLine({ unit: this.routeUnit, task: 'route', where: g.id, mode: G.ui.moveMode || 'walk' });
-        G.toast(PLAN_UNITS[this.routeUnit] + ' moves along ' + g.name + '. Added to the plan.');
+        // Several teams: a line for each, the others with the first, each to its own spot at the end.
+        const units = Array.isArray(this.routeUnit) ? this.routeUnit : [this.routeUnit], n0 = this.lines.length;
+        units.forEach((u, k) => this.addLine(Object.assign({ unit: u, task: 'route', where: g.id, mode: G.ui.moveMode || 'walk' }, k ? { trigger: 'with' } : {})));
+        if (units.length > 1) this.spreadSpots(this.lines.slice(n0), units, g.pts[g.pts.length - 1], g.pts[g.pts.length - 2]);
+        G.toast(units.map(u => PLAN_UNITS[u]).join(' and ') + ' ' + (units.length > 1 ? 'move' : 'moves') + ' along ' + g.name + '. Added to the plan.');
       }
     }
     else G.toast('A route needs at least two waypoints.');
@@ -294,19 +297,20 @@ const Plan = {
     if (sel && sel.level === 'group') {
       const live = G.squads.blue.teams.filter(t => t.members.some(s => s.active));
       if (sel.teams.length >= live.length) return this.addStep({ level: 'squad', squad: sel.squad }, w, step);
+      // A route for several teams is drawn first; each gets its line when it is finished.
+      if (step === 'rte') {
+        this.groupUnits = sel.teams.map(t => 't' + t.num);
+        try { this.addStep({ level: 'team', team: sel.teams[0], squad: sel.squad }, w, step); } finally { this.groupUnits = null; }
+        return;
+      }
       const n0 = this.lines.length;
       this.addStep({ level: 'team', team: sel.teams[0], squad: sel.squad }, w, step);
       const first = this.lines[n0];
       if (!first || this.lines.length !== n0 + 1) return;
       const units = sel.teams.map(t => 't' + t.num);
       for (const u of units.slice(1)) { const { id, status, spots, ...rest } = first; this.addLine(Object.assign({}, rest, { unit: u, trigger: 'with' })); }
-      if (first.task === 'move') {
-        const c = centroid(selMembers(sel).filter(s => s.active)), h = angleTo(c.x, c.y, w.x, w.y);
-        units.forEach((u, k) => {
-          const o = rotateOffset((k - (units.length - 1) / 2) * 30, 0, h), l = this.lines[n0 + k];
-          l.spots = { [u]: { dx: o.x, dy: o.y } };
-        });
-      }
+      // Side by side at the spot (or, suppressing, aimed side by side across the target).
+      if (SPOT_TASKS.includes(first.task)) this.spreadSpots(this.lines.slice(n0, n0 + units.length), units, w, centroid(selMembers(sel).filter(s => s.active)));
       G.toast(units.length + ' lines: ' + units.map(u => PLAN_UNITS[u]).join(' and ') + ' together.');
       OPORD.refresh();
       return;
@@ -329,7 +333,7 @@ const Plan = {
       case 'aslt': g = this.addGraphic('aslt', [w]); l = this.addLine({ unit, task: 'move', where: g.id, mode }); break;
       case 'rel': g = this.addGraphic('rel', [w]); l = this.addLine({ unit, task: 'move', where: g.id, mode }); break;
       case 'rte':
-        this.tool = 'rte'; this.routeUnit = unit; this.routeDraft = [{ x: w.x, y: w.y }];
+        this.tool = 'rte'; this.routeUnit = this.groupUnits || unit; this.routeDraft = [{ x: w.x, y: w.y }];
         G.toast('Route for ' + PLAN_UNITS[unit] + ': tap each waypoint, then Finish route.');
         OPORD.refresh();
         return;
@@ -557,6 +561,17 @@ const Plan = {
     return out;
   },
 
+  // Several teams on one point: each its own spot, side by side across the way they came
+  // (30 m apart; 20 m in a fighting position; aim points 12 m apart across a target).
+  spreadSpots(lines, units, dest, from) {
+    const task = lines[0].task, gap = task === 'suppress' ? 12 : task === 'occupy' ? 20 : 30;
+    const h = angleTo(from.x, from.y, dest.x, dest.y);
+    units.forEach((u, k) => {
+      const o = rotateOffset((k - (units.length - 1) / 2) * gap, 0, h), l = lines[k];
+      if (l) l.spots = Object.assign(l.spots || {}, { [u]: { dx: o.x, dy: o.y } });
+    });
+  },
+
   // Where each team of a suppress line aims: its dragged aim point, or (a squad) the teams'
   // fire spread 12 m apart across the target as seen from the squad, or the point itself.
   aimsFor(l, dest, from, units) {
@@ -644,7 +659,13 @@ const Plan = {
           if (l.spots && Object.keys(l.spots).length) this.moveToSpots(l, sel, this.anchor(where));
           else groupMove(sel, this.anchor(where).x, this.anchor(where).y, l.mode);
           break;
-        case 'route': routeMove(sel, where.pts, l.mode); break;
+        case 'route':
+          if (l.spots && Object.keys(l.spots).length) {
+            // Along the route together, then each team off to its own spot at the end.
+            const { units, spots } = this.teamSpots(l, sel, this.anchor(where));
+            for (const u of units) routeMove(this.unitSel(u), [...where.pts.slice(0, -1), spots[u]], l.mode);
+          } else routeMove(sel, where.pts, l.mode);
+          break;
         case 'occupy': occupyPosition(sel, where, l.spots && Object.keys(l.spots).length ? this.teamSpots(l, sel, this.anchor(where)).spots : null); l.stage = 'moving'; break;
         case 'bound':
           if (l.spots && Object.keys(l.spots).length) this.boundToSpots(l, sel, this.anchor(where));
