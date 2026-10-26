@@ -542,15 +542,8 @@ const View3D = {
   },
 
   // A control measure point near a screen point, for dragging while planning.
-  hitGraphic(sx, sy) {
-    let best = null, bd = 22;
-    for (const g of Plan.graphics) g.pts.forEach((pt, idx) => {
-      const q = this.screenOf(pt.x, pt.y);
-      const d = Math.hypot(q.x - sx, q.y - sy);
-      if (q.z <= 1 && d < bd) { bd = d; best = { g, idx }; }
-    });
-    return best;
-  },
+  // The same rules as on the flat map: along a line, inside an area.
+  hitGraphic(sx, sy) { return Plan.hitGraphic(sx, sy, (x, y) => this.screenOf(x, y)); },
 
   // ------------------------------------------------------------ input
   bindInput() {
@@ -589,8 +582,13 @@ const View3D = {
         const w = this.groundAt(p.x, p.y);
         if (w) { G.ui.unitDrag.to = w; this.drapeDirty = true; }
       } else if (this.pointers.size === 1 && this.moved && this.dragG) {
-        const w = this.groundAt(p.x, p.y), pt = this.dragG.g.pts[this.dragG.idx];
-        if (w) { pt.x = clamp(w.x, 0, MAP_W); pt.y = clamp(w.y, 0, MAP_H); }
+        const w = this.groundAt(p.x, p.y), dg = this.dragG;
+        if (w && (dg.along || dg.inside)) {
+          // Taken by its middle (a line) or its inside (an area): the whole measure moves.
+          if (!dg.orig) { dg.orig = dg.g.pts.map(q => ({ x: q.x, y: q.y })); dg.from = this.groundAt(p.sx, p.sy) || w; }
+          dg.g.pts.forEach((q, i) => { q.x = clamp(dg.orig[i].x + w.x - dg.from.x, 0, MAP_W); q.y = clamp(dg.orig[i].y + w.y - dg.from.y, 0, MAP_H); });
+        } else if (w) { const pt = dg.g.pts[dg.idx]; pt.x = clamp(w.x, 0, MAP_W); pt.y = clamp(w.y, 0, MAP_H); }
+        this.markDirty();
       } else if (this.pointers.size === 1 && this.moved) {
         if (this.drag && this.drag.turn) { c.yaw += dx * 0.006; c.pitch += dy * 0.006; }
         else {

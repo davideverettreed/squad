@@ -301,7 +301,10 @@ const Plan = {
   },
   // The control measure under a screen point: a point near its symbol, a line anywhere
   // along it (a vertex near the pointer is picked up to drag), an area anywhere inside.
-  hitGraphic(sx, sy) {
+  // proj: world to screen (the flat map's by default; the sand table passes its own, which
+  // gives z > 1 for a point behind the camera).
+  hitGraphic(sx, sy, proj) {
+    proj = proj || ((x, y) => toScreen(x, y));
     let best = null, bd = 22;
     const segDist = (a, b) => {
       const dx = b.x - a.x, dy = b.y - a.y, L = dx * dx + dy * dy, t = L ? clamp(((sx - a.x) * dx + (sy - a.y) * dy) / L, 0, 1) : 0;
@@ -310,7 +313,8 @@ const Plan = {
     for (const g of this.graphics) {
       const K = GRAPHIC_KINDS[g.kind];
       if (K.line) {
-        const q = g.pts.map(p => toScreen(p.x, p.y));
+        const q = g.pts.map(p => proj(p.x, p.y));
+        if (q.some(p => p.z > 1)) continue;
         for (let i = 0; i < q.length; i++) {
           const d = Math.hypot(q[i].x - sx, q[i].y - sy);
           if (d < bd) { bd = d; best = { g, idx: i }; }
@@ -322,10 +326,11 @@ const Plan = {
         }
         continue;
       }
-      const p = toScreen(g.pts[0].x, g.pts[0].y), d = Math.hypot(p.x - sx, p.y - sy);
+      const p = proj(g.pts[0].x, g.pts[0].y), d = Math.hypot(p.x - sx, p.y - sy);
+      if (p.z > 1) continue;
       if (d < bd) { bd = d; best = { g, idx: 0 }; }
       // Inside an area (objective, assault position): a hit, though a point on top of it wins.
-      const rr = (K.r || 0) * R.cam.zoom;
+      const e = K.r ? proj(g.pts[0].x + K.r, g.pts[0].y) : null, rr = e ? Math.hypot(e.x - p.x, e.y - p.y) : 0;
       if (rr && d < rr && !best) best = { g, idx: 0, inside: true };
     }
     return best;
