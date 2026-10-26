@@ -1,11 +1,13 @@
 'use strict';
-// Mouse, touch and keyboard. Drag pans, wheel or pinch zooms, tap selects or orders,
-// right-click moves (or engages a visible enemy).
+// Mouse, touch and keyboard. Drag pans, wheel or pinch zooms. With a mouse, left click
+// selects and right click opens the action menu; on a touch screen a tap selects or orders.
 
 const Input = {
   pointers: new Map(), moved: false, camStart: null, pinch: null,
 
   init(canvas) {
+    // With a mouse the buttons split the work: left selects, right acts. Touch keeps taps.
+    window.addEventListener('pointerdown', (e) => { G.ui.mouse = e.pointerType === 'mouse'; }, true);
     canvas.addEventListener('pointerdown', (e) => {
       try { canvas.setPointerCapture(e.pointerId); } catch (err) { /* pointer already gone */ }
       this.pointers.set(e.pointerId, { x: e.offsetX, y: e.offsetY, sx: e.offsetX, sy: e.offsetY, button: e.button });
