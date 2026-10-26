@@ -139,10 +139,25 @@ const UI = {
     const t = G.squads.blue.teams[n - 1];
     if (t && t.members.some(s => s.active)) this.select({ level: 'team', team: t, squad: t.squad });
   },
+  // A plan ghost tapped: that team, where the plan leaves it. With Shift, add it to (or take
+  // it from) the teams already picked; tapped twice, every team at that spot.
+  ghostTap(gh, add) {
+    const sq = G.squads.blue, t = sq.teams[Number(gh.unit[1]) - 1], now = performance.now(), last = this.lastGhostTap;
+    this.lastGhostTap = { unit: gh.unit, t: now };
+    let teams;
+    if (last && last.unit === gh.unit && now - last.t < 380) teams = Plan.projection().ghosts.filter(o => o.name === gh.name).map(o => sq.teams[Number(o.unit[1]) - 1]);
+    else if (add) {
+      const cur = G.ui.sel && G.ui.sel.level === 'team' ? [G.ui.sel.team] : G.ui.sel && G.ui.sel.level === 'group' ? G.ui.sel.teams.slice() : [];
+      teams = cur.includes(t) ? cur.filter(x => x !== t) : [...cur, t];
+    } else teams = [t];
+    teams.sort((a, b) => a.num - b.num);
+    if (!teams.length) { this.select(null); return; }
+    this.select(teams.length === 1 ? { level: 'team', team: teams[0], squad: sq } : { level: 'group', squad: sq, teams, except: null });
+    this.toast(selName(G.ui.sel) + ' at ' + gh.name + ': tap the map for the next step. Shift-click or double-click a ghost to pick more; drag one to set its spot.');
+  },
   selectAllBut(n) {
     const t = G.squads.blue && G.squads.blue.teams[n - 1];
     if (!t) return;
-    if (Plan.planning) { this.toast('A plan line is for the squad or one team. Select all but a team after step-off.'); return; }
     const g = groupBut(t);
     if (g.teams.length) this.select(g);
   },
@@ -170,11 +185,7 @@ const UI = {
     if (Plan.tool && !secondary) { Plan.place(w); return; }
     // A tap on a ghost picks that unit where the plan leaves it, to plan its next step.
     const ghost = !secondary && Plan.planning ? (at ? at.ghost : ghostAt(sx, sy)) : null;
-    if (ghost) {
-      this.select(Plan.unitSel(ghost.unit));
-      this.toast(PLAN_UNITS[ghost.unit] + ' at ' + ghost.name + ': tap the map for its next step.');
-      return;
-    }
+    if (ghost) { this.ghostTap(ghost, !!G.ui.shift); return; }
     const piece = at ? at.piece : pieceAt(sx, sy);
     const sel = G.ui.sel;
     // An enemy piece stands for its nearest visible, effective man.
@@ -294,7 +305,7 @@ const UI = {
     this.closePlanMenu();
     const unit = Plan.planUnit(sel), m = el('div', 'planmenu');
     m.id = 'planMenu';
-    m.appendChild(el('div', 'pmhead', PLAN_UNITS[unit] + ' · ' + gridRef(w.x, w.y)));
+    m.appendChild(el('div', 'pmhead', (unit ? PLAN_UNITS[unit] : selName(sel)) + ' · ' + gridRef(w.x, w.y)));
     const items = [
       ['cp', 'Checkpoint', 'move here'], ['bound', 'Bound here', 'bounding overwatch'],
       ['rte', 'Route from here', 'tap waypoints'], ['fp', 'Fighting position', 'occupy and defend'],

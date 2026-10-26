@@ -1181,6 +1181,8 @@ function drawPlanGhosts(ctx) {
   if (!View3D.drawingDrape) for (const gh of pr.ghosts) {
     const q = ghostScreen(gh);
     ctx.globalAlpha = 0.85;
+    const picked = G.ui.sel && ((G.ui.sel.level === 'team' && 't' + G.ui.sel.team.num === gh.unit) || (G.ui.sel.level === 'group' && G.ui.sel.teams.some(t => 't' + t.num === gh.unit)));
+    if (picked) { ctx.fillStyle = 'rgba(255,214,10,0.35)'; ctx.beginPath(); ctx.arc(q.x, q.y, 22, 0, Math.PI * 2); ctx.fill(); }
     drawUnitSymbol(ctx, q.x, q.y, 15, 'blue', gh.unit === 'squad' ? 'squad' : 'team', { fill: 'rgba(128,224,255,0.3)', ink: OVL.blue, dashed: true });
     ctx.globalAlpha = 1;
     if (gh.unit !== 'squad') {
@@ -1193,7 +1195,11 @@ function drawPlanGhosts(ctx) {
 }
 // A ghost stands up and to the right of the control measure it ends on, so each can be
 // tapped on its own.
-function ghostScreen(gh) { const q = toScreen(gh.x, gh.y); return { x: q.x + 24, y: q.y - 24 }; }
+function ghostScreen(gh) {
+  const q = toScreen(gh.x, gh.y);
+  const onMark = Plan.graphics.some(g => { const a = toScreen(Plan.anchor(g).x, Plan.anchor(g).y); return Math.hypot(a.x - q.x, a.y - q.y) < 16; });
+  return onMark ? { x: q.x + 24, y: q.y - 24 } : q;
+}
 function ghostAt(sx, sy) {
   if (!Plan.planning) return null;
   let best = null, bd = 20;

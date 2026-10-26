@@ -227,16 +227,47 @@ const Plan = {
     OPORD.refresh();
     return true;
   },
+  // A move whose teams have their own spots: each team goes to its spot.
+  moveToSpots(l, sel, dest) {
+    const sq = G.squads.blue, members = selMembers(sel);
+    Plan.override(members, 'move');
+    releaseControllers(members);
+    const units = l.unit === 'squad' ? sq.teams.filter(t => t.members.some(commandable)).map(t => 't' + t.num) : [l.unit];
+    const spots = this.spotsFor(l, dest, centroid(members.filter(commandable)), units);
+    for (const u of units) teamMove(sq.teams[Number(u[1]) - 1], spots[u].x, spots[u].y, l.mode);
+  },
   // The plan unit for a selection: a Marine plans with his fire team, the SL with the squad.
   planUnit(sel) {
     if (!sel) return null;
-    if (sel.level === 'group') return null; // a plan line is for the squad or one team
+    if (sel.level === 'group') return null; // several teams: a line for each (see addStep)
     const t = sel.level === 'squad' ? null : sel.team;
     return t && t.num ? 't' + t.num : 'squad';
   },
   // A step chosen from the map menu while planning: a control measure at the spot and a
   // line of the plan that sends the unit to it.
   addStep(sel, w, step) {
+    // Several teams: all of them is the squad; otherwise the first team's line, then the
+    // others with it, side by side at the spot.
+    if (sel && sel.level === 'group') {
+      const live = G.squads.blue.teams.filter(t => t.members.some(s => s.active));
+      if (sel.teams.length >= live.length) return this.addStep({ level: 'squad', squad: sel.squad }, w, step);
+      const n0 = this.lines.length;
+      this.addStep({ level: 'team', team: sel.teams[0], squad: sel.squad }, w, step);
+      const first = this.lines[n0];
+      if (!first || this.lines.length !== n0 + 1) return;
+      const units = sel.teams.map(t => 't' + t.num);
+      for (const u of units.slice(1)) { const { id, status, spots, ...rest } = first; this.addLine(Object.assign({}, rest, { unit: u, trigger: 'with' })); }
+      if (first.task === 'move') {
+        const c = centroid(selMembers(sel).filter(s => s.active)), h = angleTo(c.x, c.y, w.x, w.y);
+        units.forEach((u, k) => {
+          const o = rotateOffset((k - (units.length - 1) / 2) * 30, 0, h), l = this.lines[n0 + k];
+          l.spots = { [u]: { x: w.x + o.x, y: w.y + o.y } };
+        });
+      }
+      G.toast(units.length + ' lines: ' + units.map(u => PLAN_UNITS[u]).join(' and ') + ' together.');
+      OPORD.refresh();
+      return;
+    }
     const unit = this.planUnit(sel), mode = G.ui.moveMode || 'walk';
     if (!unit) return;
     let g = null, l = null;
@@ -397,6 +428,10 @@ const Plan = {
   // Where the plan sends each unit, line by line: a leg for each move, and a ghost of each
   // unit where its last planned move ends. A squad move sends all three teams together;
   // a team sent on alone leaves the squad's ghost and gets one of its own.
+  // Where the plan sends each fire team, line by line: a leg for each move, and a ghost of
+  // each team where its last planned move ends. A squad move sets the teams out in the
+  // squad's formation around the point; a team's spot can be dragged to where it should be
+  // (kept in the line as spots[team]).
   projection() {
     const sq = G.squads.blue, legs = [], ghosts = [];
     if (!sq) return { legs, ghosts };
@@ -414,26 +449,29 @@ const Plan = {
         if (g) { dest = l.task === 'route' ? g.pts[g.pts.length - 1] : this.anchor(g); if (l.task === 'route') via = g.pts; }
       }
       if (!dest) continue;
-      const units = l.unit === 'squad' ? ['t1', 't2', 't3'].filter(u => pos[u]) : [l.unit];
-      const starts = units.map(u => pos[u]).filter(Boolean);
+      const units = l.unit === 'squad' ? ['t1', 't2', 't3'].filter(u => pos[u]) : [l.unit].filter(u => pos[u]);
+      const starts = units.map(u => pos[u]);
       if (!starts.length) continue;
-      legs.push({ from: centroid(starts), to: dest, via, unit: l.unit, task: l.task });
-      const m = { x: dest.x, y: dest.y, squad: l.unit === 'squad', name: g.name };
-      for (const u of units) { pos[u] = { x: dest.x, y: dest.y }; mark[u] = m; }
+      const from = centroid(starts);
+      legs.push({ from, to: dest, via, unit: l.unit, task: l.task });
+      const spots = this.spotsFor(l, dest, from, units);
+      for (const u of units) { pos[u] = spots[u]; mark[u] = { line: l, name: g.name }; }
     }
-    const teams = ['t1', 't2', 't3'].filter(u => mark[u]);
-    const whole = teams.length && teams.every(u => mark[u] === mark[teams[0]]) && mark[teams[0]].squad && teams.length === ['t1', 't2', 't3'].filter(u => pos[u]).length;
-    if (whole) ghosts.push({ unit: 'squad', x: mark.t1.x, y: mark.t1.y, name: mark.t1.name });
-    else {
-      // Teams that end on the same spot stand side by side.
-      const at = new Map();
-      for (const u of teams) {
-        const m = mark[u], key = Math.round(m.x) + ',' + Math.round(m.y), k = at.get(key) || 0;
-        at.set(key, k + 1);
-        ghosts.push({ unit: u, x: m.x + k * 14, y: m.y + k * 6, name: m.name });
-      }
-    }
+    for (const u of ['t1', 't2', 't3']) if (mark[u]) ghosts.push({ unit: u, x: pos[u].x, y: pos[u].y, name: mark[u].name, line: mark[u].line });
     return { legs, ghosts };
+  },
+  // Where each team of a line ends up: its dragged spot, or its place in the squad's
+  // formation around the point (a squad move), or the point itself (a team's move).
+  spotsFor(l, dest, from, units) {
+    const sq = G.squads.blue, out = {}, h = angleTo(from.x, from.y, dest.x, dest.y);
+    units.forEach((u, k) => {
+      if (l.spots && l.spots[u]) { out[u] = l.spots[u]; return; }
+      if (l.unit === 'squad' && units.length > 1) {
+        const o = scaled(squadSlot(sq.formation, k, units.length), sq.spacing), w = rotateOffset(o.x, o.y, h);
+        out[u] = { x: dest.x + w.x, y: dest.y + w.y };
+      } else out[u] = { x: dest.x, y: dest.y };
+    });
+    return out;
   },
 
   triggerMet(l, i) {
@@ -506,7 +544,10 @@ const Plan = {
     G.execIssuing = true;
     try {
       switch (l.task) {
-        case 'move': groupMove(sel, this.anchor(where).x, this.anchor(where).y, l.mode); break;
+        case 'move':
+          if (l.spots && Object.keys(l.spots).length) this.moveToSpots(l, sel, this.anchor(where));
+          else groupMove(sel, this.anchor(where).x, this.anchor(where).y, l.mode);
+          break;
         case 'route': routeMove(sel, where.pts, l.mode); break;
         case 'occupy': occupyPosition(sel, where); l.stage = 'moving'; break;
         case 'bound': issueOrder(sel, 'bound', this.anchor(where)); break;

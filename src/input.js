@@ -12,13 +12,16 @@ const Input = {
       if (this.pointers.size === 1) {
         this.moved = false;
         this.camStart = { x: R.cam.x, y: R.cam.y };
+        // While planning, a plan ghost under the pointer is tapped or dragged to its spot.
+        this.dragGh = e.button === 0 && G.running && Plan.planning && !Plan.tool ? ghostAt(e.offsetX, e.offsetY) : null;
+        if (this.dragGh) { const q = ghostScreen(this.dragGh), w = toScreen(this.dragGh.x, this.dragGh.y); this.dragGh.off = { x: q.x - w.x, y: q.y - w.y }; }
         // Right button held after step-off: where the selected unit goes, then drag to set its front.
         this.faceDrag = e.button === 2 && G.running && !G.over && !Plan.planning && G.ui.sel ? { at: toWorld(e.offsetX, e.offsetY), to: null } : null;
         G.ui.faceDrag = this.faceDrag;
         // A finger (or the left button) pressed on one of our pieces drags the unit to a new place.
-        this.dragU = e.button === 0 && G.running && !G.over && !Plan.tool && !G.ui.measuring ? UI.unitDragStart(pieceAt(e.offsetX, e.offsetY)) : null;
+        this.dragU = !this.dragGh && e.button === 0 && G.running && !G.over && !Plan.tool && !G.ui.measuring ? UI.unitDragStart(pieceAt(e.offsetX, e.offsetY)) : null;
         // While planning, a control measure under the finger is dragged instead of the map.
-        this.dragG = !this.dragU && G.running && Plan.planning && !Plan.tool && e.button !== 2 ? Plan.hitGraphic(e.offsetX, e.offsetY) : null;
+        this.dragG = !this.dragU && !this.dragGh && G.running && Plan.planning && !Plan.tool && e.button !== 2 ? Plan.hitGraphic(e.offsetX, e.offsetY) : null;
       } else if (this.pointers.size === 2) {
         this.moved = true;
         if (this.dragU) { this.dragU = null; G.ui.unitDrag = null; }
@@ -35,7 +38,10 @@ const Input = {
       p.x = e.offsetX; p.y = e.offsetY;
       if (this.pointers.size === 1) {
         if (Math.hypot(p.x - p.sx, p.y - p.sy) > 8) this.moved = true;
-        if (this.moved && this.faceDrag) {
+        if (this.moved && this.dragGh) {
+          const g = this.dragGh, l = g.line;
+          if (l.task === 'move') { l.spots = l.spots || {}; l.spots[g.unit] = toWorld(p.x - g.off.x, p.y - g.off.y); }
+        } else if (this.moved && this.faceDrag) {
           this.faceDrag.to = toWorld(p.x, p.y);
         } else if (this.moved && this.dragU) {
           G.ui.unitDrag.to = toWorld(p.x, p.y);
@@ -60,6 +66,13 @@ const Input = {
       const p = this.pointers.get(e.pointerId);
       if (!p) return;
       this.pointers.delete(e.pointerId);
+      if (e.type === 'pointerup' && this.dragGh && this.pointers.size === 0) {
+        const g = this.dragGh; this.dragGh = null;
+        if (!this.moved) UI.ghostTap(g, e.shiftKey || e.ctrlKey || e.metaKey);
+        else if (g.line.task !== 'move') UI.toast('Only a move to a checkpoint can be given team spots.');
+        else OPORD.refresh();
+        return;
+      }
       if (e.type === 'pointerup' && this.faceDrag && this.pointers.size === 0) {
         const f = this.faceDrag; this.faceDrag = null; G.ui.faceDrag = null;
         if (this.moved && f.to && dist(f.at.x, f.at.y, f.to.x, f.to.y) > 3) {
@@ -106,7 +119,9 @@ const Input = {
       clampCam();
     }, { passive: false });
 
+    window.addEventListener('keyup', (e) => { G.ui.shift = e.shiftKey; });
     window.addEventListener('keydown', (e) => {
+      G.ui.shift = e.shiftKey;
       if (e.target.closest && e.target.closest('input, select, textarea')) return;
       if (!G.running) return;
       const k = e.key;

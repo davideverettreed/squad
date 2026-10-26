@@ -18,7 +18,7 @@ function selMembers(sel) {
 function selName(sel) {
   if (sel.level === 'soldier') return sel.soldier.label;
   if (sel.level === 'team') return sel.team.name;
-  if (sel.level === 'group') return 'All but ' + sel.except.short;
+  if (sel.level === 'group') return sel.except ? 'All but ' + sel.except.short : sel.teams.map(t => t.short).join(' + ');
   return sel.squad.name;
 }
 // Every team of the squad but this one.

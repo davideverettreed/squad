@@ -514,7 +514,7 @@ body:not(.roster-min) #btn3d, body:not(.roster-min) #ctl3d { margin-left: 0; }
         <h3>Selecting</h3>
         <p>Tap a Marine to select that Marine. Tap again to select the fire team, and again for the whole squad. The Squad and fire team buttons above the orders do the same. Keys: <kbd>1</kbd> <kbd>2</kbd> <kbd>3</kbd> fire teams, <kbd>0</kbd> squad, <kbd>Esc</kbd> cancel.</p>
         <h3>Moving</h3>
-        <p>While planning, each planned move shows as a dashed blue arrow, and a dashed ghost of the unit stands where its last move ends. Tap a ghost to pick that unit there, then tap the map to plan its next step. Tap a control measure to change it into another kind (a checkpoint into an assault position, say), rename it, open it in the order or delete it; drag it to move it. While planning, nothing moves: select a unit and tap the map to open a menu that sets a checkpoint, a bound, a route, a fighting position, a support-by-fire position, an assault position, an objective or a target reference point at that spot and adds the line to the plan. Press on one of your pieces (finger or left button) and drag it: let go to open the plan menu at that spot while planning, or to send it there after step-off. After step-off, orders go by radio: tap the ground to move in the chosen mode (Walk unless you pick Rush or Crawl); tap twice quickly to rush. Hold the right button where the unit should go and drag toward the front it should face: let go and it moves there and turns to face that way. Double-click a fire team's button to select every other team instead. The squad leader moves with 1st Fire Team, but can still be selected alone, and the other teams move without him. Closer and Wider (keys − and +) set the interval between the men of the selected team or squad, from half to three times the standard 7 m; in the fight they spread out or close up where they are. W, A, S and D shift the selected unit forward, left, back and right while it keeps its front; Q and E turn it. A ghost shows where it will end up, the order goes out when you stop pressing, and once there the men take up whatever move they were on. Right-click also moves. Teams and the squad move in their formation. A walking team that takes fire, or sees a new enemy within 250 m, halts on its own, gets down and returns fire; rush, assault or bound to keep moving under fire. Rushing is fast but tiring and easy to spot. Crawling is slow but men can crawl while pinned.</p>
+        <p>While planning, each planned move shows as a dashed blue arrow, and a dashed ghost of the unit stands where its last move ends. Each fire team gets its own ghost. Tap a ghost to pick that team there, Shift-click to add more, or double-click to pick every team at that spot; then tap the map to plan the next step. Drag a ghost to give its team its own spot at a checkpoint. Tap a control measure to change it into another kind (a checkpoint into an assault position, say), rename it, open it in the order or delete it; drag it to move it. While planning, nothing moves: select a unit and tap the map to open a menu that sets a checkpoint, a bound, a route, a fighting position, a support-by-fire position, an assault position, an objective or a target reference point at that spot and adds the line to the plan. Press on one of your pieces (finger or left button) and drag it: let go to open the plan menu at that spot while planning, or to send it there after step-off. After step-off, orders go by radio: tap the ground to move in the chosen mode (Walk unless you pick Rush or Crawl); tap twice quickly to rush. Hold the right button where the unit should go and drag toward the front it should face: let go and it moves there and turns to face that way. Double-click a fire team's button to select every other team instead. The squad leader moves with 1st Fire Team, but can still be selected alone, and the other teams move without him. Closer and Wider (keys − and +) set the interval between the men of the selected team or squad, from half to three times the standard 7 m; in the fight they spread out or close up where they are. W, A, S and D shift the selected unit forward, left, back and right while it keeps its front; Q and E turn it. A ghost shows where it will end up, the order goes out when you stop pressing, and once there the men take up whatever move they were on. Right-click also moves. Teams and the squad move in their formation. A walking team that takes fire, or sees a new enemy within 250 m, halts on its own, gets down and returns fire; rush, assault or bound to keep moving under fire. Rushing is fast but tiring and easy to spot. Crawling is slow but men can crawl while pinned.</p>
         <h3>Fire and maneuver</h3>
         <p><b>Suppress</b> puts fire on an area, seen enemy or not. <b>Bound</b> sends the squad forward one fire team at a time while the others cover it (a fire team bounds in buddy pairs). <b>Assault</b> walks forward firing and throwing grenades. Tap a visible enemy to make the selection engage that target.</p>
         <h3>Reading the pieces</h3>
@@ -2540,7 +2540,7 @@ function selMembers(sel) {
 function selName(sel) {
   if (sel.level === 'soldier') return sel.soldier.label;
   if (sel.level === 'team') return sel.team.name;
-  if (sel.level === 'group') return 'All but ' + sel.except.short;
+  if (sel.level === 'group') return sel.except ? 'All but ' + sel.except.short : sel.teams.map(t => t.short).join(' + ');
   return sel.squad.name;
 }
 // Every team of the squad but this one.
@@ -4949,6 +4949,8 @@ function drawPlanGhosts(ctx) {
   if (!View3D.drawingDrape) for (const gh of pr.ghosts) {
     const q = ghostScreen(gh);
     ctx.globalAlpha = 0.85;
+    const picked = G.ui.sel && ((G.ui.sel.level === 'team' && 't' + G.ui.sel.team.num === gh.unit) || (G.ui.sel.level === 'group' && G.ui.sel.teams.some(t => 't' + t.num === gh.unit)));
+    if (picked) { ctx.fillStyle = 'rgba(255,214,10,0.35)'; ctx.beginPath(); ctx.arc(q.x, q.y, 22, 0, Math.PI * 2); ctx.fill(); }
     drawUnitSymbol(ctx, q.x, q.y, 15, 'blue', gh.unit === 'squad' ? 'squad' : 'team', { fill: 'rgba(128,224,255,0.3)', ink: OVL.blue, dashed: true });
     ctx.globalAlpha = 1;
     if (gh.unit !== 'squad') {
@@ -4961,7 +4963,11 @@ function drawPlanGhosts(ctx) {
 }
 // A ghost stands up and to the right of the control measure it ends on, so each can be
 // tapped on its own.
-function ghostScreen(gh) { const q = toScreen(gh.x, gh.y); return { x: q.x + 24, y: q.y - 24 }; }
+function ghostScreen(gh) {
+  const q = toScreen(gh.x, gh.y);
+  const onMark = Plan.graphics.some(g => { const a = toScreen(Plan.anchor(g).x, Plan.anchor(g).y); return Math.hypot(a.x - q.x, a.y - q.y) < 16; });
+  return onMark ? { x: q.x + 24, y: q.y - 24 } : q;
+}
 function ghostAt(sx, sy) {
   if (!Plan.planning) return null;
   let best = null, bd = 20;
@@ -5589,10 +5595,25 @@ const UI = {
     const t = G.squads.blue.teams[n - 1];
     if (t && t.members.some(s => s.active)) this.select({ level: 'team', team: t, squad: t.squad });
   },
+  // A plan ghost tapped: that team, where the plan leaves it. With Shift, add it to (or take
+  // it from) the teams already picked; tapped twice, every team at that spot.
+  ghostTap(gh, add) {
+    const sq = G.squads.blue, t = sq.teams[Number(gh.unit[1]) - 1], now = performance.now(), last = this.lastGhostTap;
+    this.lastGhostTap = { unit: gh.unit, t: now };
+    let teams;
+    if (last && last.unit === gh.unit && now - last.t < 380) teams = Plan.projection().ghosts.filter(o => o.name === gh.name).map(o => sq.teams[Number(o.unit[1]) - 1]);
+    else if (add) {
+      const cur = G.ui.sel && G.ui.sel.level === 'team' ? [G.ui.sel.team] : G.ui.sel && G.ui.sel.level === 'group' ? G.ui.sel.teams.slice() : [];
+      teams = cur.includes(t) ? cur.filter(x => x !== t) : [...cur, t];
+    } else teams = [t];
+    teams.sort((a, b) => a.num - b.num);
+    if (!teams.length) { this.select(null); return; }
+    this.select(teams.length === 1 ? { level: 'team', team: teams[0], squad: sq } : { level: 'group', squad: sq, teams, except: null });
+    this.toast(selName(G.ui.sel) + ' at ' + gh.name + ': tap the map for the next step. Shift-click or double-click a ghost to pick more; drag one to set its spot.');
+  },
   selectAllBut(n) {
     const t = G.squads.blue && G.squads.blue.teams[n - 1];
     if (!t) return;
-    if (Plan.planning) { this.toast('A plan line is for the squad or one team. Select all but a team after step-off.'); return; }
     const g = groupBut(t);
     if (g.teams.length) this.select(g);
   },
@@ -5620,11 +5641,7 @@ const UI = {
     if (Plan.tool && !secondary) { Plan.place(w); return; }
     // A tap on a ghost picks that unit where the plan leaves it, to plan its next step.
     const ghost = !secondary && Plan.planning ? (at ? at.ghost : ghostAt(sx, sy)) : null;
-    if (ghost) {
-      this.select(Plan.unitSel(ghost.unit));
-      this.toast(PLAN_UNITS[ghost.unit] + ' at ' + ghost.name + ': tap the map for its next step.');
-      return;
-    }
+    if (ghost) { this.ghostTap(ghost, !!G.ui.shift); return; }
     const piece = at ? at.piece : pieceAt(sx, sy);
     const sel = G.ui.sel;
     // An enemy piece stands for its nearest visible, effective man.
@@ -5744,7 +5761,7 @@ const UI = {
     this.closePlanMenu();
     const unit = Plan.planUnit(sel), m = el('div', 'planmenu');
     m.id = 'planMenu';
-    m.appendChild(el('div', 'pmhead', PLAN_UNITS[unit] + ' · ' + gridRef(w.x, w.y)));
+    m.appendChild(el('div', 'pmhead', (unit ? PLAN_UNITS[unit] : selName(sel)) + ' · ' + gridRef(w.x, w.y)));
     const items = [
       ['cp', 'Checkpoint', 'move here'], ['bound', 'Bound here', 'bounding overwatch'],
       ['rte', 'Route from here', 'tap waypoints'], ['fp', 'Fighting position', 'occupy and defend'],
@@ -6376,16 +6393,47 @@ const Plan = {
     OPORD.refresh();
     return true;
   },
+  // A move whose teams have their own spots: each team goes to its spot.
+  moveToSpots(l, sel, dest) {
+    const sq = G.squads.blue, members = selMembers(sel);
+    Plan.override(members, 'move');
+    releaseControllers(members);
+    const units = l.unit === 'squad' ? sq.teams.filter(t => t.members.some(commandable)).map(t => 't' + t.num) : [l.unit];
+    const spots = this.spotsFor(l, dest, centroid(members.filter(commandable)), units);
+    for (const u of units) teamMove(sq.teams[Number(u[1]) - 1], spots[u].x, spots[u].y, l.mode);
+  },
   // The plan unit for a selection: a Marine plans with his fire team, the SL with the squad.
   planUnit(sel) {
     if (!sel) return null;
-    if (sel.level === 'group') return null; // a plan line is for the squad or one team
+    if (sel.level === 'group') return null; // several teams: a line for each (see addStep)
     const t = sel.level === 'squad' ? null : sel.team;
     return t && t.num ? 't' + t.num : 'squad';
   },
   // A step chosen from the map menu while planning: a control measure at the spot and a
   // line of the plan that sends the unit to it.
   addStep(sel, w, step) {
+    // Several teams: all of them is the squad; otherwise the first team's line, then the
+    // others with it, side by side at the spot.
+    if (sel && sel.level === 'group') {
+      const live = G.squads.blue.teams.filter(t => t.members.some(s => s.active));
+      if (sel.teams.length >= live.length) return this.addStep({ level: 'squad', squad: sel.squad }, w, step);
+      const n0 = this.lines.length;
+      this.addStep({ level: 'team', team: sel.teams[0], squad: sel.squad }, w, step);
+      const first = this.lines[n0];
+      if (!first || this.lines.length !== n0 + 1) return;
+      const units = sel.teams.map(t => 't' + t.num);
+      for (const u of units.slice(1)) { const { id, status, spots, ...rest } = first; this.addLine(Object.assign({}, rest, { unit: u, trigger: 'with' })); }
+      if (first.task === 'move') {
+        const c = centroid(selMembers(sel).filter(s => s.active)), h = angleTo(c.x, c.y, w.x, w.y);
+        units.forEach((u, k) => {
+          const o = rotateOffset((k - (units.length - 1) / 2) * 30, 0, h), l = this.lines[n0 + k];
+          l.spots = { [u]: { x: w.x + o.x, y: w.y + o.y } };
+        });
+      }
+      G.toast(units.length + ' lines: ' + units.map(u => PLAN_UNITS[u]).join(' and ') + ' together.');
+      OPORD.refresh();
+      return;
+    }
     const unit = this.planUnit(sel), mode = G.ui.moveMode || 'walk';
     if (!unit) return;
     let g = null, l = null;
@@ -6546,6 +6594,10 @@ const Plan = {
   // Where the plan sends each unit, line by line: a leg for each move, and a ghost of each
   // unit where its last planned move ends. A squad move sends all three teams together;
   // a team sent on alone leaves the squad's ghost and gets one of its own.
+  // Where the plan sends each fire team, line by line: a leg for each move, and a ghost of
+  // each team where its last planned move ends. A squad move sets the teams out in the
+  // squad's formation around the point; a team's spot can be dragged to where it should be
+  // (kept in the line as spots[team]).
   projection() {
     const sq = G.squads.blue, legs = [], ghosts = [];
     if (!sq) return { legs, ghosts };
@@ -6563,26 +6615,29 @@ const Plan = {
         if (g) { dest = l.task === 'route' ? g.pts[g.pts.length - 1] : this.anchor(g); if (l.task === 'route') via = g.pts; }
       }
       if (!dest) continue;
-      const units = l.unit === 'squad' ? ['t1', 't2', 't3'].filter(u => pos[u]) : [l.unit];
-      const starts = units.map(u => pos[u]).filter(Boolean);
+      const units = l.unit === 'squad' ? ['t1', 't2', 't3'].filter(u => pos[u]) : [l.unit].filter(u => pos[u]);
+      const starts = units.map(u => pos[u]);
       if (!starts.length) continue;
-      legs.push({ from: centroid(starts), to: dest, via, unit: l.unit, task: l.task });
-      const m = { x: dest.x, y: dest.y, squad: l.unit === 'squad', name: g.name };
-      for (const u of units) { pos[u] = { x: dest.x, y: dest.y }; mark[u] = m; }
+      const from = centroid(starts);
+      legs.push({ from, to: dest, via, unit: l.unit, task: l.task });
+      const spots = this.spotsFor(l, dest, from, units);
+      for (const u of units) { pos[u] = spots[u]; mark[u] = { line: l, name: g.name }; }
     }
-    const teams = ['t1', 't2', 't3'].filter(u => mark[u]);
-    const whole = teams.length && teams.every(u => mark[u] === mark[teams[0]]) && mark[teams[0]].squad && teams.length === ['t1', 't2', 't3'].filter(u => pos[u]).length;
-    if (whole) ghosts.push({ unit: 'squad', x: mark.t1.x, y: mark.t1.y, name: mark.t1.name });
-    else {
-      // Teams that end on the same spot stand side by side.
-      const at = new Map();
-      for (const u of teams) {
-        const m = mark[u], key = Math.round(m.x) + ',' + Math.round(m.y), k = at.get(key) || 0;
-        at.set(key, k + 1);
-        ghosts.push({ unit: u, x: m.x + k * 14, y: m.y + k * 6, name: m.name });
-      }
-    }
+    for (const u of ['t1', 't2', 't3']) if (mark[u]) ghosts.push({ unit: u, x: pos[u].x, y: pos[u].y, name: mark[u].name, line: mark[u].line });
     return { legs, ghosts };
+  },
+  // Where each team of a line ends up: its dragged spot, or its place in the squad's
+  // formation around the point (a squad move), or the point itself (a team's move).
+  spotsFor(l, dest, from, units) {
+    const sq = G.squads.blue, out = {}, h = angleTo(from.x, from.y, dest.x, dest.y);
+    units.forEach((u, k) => {
+      if (l.spots && l.spots[u]) { out[u] = l.spots[u]; return; }
+      if (l.unit === 'squad' && units.length > 1) {
+        const o = scaled(squadSlot(sq.formation, k, units.length), sq.spacing), w = rotateOffset(o.x, o.y, h);
+        out[u] = { x: dest.x + w.x, y: dest.y + w.y };
+      } else out[u] = { x: dest.x, y: dest.y };
+    });
+    return out;
   },
 
   triggerMet(l, i) {
@@ -6655,7 +6710,10 @@ const Plan = {
     G.execIssuing = true;
     try {
       switch (l.task) {
-        case 'move': groupMove(sel, this.anchor(where).x, this.anchor(where).y, l.mode); break;
+        case 'move':
+          if (l.spots && Object.keys(l.spots).length) this.moveToSpots(l, sel, this.anchor(where));
+          else groupMove(sel, this.anchor(where).x, this.anchor(where).y, l.mode);
+          break;
         case 'route': routeMove(sel, where.pts, l.mode); break;
         case 'occupy': occupyPosition(sel, where); l.stage = 'moving'; break;
         case 'bound': issueOrder(sel, 'bound', this.anchor(where)); break;
@@ -8205,13 +8263,16 @@ const Input = {
       if (this.pointers.size === 1) {
         this.moved = false;
         this.camStart = { x: R.cam.x, y: R.cam.y };
+        // While planning, a plan ghost under the pointer is tapped or dragged to its spot.
+        this.dragGh = e.button === 0 && G.running && Plan.planning && !Plan.tool ? ghostAt(e.offsetX, e.offsetY) : null;
+        if (this.dragGh) { const q = ghostScreen(this.dragGh), w = toScreen(this.dragGh.x, this.dragGh.y); this.dragGh.off = { x: q.x - w.x, y: q.y - w.y }; }
         // Right button held after step-off: where the selected unit goes, then drag to set its front.
         this.faceDrag = e.button === 2 && G.running && !G.over && !Plan.planning && G.ui.sel ? { at: toWorld(e.offsetX, e.offsetY), to: null } : null;
         G.ui.faceDrag = this.faceDrag;
         // A finger (or the left button) pressed on one of our pieces drags the unit to a new place.
-        this.dragU = e.button === 0 && G.running && !G.over && !Plan.tool && !G.ui.measuring ? UI.unitDragStart(pieceAt(e.offsetX, e.offsetY)) : null;
+        this.dragU = !this.dragGh && e.button === 0 && G.running && !G.over && !Plan.tool && !G.ui.measuring ? UI.unitDragStart(pieceAt(e.offsetX, e.offsetY)) : null;
         // While planning, a control measure under the finger is dragged instead of the map.
-        this.dragG = !this.dragU && G.running && Plan.planning && !Plan.tool && e.button !== 2 ? Plan.hitGraphic(e.offsetX, e.offsetY) : null;
+        this.dragG = !this.dragU && !this.dragGh && G.running && Plan.planning && !Plan.tool && e.button !== 2 ? Plan.hitGraphic(e.offsetX, e.offsetY) : null;
       } else if (this.pointers.size === 2) {
         this.moved = true;
         if (this.dragU) { this.dragU = null; G.ui.unitDrag = null; }
@@ -8228,7 +8289,10 @@ const Input = {
       p.x = e.offsetX; p.y = e.offsetY;
       if (this.pointers.size === 1) {
         if (Math.hypot(p.x - p.sx, p.y - p.sy) > 8) this.moved = true;
-        if (this.moved && this.faceDrag) {
+        if (this.moved && this.dragGh) {
+          const g = this.dragGh, l = g.line;
+          if (l.task === 'move') { l.spots = l.spots || {}; l.spots[g.unit] = toWorld(p.x - g.off.x, p.y - g.off.y); }
+        } else if (this.moved && this.faceDrag) {
           this.faceDrag.to = toWorld(p.x, p.y);
         } else if (this.moved && this.dragU) {
           G.ui.unitDrag.to = toWorld(p.x, p.y);
@@ -8253,6 +8317,13 @@ const Input = {
       const p = this.pointers.get(e.pointerId);
       if (!p) return;
       this.pointers.delete(e.pointerId);
+      if (e.type === 'pointerup' && this.dragGh && this.pointers.size === 0) {
+        const g = this.dragGh; this.dragGh = null;
+        if (!this.moved) UI.ghostTap(g, e.shiftKey || e.ctrlKey || e.metaKey);
+        else if (g.line.task !== 'move') UI.toast('Only a move to a checkpoint can be given team spots.');
+        else OPORD.refresh();
+        return;
+      }
       if (e.type === 'pointerup' && this.faceDrag && this.pointers.size === 0) {
         const f = this.faceDrag; this.faceDrag = null; G.ui.faceDrag = null;
         if (this.moved && f.to && dist(f.at.x, f.at.y, f.to.x, f.to.y) > 3) {
@@ -8299,7 +8370,9 @@ const Input = {
       clampCam();
     }, { passive: false });
 
+    window.addEventListener('keyup', (e) => { G.ui.shift = e.shiftKey; });
     window.addEventListener('keydown', (e) => {
+      G.ui.shift = e.shiftKey;
       if (e.target.closest && e.target.closest('input, select, textarea')) return;
       if (!G.running) return;
       const k = e.key;
