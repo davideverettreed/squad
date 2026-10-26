@@ -495,8 +495,8 @@ const View3D = {
       this.pointers.set(e.pointerId, { x: e.offsetX, y: e.offsetY, sx: e.offsetX, sy: e.offsetY, button: e.button });
       this.moved = this.pointers.size > 1;
       this.drag = { turn: e.button === 2 || e.shiftKey };
-      // On a touch screen a finger on one of our pieces drags the unit to a new place.
-      this.dragU = this.pointers.size === 1 && e.pointerType !== 'mouse' && G.running && !G.over && !Plan.tool && !G.ui.measuring ? UI.unitDragStart(this.pieceAt(e.offsetX, e.offsetY)) : null;
+      // A finger (or the left button) pressed on one of our pieces drags the unit to a new place.
+      this.dragU = this.pointers.size === 1 && e.button === 0 && !e.shiftKey && G.running && !G.over && !Plan.tool && !G.ui.measuring ? UI.unitDragStart(this.pieceAt(e.offsetX, e.offsetY)) : null;
       if (this.pointers.size > 1 && this.dragU) { this.dragU = null; G.ui.unitDrag = null; }
       // While planning, a control measure under the finger is dragged instead of the view.
       this.dragG = !this.dragU && this.pointers.size === 1 && G.running && Plan.planning && !Plan.tool && e.button !== 2 ? this.hitGraphic(e.offsetX, e.offsetY) : null;

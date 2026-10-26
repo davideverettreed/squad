@@ -12,8 +12,8 @@ const Input = {
       if (this.pointers.size === 1) {
         this.moved = false;
         this.camStart = { x: R.cam.x, y: R.cam.y };
-        // On a touch screen a finger on one of our pieces drags the unit to a new place.
-        this.dragU = e.pointerType !== 'mouse' && G.running && !G.over && !Plan.tool && !G.ui.measuring ? UI.unitDragStart(pieceAt(e.offsetX, e.offsetY)) : null;
+        // A finger (or the left button) pressed on one of our pieces drags the unit to a new place.
+        this.dragU = e.button === 0 && G.running && !G.over && !Plan.tool && !G.ui.measuring ? UI.unitDragStart(pieceAt(e.offsetX, e.offsetY)) : null;
         // While planning, a control measure under the finger is dragged instead of the map.
         this.dragG = !this.dragU && G.running && Plan.planning && !Plan.tool && e.button !== 2 ? Plan.hitGraphic(e.offsetX, e.offsetY) : null;
       } else if (this.pointers.size === 2) {
