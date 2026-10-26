@@ -18,7 +18,8 @@ const G = {
 function loadSettings() {
   let saved = null;
   try { saved = JSON.parse(localStorage.getItem('squad.settings') || 'null'); } catch (e) { saved = null; }
-  const s = { seed: Math.floor(Math.random() * 99999) + 1, mode: 'random', region: 'random', echelon: 'squad', loadout: defaultLoadout() };
+  const s = { seed: Math.floor(Math.random() * 99999) + 1, mode: 'random', region: 'random', echelon: 'squad', loadout: defaultLoadout(),
+    scenario: 'modern', friendly: 'era' };
   if (saved && saved.loadout) {
     for (const k of Object.keys(s.loadout)) {
       const l = saved.loadout[k];
@@ -26,11 +27,14 @@ function loadSettings() {
     }
     if (saved.mode && (saved.mode === 'random' || MISSIONS[saved.mode])) s.mode = saved.mode;
     if (saved.region && (saved.region === 'random' || REGIONS[saved.region])) s.region = saved.region;
+    if (saved.scenario && SCENARIOS[saved.scenario]) s.scenario = saved.scenario;
+    if (saved.friendly && (saved.friendly === 'era' || FRIENDLY_KEYS.includes(saved.friendly))) s.friendly = saved.friendly;
   }
   return s;
 }
 function saveSettings() {
-  try { localStorage.setItem('squad.settings', JSON.stringify({ mode: G.settings.mode, region: G.settings.region, loadout: G.settings.loadout })); } catch (e) { /* storage unavailable */ }
+  try { localStorage.setItem('squad.settings', JSON.stringify({ mode: G.settings.mode, region: G.settings.region, loadout: G.settings.loadout,
+    scenario: G.settings.scenario, friendly: G.settings.friendly })); } catch (e) { /* storage unavailable */ }
 }
 
 function newMission() {
@@ -39,12 +43,14 @@ function newMission() {
   NEXT_ID = 1;
   G.echelon = ECHELONS[set.echelon] || ECHELONS.squad;
   setMapSize(G.echelon.size); resizeSheet();
-  G.map = new GameMap(set.seed, set.region);
+  // A scenario brings its own ground unless another region was picked.
+  const sc = scenarioOf(set);
+  G.map = new GameMap(set.seed, set.region === 'random' && sc.region ? sc.region : set.region);
   // Grid: a small 100 km digit and two principal digits for each kilometer line.
   G.grid = { e: randInt(10, 85), n: randInt(10, 85), le: randInt(1, 8), ln: randInt(1, 8) };
-  const blue = buildUSMCSquad(set.loadout);
+  const blue = buildBlue(set);
   // The mission: its site, the enemy and what it is doing, the squad's start.
-  const ms = setupMission(set.mode, blue);
+  const ms = setupMission(set.mode, blue, sc);
   const red = ms.red;
   G.squads = { blue, red };
   G.mission = ms.M;
@@ -64,7 +70,7 @@ function newMission() {
   $('debrief').hidden = true;
   G.ui.sel = null; G.ui.pending = null; G.ui.tapes = []; G.ui.tapeStart = null;
   for (const t of [blue.hq, ...blue.teams, red.hq, ...red.teams]) { t.routing = false; t.morale = t.squad.morale; }
-  initAI(ms.ai.mode, ms.ai.objective, ms.ai);
+  initAI(ms.ai.mode, ms.ai.objective, Object.assign({ doctrine: forceInfo(red.kind).doctrine }, ms.ai));
 
   buildTerrain(G.map);
   fitCamera(centroid(blue.all), Math.max(R.minZoom, 1.3));
@@ -72,6 +78,7 @@ function newMission() {
   UI.logLines = [];
   UI.buildRoster();
   UI.select({ level: 'squad', squad: blue });
+  UI.labelTeams();
   Plan.reset();
   Fog.reset();
   for (let k = 0; k < 4; k++) Fog.update();
@@ -84,6 +91,7 @@ function newMission() {
 // A broken team falls back about 400 m away from the enemy and is out of the fight.
 function routePoint(s) {
   // An enemy that means to get away heads for the edge of the sheet.
+  if (s.side === 'red' && s.team.escape) return { x: s.team.escape.x + gauss() * 10, y: s.team.escape.y + gauss() * 10 };
   if (s.side === 'red' && AI.escape) return { x: AI.escape.x + gauss() * 10, y: AI.escape.y + gauss() * 10 };
   const t = threatCentroid(s.side, [s]);
   const a = angleTo(t.x, t.y, s.x, s.y);
@@ -168,7 +176,7 @@ function inCover(s) {
   const o = CELL * 0.8;
   for (const [dx, dy] of [[o, 0], [-o, 0], [0, o], [0, -o]]) {
     const n = G.map.terAt(s.x + dx, s.y + dy);
-    if (n === TER.WALL || n === TER.BUILDING) return true;
+    if (n === TER.WALL || n === TER.BUILDING || n === TER.DIKE) return true;
   }
   // Low vegetation (grass, scrub, reeds) hides a man who lies down in it.
   return TERRAIN[k].conceal >= 0.45 && s.posture === 'prone';
@@ -188,7 +196,8 @@ function updateSuppression(s, dt) {
 function update(dt) {
   G.time += dt;
   G.spotT -= dt;
-  if (G.spotT <= 0) { G.spotT = 0.25; updateSpotting(); }
+  // A big fight is looked over a little less often.
+  if (G.spotT <= 0) { G.spotT = G.soldiers.length > 120 ? 0.4 : 0.25; updateSpotting(); }
   // While the order is being planned the field is frozen: no one moves or fires. Men still
   // look about and spot, and the clock runs (the enemy's time is accounted at step-off).
   const frozen = Plan.planning;
@@ -301,7 +310,8 @@ function boot() {
   // Draw a map behind the briefing so the first view is the ground, not a blank table.
   withLoading('Drawing the map sheet…', () => {
     setMapSize(ECHELONS[G.settings.echelon].size); resizeSheet();
-    G.map = new GameMap(G.settings.seed, G.settings.region);
+    const sc = scenarioOf(G.settings);
+    G.map = new GameMap(G.settings.seed, G.settings.region === 'random' && sc.region ? sc.region : G.settings.region);
     buildTerrain(G.map);
     fitCamera(null, R.minZoom);
     UI.showBriefing();

@@ -3,6 +3,7 @@
 
 let NEXT_ID = 1;
 const ORDINAL = ['1st', '2nd', '3rd', '4th'];
+function ordinal(n) { const t = n % 100, u = n % 10; return n + (t > 10 && t < 14 ? 'th' : u === 1 ? 'st' : u === 2 ? 'nd' : u === 3 ? 'rd' : 'th'); }
 
 class Soldier {
   constructor(side, billet, team, cfg) {
@@ -27,8 +28,11 @@ class Soldier {
     this.launcherKey = cfg.launcher || null;
     this.launcher = cfg.launcher ? LAUNCHERS[cfg.launcher] : null;
     this.lRounds = this.launcher ? (cfg.lRounds != null ? cfg.lRounds : this.launcher.rounds) : 0;
-    this.grenade = side === 'blue' ? GRENADES.M67 : GRENADES.RGD5;
+    this.grenadeKey = cfg.grenade || (side === 'blue' ? 'M67' : 'RGD5');
+    this.grenade = GRENADES[this.grenadeKey];
     this.frags = cfg.frags != null ? cfg.frags : 2;
+    this.meleeKey = cfg.melee || 'butt';
+    this.skill = cfg.skill || team.squad.skill || 1; // marksmanship
     this.fireControl = 'free';
     this.targetId = null; this.priorityId = null; this.suppressPt = null; this.launchQueue = null;
     this.fireCD = randRange(0.3, 1.5); this.reloadT = 0; this.launchCD = randRange(2, 5); this.fragCD = 0;
@@ -91,7 +95,7 @@ class Team {
   }
   get leader() { return this.members.find(s => s.active) || null; }
   get active() { return this.members.filter(s => s.active); }
-  get short() { return this.num ? ORDINAL[this.num - 1] + ' FT' : 'SL'; }
+  get short() { return this.num ? ordinal(this.num) + ' ' + (this.squad.teamWord || 'FT') : this.squad.hqShort || 'SL'; }
   get broken() { return this.morale < 12; }
   get shaken() { return this.morale < 28; }
 }
@@ -103,6 +107,8 @@ class Squad {
     this.formation = 'wedge';
     this.spacing = 1; // interval between teams, as a share of the standard
     this.training = 1;
+    this.skill = 1;
+    this.teamWord = 'FT'; this.teamName = 'Fire Team';
   }
   get all() { return [this.hq, ...this.teams].flatMap(t => t.members); }
   get active() { return this.all.filter(s => s.active); }
@@ -134,12 +140,12 @@ function applyLoadout(sq, lo) {
 
 function buildUSMCSquad(loadout) {
   const sq = new Squad('blue', '1st Squad', 82);
-  sq.training = 0.85;
+  sq.training = 0.85; sq.kind = 'usmc';
   const names = shuffle(SURNAMES.slice());
   const make = (key, team) => {
     const b = USMC_BILLETS[key], lo = loadout[key];
     const s = new Soldier('blue', key, team, { title: b.title, rank: b.rank, name: names.pop(), weapon: lo.weapon,
-      mags: lo.mags, frags: lo.frags, launcher: lo.launcher, lRounds: lo.lRounds });
+      mags: lo.mags, frags: lo.frags, launcher: lo.launcher, lRounds: lo.lRounds, melee: 'bayonet' });
     team.members.push(s);
     return s;
   };
@@ -194,4 +200,9 @@ function placeSquad(sq, map, x, y, heading) {
   });
   const so = scaled(squadLeaderSlot(sq.formation), sq.spacing), w = rotateOffset(so.x, so.y, heading);
   put(sq.leader, x + w.x, y + w.y);
+  // Anyone else at the command post (a deputy, a sniper, a radio operator) beside the leader.
+  sq.hq.members.filter(s => s !== sq.leader).forEach((s, i) => {
+    const o = rotateOffset(so.x + (i % 2 ? -4 : 4) * Math.ceil((i + 1) / 2), so.y - 3, heading);
+    put(s, x + o.x, y + o.y);
+  });
 }

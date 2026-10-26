@@ -89,6 +89,8 @@ const MAPC = {
   snow: [241, 245, 249],
   ice: [222, 238, 248],
   wash: [242, 232, 206],
+  paddy: [222, 238, 224],
+  dike: [226, 214, 182],
   water: [176, 220, 244],
   waterEdge: [40, 140, 205],
   contour: [168, 84, 50],
@@ -98,7 +100,7 @@ const CLASS_COLORS = {
   [TER.WOODS]: MAPC.woods, [TER.GRASS]: MAPC.grass, [TER.PLOWED]: MAPC.plowed, [TER.ORCHARD]: MAPC.orchard,
   [TER.VINEYARD]: MAPC.vineyard, [TER.POND]: MAPC.water, [TER.SWAMP]: MAPC.swamp, [TER.BEACH]: MAPC.beach,
   [TER.CHAPARRAL]: MAPC.chaparral, [TER.BRUSH]: MAPC.brush, [TER.DESERT]: MAPC.desert, [TER.ROCK]: MAPC.rock,
-  [TER.SNOW]: MAPC.snow, [TER.ICE]: MAPC.ice, [TER.WASH]: MAPC.wash,
+  [TER.SNOW]: MAPC.snow, [TER.ICE]: MAPC.ice, [TER.WASH]: MAPC.wash, [TER.PADDY]: MAPC.paddy, [TER.DIKE]: MAPC.dike,
 };
 const CLASS_COLOR = (k) => CLASS_COLORS[k] || MAPC.paper;
 // Ground that draws as a tinted area; river, ford and sea water draw like a pond.
@@ -251,6 +253,13 @@ function drawMapRegion(ctx, map, x0, y0, w, h, ppm, level) {
         // Sand: brown stipple.
         ctx.fillStyle = '#a07a4a';
         ctx.beginPath(); ctx.arc(x + ((cx * 3) % 3 - 1), y + ((cy * 5) % 3 - 1), level === 2 ? 0.45 : 0.9, 0, Math.PI * 2); ctx.fill();
+      } else if (k === TER.PADDY && (cx * 3 + cy * 5) % 3 === 0) {
+        // Rice: a green tuft over a short blue water line.
+        const s = level === 2 ? 1.4 : 2.8;
+        ctx.strokeStyle = BLUE_LINE;
+        ctx.beginPath(); ctx.moveTo(x - s * 1.2, y); ctx.lineTo(x + s * 1.2, y); ctx.stroke();
+        ctx.strokeStyle = '#4f8a3a';
+        ctx.beginPath(); ctx.moveTo(x, y); ctx.lineTo(x, y - s); ctx.moveTo(x, y); ctx.lineTo(x - s * 0.7, y - s * 0.8); ctx.moveTo(x, y); ctx.lineTo(x + s * 0.7, y - s * 0.8); ctx.stroke();
       } else if (k === TER.GRASS && level === 2 && (cx * 7 + cy * 13) % 5 === 0) {
         ctx.strokeStyle = '#6f9a52';
         const s = 1.4;
@@ -273,14 +282,24 @@ function drawMapRegion(ctx, map, x0, y0, w, h, ppm, level) {
     ctx.setLineDash([]);
   }
   // The sea's name, along the coast.
-  if (map.R.coast && x0 < 600) {
+  const seaName = (map.R.sea || 'PACIFIC OCEAN').split('').join(' ');
+  if (map.R.island) {
+    // Around an island: the sea's name above and below it.
+    const fs = (level === 0 ? 34 : 22) / ppm;
+    for (const yy of [MAP_H * 0.1, MAP_H * 0.9]) {
+      if (!inBox(MAP_W / 2, yy, 900)) continue;
+      ctx.font = 'italic 700 ' + fs + 'px "Saira Condensed", "Arial Narrow", sans-serif';
+      ctx.textAlign = 'center'; ctx.textBaseline = 'middle'; ctx.fillStyle = BLUE_LINE;
+      ctx.fillText(seaName, MAP_W / 2, yy);
+    }
+  } else if (map.R.coast && x0 < 600) {
     const fs = (level === 0 ? 34 : 22) / ppm;
     for (const yy of [800, 2200]) {
       if (!inBox(110, yy, 600)) continue;
       ctx.save(); ctx.translate(map.coastAt(yy / MAP_H) / 2, yy); ctx.rotate(-Math.PI / 2);
       ctx.font = 'italic 700 ' + fs + 'px "Saira Condensed", "Arial Narrow", sans-serif';
       ctx.textAlign = 'center'; ctx.textBaseline = 'middle'; ctx.fillStyle = BLUE_LINE;
-      ctx.fillText('P A C I F I C   O C E A N', 0, 0);
+      ctx.fillText(seaName, 0, 0);
       ctx.restore();
     }
   }
@@ -501,9 +520,9 @@ function buildTerrain(map) {
     ['woods', 'Woods, hedgerow', has[TER.WOODS]], ['grass', 'Tall grass', has[TER.GRASS]], ['orchard', 'Orchard', has[TER.ORCHARD]],
     ['vineyard', 'Vineyard', has[TER.VINEYARD]], ['chaparral', 'Chaparral', has[TER.CHAPARRAL]], ['brush', 'Mesquite brush', has[TER.BRUSH]],
     ['desert', 'Desert scrub', has[TER.DESERT]], ['rock', 'Rock outcrop, talus', has[TER.ROCK]], ['snow', 'Deep snow', has[TER.SNOW]],
-    ['beach', 'Sand beach', has[TER.BEACH]],
+    ['beach', 'Sand beach', has[TER.BEACH]], ['paddy', 'Rice paddy, dike', has[TER.PADDY]],
     ['paved', 'Hard surface road', 1], ['road', 'Unimproved road', 1], ['wall', 'Stone wall', has[TER.WALL]], ['building', 'Building', 1],
-    ['stream', 'Stream', wet], ['wash', 'Dry wash', dry], ['pond', map.R.ponds === 'ice' ? 'Frozen pond' : map.R.coast ? 'Pond, ocean' : 'Pond', has[TER.POND] || has[TER.ICE] || has[TER.OCEAN]],
+    ['stream', 'Stream', wet], ['wash', 'Dry wash', dry], ['pond', map.R.ponds === 'ice' ? 'Frozen pond' : map.R.coast || map.R.island ? 'Pond, sea' : 'Pond', has[TER.POND] || has[TER.ICE] || has[TER.OCEAN]],
     ['index', 'Index contour (' + ii + ' m)', 1], ['contour', 'Contour (' + map.ci + ' m)', 1],
     ['river', 'River, bridge, ford', !!map.river], ['swamp', 'Swamp, marsh', has[TER.SWAMP]],
   ].filter(r => r[2]);
@@ -521,6 +540,10 @@ function buildTerrain(map) {
       for (let t = 0; t < n; t++) { ctx.beginPath(); ctx.arc(x + 10 + t * (72 / Math.max(1, n - 1)), y + (t % 2 ? 6 : -6), 3, 0, Math.PI * 2); ctx.fill(); }
     }
     else if (k === 'rock') { sw(MAPC.rock); ctx.fillStyle = '#7a5a3c'; for (let t = 10; t < 90; t += 16) { ctx.beginPath(); ctx.moveTo(x + t - 5, y + 5 - (t % 3) * 3); ctx.lineTo(x + t, y - 6 - (t % 3) * 3); ctx.lineTo(x + t + 5, y + 5 - (t % 3) * 3); ctx.fill(); } }
+    else if (k === 'paddy') {
+      sw(MAPC.paddy); ctx.strokeStyle = 'rgb(' + MAPC.dike.map(v => v - 60).join(',') + ')'; ctx.lineWidth = 3; ctx.strokeRect(x + 2, y - 14, 86, 28);
+      for (const tx of [22, 45, 68]) { ctx.strokeStyle = BLUE_LINE; ctx.lineWidth = 2; ctx.beginPath(); ctx.moveTo(tx + x - 8, y + 6); ctx.lineTo(tx + x + 8, y + 6); ctx.stroke(); ctx.strokeStyle = '#4f8a3a'; ctx.beginPath(); ctx.moveTo(x + tx, y + 6); ctx.lineTo(x + tx, y - 6); ctx.moveTo(x + tx, y + 6); ctx.lineTo(x + tx - 6, y - 3); ctx.moveTo(x + tx, y + 6); ctx.lineTo(x + tx + 6, y - 3); ctx.stroke(); }
+    }
     else if (k === 'snow') { sw(MAPC.snow); ctx.strokeStyle = '#999'; ctx.lineWidth = 1; ctx.strokeRect(x, y - 16, 90, 32); }
     else if (k === 'beach' || k === 'wash') {
       sw(MAPC[k]); ctx.fillStyle = '#a07a4a';
@@ -623,7 +646,6 @@ function tileDist(key) {
 }
 
 // ---------------------------------------------------------------- frame
-const TEAM_TAG = ['', '1', '2', '3', '4'];
 // Overlay colors follow US doctrine for graphics on a map overlay:
 // blue for friendly, red for enemy, black for fire support targets.
 const OVL = { blue: '#1f4fbf', red: '#c62828', black: '#161616' };
@@ -1029,9 +1051,9 @@ function drawUnits(ctx) {
       ctx.font = '700 ' + Math.round(r * 0.9) + 'px "Saira Condensed", "Arial Narrow", sans-serif';
       ctx.textAlign = 'left'; ctx.textBaseline = 'middle';
       ctx.lineWidth = 3; ctx.strokeStyle = 'rgba(247,245,236,0.95)';
-      ctx.strokeText(TEAM_TAG[s.team.num], q.x + r + 3, y - r * 0.55);
+      ctx.strokeText(String(s.team.num), q.x + r + 3, y - r * 0.55);
       ctx.fillStyle = s.side === 'blue' ? OVL.blue : OVL.red;
-      ctx.fillText(TEAM_TAG[s.team.num], q.x + r + 3, y - r * 0.55);
+      ctx.fillText(String(s.team.num), q.x + r + 3, y - r * 0.55);
     }
     const chits = [[POSTURE[s.posture].short, '#f3eedc', OVL.black]];
     if (s.pinned) chits.push(['PIN', '#b3261e', '#fff']);
@@ -1483,6 +1505,12 @@ function drawEffects(ctx) {
         ctx.beginPath(); ctx.arc(p.x + Math.cos(a) * 22 * burst, p.y - h + Math.sin(a) * 14 * burst, 4, 0, Math.PI * 2); ctx.fill();
       }
       ctx.globalAlpha = 1;
+    } else if (e.type === 'smoke') {
+      // Black-powder smoke: a white cloud that swells, drifts and thins.
+      const p = toScreen(e.x + f * 6, e.y - f * 4), rr = (1.5 + 5 * Math.sqrt(f)) * z;
+      ctx.fillStyle = 'rgba(236,236,230,' + (0.75 * (1 - f)) + ')';
+      ctx.strokeStyle = 'rgba(120,120,120,' + (0.35 * (1 - f)) + ')'; ctx.lineWidth = 1;
+      ctx.beginPath(); ctx.arc(p.x, p.y, Math.max(3, rr), 0, Math.PI * 2); ctx.fill(); ctx.stroke();
     } else if (e.type === 'flash') {
       const p = toScreen(e.x, e.y);
       ctx.fillStyle = 'rgba(232,135,30,' + (1 - f) + ')';

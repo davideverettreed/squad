@@ -13,7 +13,7 @@ class GameMap {
     this.places = [];    // { name, x, y }
     setSeed(seed);
     // The region is drawn from the seed when not chosen, so a map number always gives the same sheet.
-    const pickR = pick(REGION_KEYS);
+    const pickR = pick(REGION_KEYS.filter(k => !REGIONS[k].era));
     this.region = REGIONS[region] ? region : pickR;
     this.R = REGIONS[this.region];
     this.ci = this.R.ci; this.index = this.R.index;
@@ -59,7 +59,7 @@ class GameMap {
   // ---------------------------------------------------------------- generation
   generate() {
     this.genElevation();
-    if (this.R.coast) this.genCoast();
+    if (this.inland) this.genCoast();
     this.genHydrology();
     this.genSwamps();
     this.genFields();
@@ -105,6 +105,15 @@ class GameMap {
     const fa = randRange(0, Math.PI * 2), fx = Math.cos(fa), fy = Math.sin(fa);
     const front = (u, v) => clamp(0.5 + ((u - 0.5) * fx + (v - 0.5) * fy) * 1.3, 0, 1);
     if (R.coast) this.coastAt = (v) => MAP_W * (0.07 + coastX(0.5, v) * 0.09);
+    // How far inland a point is: from the west coast, or from the shore of an island in
+    // the middle of the sheet (negative at sea).
+    if (R.island) {
+      const rr = this.noise(5, 5), r0 = MAP_W * randRange(0.27, 0.32);
+      this.inland = (x, y) => {
+        const a = Math.atan2(y - MAP_H / 2, x - MAP_W / 2), u = 0.5 + Math.cos(a) * 0.4, v = 0.5 + Math.sin(a) * 0.4;
+        return r0 * (0.75 + rr(u, v) * 0.5) - dist(x, y, MAP_W / 2, MAP_H / 2);
+      };
+    } else if (R.coast) this.inland = (x, y) => x - this.coastAt(y / MAP_H);
     let lo = Infinity, hi = -Infinity;
     for (let cy = 0; cy < GH; cy++) for (let cx = 0; cx < GW; cx++) {
       const u = (cx + 0.5) / GW, v = (cy + 0.5) / GH;
@@ -126,9 +135,9 @@ class GameMap {
         const rv = MAP_K < 1 ? front(u, v) * 0.75 + range(u, v) * 0.35 - 0.05 : range(u, v);
         t = Math.pow(t, 1.8) * (R.floor + (1 - R.floor) * smooth(clamp((rv - 0.3) / 0.4, 0, 1)));
       }
-      if (R.coast) {
-        const x = (i % GW + 0.5) * CELL, c = this.coastAt((Math.floor(i / GW) + 0.5) / GH);
-        t *= 0.12 + 0.88 * smooth(clamp((x - c) / (MAP_W * 0.5), 0, 1));
+      if (this.inland) {
+        const d = this.inland((i % GW + 0.5) * CELL, (Math.floor(i / GW) + 0.5) * CELL);
+        t *= 0.12 + 0.88 * smooth(clamp(d / (MAP_W * (R.island ? 0.25 : 0.5)), 0, 1));
       }
       this.elev[i] = t * relief;
     }
@@ -138,13 +147,14 @@ class GameMap {
   genCoast() {
     const nb = this.noise(4, 30);
     for (let cy = 0; cy < GH; cy++) {
-      const v = (cy + 0.5) / GH, c = this.coastAt(v), beach = 25 + nb(0.5, v) * 45;
+      const v = (cy + 0.5) / GH;
       for (let cx = 0; cx < GW; cx++) {
-        const x = (cx + 0.5) * CELL, i = cy * GW + cx;
-        if (x < c) { this.ter[i] = TER.OCEAN; this.elev[i] = 0; }
+        const x = (cx + 0.5) * CELL, y = (cy + 0.5) * CELL, i = cy * GW + cx, d = this.inland(x, y);
+        const beach = (this.R.island ? 15 : 25) + nb(this.R.island ? x / MAP_W : 0.5, v) * (this.R.island ? 25 : 45);
+        if (d < 0) { this.ter[i] = TER.OCEAN; this.elev[i] = 0; }
         else {
           this.elev[i] += 1.5;
-          if (x < c + beach) { this.ter[i] = TER.BEACH; this.elev[i] = Math.min(this.elev[i], 1.5 + (x - c) * 0.05); }
+          if (d < beach) { this.ter[i] = TER.BEACH; this.elev[i] = Math.min(this.elev[i], 1.5 + d * 0.05); }
         }
       }
     }
@@ -344,7 +354,7 @@ class GameMap {
       }
       return;
     }
-    const S = 200, nx = Math.ceil(MAP_W / S) + 1, ny = Math.ceil(MAP_H / S) + 1;
+    const S = R.fieldSize || 200, nx = Math.ceil(MAP_W / S) + 1, ny = Math.ceil(MAP_H / S) + 1;
     const kinds = R.fields;
     const total = kinds.reduce((n, k) => n + k[1], 0);
     const pickKind = () => { let r = rand() * total; for (const [k, w] of kinds) { if ((r -= w) <= 0) return k; } return TER.OPEN; };
@@ -366,7 +376,7 @@ class GameMap {
     const edgeKind = new Map();
     const edgeFor = (a, b) => {
       const key = Math.min(a, b) * 100000 + Math.max(a, b);
-      if (!edgeKind.has(key)) { const r = rand(); edgeKind.set(key, { kind: r < R.hedges ? TER.WOODS : r < R.hedges + R.walls ? TER.WALL : -1, phase: randInt(0, 30) }); }
+      if (!edgeKind.has(key)) { const r = rand(); edgeKind.set(key, { kind: r < R.hedges ? (R.hedgeKind != null ? R.hedgeKind : TER.WOODS) : r < R.hedges + R.walls ? TER.WALL : -1, phase: randInt(0, 30) }); }
       return edgeKind.get(key);
     };
     for (let cy = 0; cy < GH - 1; cy++) for (let cx = 0; cx < GW - 1; cx++) {
@@ -394,6 +404,8 @@ class GameMap {
       const slope = Math.hypot(this.elev[c + 1] - this.elev[c - 1], this.elev[c + GW] - this.elev[c - GW]) / (2 * CELL);
       const f = n1(u, v) * 0.7 + n2(u, v) * 0.3 + Math.min(0.18, slope * 1.5) + this.elev[c] / maxE * 0.08;
       if (f > this.R.woods && !(this.R.treeline && this.elev[c] / maxE > this.R.treeline)) this.ter[c] = TER.WOODS;
+      // Jungle on the hills above the paddy land.
+      else if (this.R.highWoods && this.elev[c] / maxE > this.R.highWoods + (n2(u, v) - 0.5) * 0.1) this.ter[c] = TER.WOODS;
     }
     // Trees along the watercourses: live oak and pecan, gum and cypress, cottonwood.
     const rip = this.R.riparian;
@@ -469,6 +481,8 @@ class GameMap {
   }
 
   layRoad(cells, kind) {
+    // Before the motor age there are no hard-surfaced roads: cart tracks only.
+    if (this.R.paved === false) kind = 'track';
     const t = kind === 'paved' ? TER.PAVED : TER.ROAD;
     // Where the road crosses the river, a bridge: one per run of river cells.
     let run = [];
@@ -494,6 +508,19 @@ class GameMap {
   }
 
   genRoads() {
+    if (this.R.island) {
+      // One track across the island from shore to shore.
+      const a = randRange(0, Math.PI * 2), end = (ang) => {
+        for (let r = MAP_W * 0.45; r > 0; r -= 8) {
+          const x = MAP_W / 2 + Math.cos(ang) * r, y = MAP_H / 2 + Math.sin(ang) * r;
+          if (this.inland(x, y) > 30) return [Math.floor(x / CELL), Math.floor(y / CELL)];
+        }
+        return [Math.floor(GW / 2), Math.floor(GH / 2)];
+      };
+      const [p, q] = [end(a), end(a + Math.PI)], tr = this.routeRoad(p[0], p[1], q[0], q[1]);
+      if (tr) this.layRoad(tr, 'track');
+      return;
+    }
     if (this.R.coast) {
       // The coast highway runs north and south a little inland; a canyon road climbs east.
       const off = (v) => Math.floor((this.coastAt(v) + MAP_W * randRange(0.09, 0.2)) / CELL);
@@ -550,6 +577,12 @@ class GameMap {
     }
   }
 
+  // A farm's name in the region's fashion: "Ashby Farm", "Ferme de Crion", "Phu Loc (2)".
+  farmName() {
+    const R = this.R, w = Array.isArray(R.farmWord) ? pick(R.farmWord) : R.farmWord;
+    return R.farmPrefix ? R.farmPrefix + this.placeName() : this.placeName() + ' ' + w;
+  }
+
   placeName() {
     const R = this.R, one = () => R.whole && (!R.nameA || chance(0.35)) ? pick(R.whole) : pick(R.nameA) + pick(R.nameB);
     for (let i = 0; i < 30; i++) {
@@ -604,7 +637,7 @@ class GameMap {
       for (let k = 0; k < randInt(0, 2); k++) this.placeBuilding(c.cx + randInt(-6, 6), c.cy + randInt(4, 7) * (chance(0.5) ? 1 : -1), randInt(2, 3), 2);
       if (chance(this.R.yardWalls[1])) this.yardWall(b);
       made++;
-      this.places.push({ name: this.placeName() + ' ' + this.R.farmWord, x: b.x1 + 6, y: b.y0, kind: 'farm' });
+      this.places.push({ name: this.farmName(), x: b.x1 + 6, y: b.y0, kind: 'farm' });
       // Track to the nearest road cell.
       let best = -1, bd = Infinity;
       for (let i = 0; i < roadCells.length; i += 3) {
@@ -628,7 +661,7 @@ class GameMap {
       for (let j = -R; j <= R && top; j += 5) for (let i = -R; i <= R; i += 5) {
         if ((i || j) && this.elev[(cy + j) * GW + cx + i] > e) { top = false; break; }
       }
-      if (top) peaks.push({ x: (cx + 0.5) * CELL, y: (cy + 0.5) * CELL, e });
+      if (top && this.ter[cy * GW + cx] !== TER.OCEAN) peaks.push({ x: (cx + 0.5) * CELL, y: (cy + 0.5) * CELL, e });
     }
     peaks.sort((a, b) => b.e - a.e);
     this.peaks = [];

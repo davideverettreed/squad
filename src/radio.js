@@ -14,7 +14,7 @@ const Radio = {
   },
 
   callsign(sel) {
-    if (sel.level === 'squad') return '1st Squad';
+    if (sel.level === 'squad') return G.squads.blue.name;
     if (sel.level === 'team') return sel.team.short;
     if (sel.level === 'group') return sel.teams.map(t => t.short).join(' and ');
     return sel.soldier.label;

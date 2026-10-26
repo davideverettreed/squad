@@ -485,11 +485,54 @@ const UI = {
   hideModal(id) { $(id).hidden = true; },
 
   // New mission: choose the kind of mission and the map. The order itself follows on the map.
+  // Team buttons named for the force: fire teams, squads, sections, groups.
+  labelTeams() {
+    const sq = G.squads.blue;
+    this.chipTeams.forEach((c, i) => { c.textContent = ORDINAL[i] + ' ' + (sq.teamWord || 'FT'); });
+  },
+
   showBriefing() {
     const set = G.settings;
     const box = $('briefBody');
     box.innerHTML = '';
     const sit = el('div', 'bsit');
+    // The scenario: the enemy, the era, the ground. Today's generic enemy, or a force from history.
+    sit.appendChild(el('h3', null, 'Scenario'));
+    const sp = el('p');
+    const scSel = el('select'); scSel.id = 'missionScenario';
+    for (const k of SCENARIO_KEYS) { const o = el('option', null, SCENARIOS[k].label); o.value = k; if (set.scenario === k) o.selected = true; scSel.appendChild(o); }
+    const sdesc = el('span', 'bdesc');
+    const scText = () => {
+      const sc = scenarioOf(set);
+      if (!sc.opfor) return 'Today\'s Marines against a present-day enemy of regular soldiers, irregulars, reconnaissance troops or aircrew, depending on the mission.';
+      return sc.status + ' · ' + sc.date + ' · ' + sc.place + '. ' + sc.history + ' Enemy: ' + FORCES[sc.opfor].label + ', ' + sc.size[0] + '-' + sc.size[1] + ' men.';
+    };
+    sdesc.textContent = scText();
+    sp.appendChild(scSel); sp.appendChild(sdesc);
+    sit.appendChild(sp);
+    // Your force: the era's own, or another.
+    sit.appendChild(el('h3', null, 'Your force'));
+    const fp = el('p');
+    const frSel = el('select'); frSel.id = 'missionFriendly';
+    const fdesc = el('span', 'bdesc');
+    const fillFriendly = () => {
+      frSel.innerHTML = '';
+      const era = scenarioOf(set).blue || 'usmc';
+      const o0 = el('option', null, 'Of the era: ' + friendlyLabel(era)); o0.value = 'era'; frSel.appendChild(o0);
+      for (const k of FRIENDLY_KEYS) { const o = el('option', null, friendlyLabel(k)); o.value = k; frSel.appendChild(o); }
+      frSel.value = set.friendly || 'era';
+      const k = set.friendly === 'era' || !set.friendly ? era : set.friendly;
+      fdesc.textContent = forceInfo(k).unit + (k === era ? '' : ' Not of the era: historical fiction.');
+    };
+    frSel.addEventListener('change', () => { set.friendly = frSel.value; fillFriendly(); eyebrow(); });
+    // The dialog's subtitle: the force you will command.
+    const eyebrow = () => {
+      const k = set.friendly === 'era' || !set.friendly ? scenarioOf(set).blue || 'usmc' : set.friendly;
+      const F = FORCES[k], n = F ? 1 + (F.hq || []).length + 3 * F.groups[0].length : 13;
+      $('briefEyebrow').textContent = (F ? F.unitName + ' · ' + F.label : '1st Squad · Marine rifle squad') + ', ' + n + ' men';
+    };
+    fp.appendChild(frSel); fp.appendChild(fdesc);
+    sit.appendChild(fp);
     sit.appendChild(el('h3', null, 'Mission'));
     const mp = el('p');
     // The mission: one of many, at random unless one is picked. The description is the
@@ -497,12 +540,19 @@ const UI = {
     const blurb = (k) => k === 'random' ? 'Any of ' + MISSION_KEYS.length + ' missions, chosen at random. The order tells you what you face.'
       : MISSIONS[k].activity({ name: 'the objective', kind: 'open' }, 'toward you') + ' Enemy ' + MISSIONS[k].size[0] + (MISSIONS[k].size[1] > MISSIONS[k].size[0] ? '-' + MISSIONS[k].size[1] : '') + ' men.';
     const modeSel = el('select'); modeSel.id = 'missionMode';
-    for (const [k, t] of [['random', 'Random mission'], ...MISSION_KEYS.map(k => [k, MISSIONS[k].label]).sort((a, b) => a[1].localeCompare(b[1]))]) {
-      const o = el('option', null, t); o.value = k; if (set.mode === k) o.selected = true; modeSel.appendChild(o);
-    }
-    if (!MISSIONS[set.mode]) set.mode = 'random';
-    const desc = el('span', 'bdesc', blurb(set.mode));
-    modeSel.addEventListener('change', () => { set.mode = modeSel.value; desc.textContent = blurb(set.mode); });
+    const desc = el('span', 'bdesc');
+    // The missions that fit the scenario.
+    const fillModes = () => {
+      const pool = scenarioOf(set).missions || MISSION_KEYS;
+      if (!pool.includes(set.mode)) set.mode = 'random';
+      modeSel.innerHTML = '';
+      for (const [k, t] of [['random', 'Random mission' + (pool.length < MISSION_KEYS.length ? ' (' + pool.length + ' fit this scenario)' : '')], ...pool.map(k => [k, MISSIONS[k].label]).sort((a, b) => a[1].localeCompare(b[1]))]) {
+        const o = el('option', null, t); o.value = k; if (set.mode === k) o.selected = true; modeSel.appendChild(o);
+      }
+      desc.textContent = set.mode === 'random' ? 'Any of the ' + pool.length + ' missions that fit, chosen at random. The order tells you what you face.' : blurb(set.mode);
+    };
+    fillModes();
+    modeSel.addEventListener('change', () => { set.mode = modeSel.value; desc.textContent = set.mode === 'random' ? 'Any of the missions that fit, chosen at random. The order tells you what you face.' : blurb(set.mode); });
     mp.appendChild(modeSel); mp.appendChild(desc);
     sit.appendChild(mp);
     const rp = el('p');
@@ -510,8 +560,21 @@ const UI = {
     for (const [k, t] of [['random', 'Random region'], ...REGION_KEYS.map(k => [k, REGIONS[k].label])]) {
       const o = el('option', null, t); o.value = k; if (set.region === k) o.selected = true; regSel.appendChild(o);
     }
-    const rdesc = el('span', 'bdesc', set.region === 'random' ? 'Any of the regions, drawn from the map number.' : REGIONS[set.region].brief);
-    regSel.addEventListener('change', () => { set.region = regSel.value; rdesc.textContent = set.region === 'random' ? 'Any of the regions, drawn from the map number.' : REGIONS[set.region].brief; });
+    const rdesc = el('span', 'bdesc');
+    const regText = () => {
+      const sc = scenarioOf(set);
+      if (set.region === 'random') return sc.region ? 'The scenario\'s own ground: ' + REGIONS[sc.region].label + '. ' + REGIONS[sc.region].brief : 'Any of the present-day regions, drawn from the map number.';
+      return REGIONS[set.region].brief + (sc.region && sc.region !== set.region ? ' Not the scenario\'s own ground.' : '');
+    };
+    regSel.options[0].textContent = scenarioOf(set).region ? 'Scenario\'s ground' : 'Random region';
+    rdesc.textContent = regText();
+    regSel.addEventListener('change', () => { set.region = regSel.value; rdesc.textContent = regText(); });
+    scSel.addEventListener('change', () => {
+      set.scenario = scSel.value; sdesc.textContent = scText(); fillFriendly(); fillModes();
+      regSel.options[0].textContent = scenarioOf(set).region ? 'Scenario\'s ground' : 'Random region';
+      rdesc.textContent = regText(); eyebrow();
+    });
+    fillFriendly(); eyebrow();
     sit.appendChild(el('h3', null, 'Region'));
     rp.appendChild(regSel); rp.appendChild(rdesc);
     sit.appendChild(rp);
@@ -530,6 +593,34 @@ const UI = {
     how.appendChild(el('p', null, 'The clock runs while you plan, at ' + PLAN_RATE + '× speed. Nothing moves while you plan, but the enemy uses the time: it digs in, or marches closer. Use no more than a third of the time available.'));
     box.appendChild(how);
     this.showModal('briefing');
+  },
+
+  // Another era's force carries what it carried: shown, not chosen.
+  renderEraLoadout(box, sq) {
+    const wrap = el('div', 'bload');
+    wrap.appendChild(el('h4', null, 'Arms and equipment'));
+    const tableWrap = el('div', 'tablewrap'), tbl = el('table', 'ltable'), head = el('tr');
+    for (const h of ['', 'Billet', 'Weapon', 'Rounds', 'Other', 'Men']) head.appendChild(el('th', null, h));
+    tbl.appendChild(head);
+    const rows = new Map();
+    for (const s of sq.all) {
+      const key = s.title + '|' + s.weapon.name + '|' + (s.launcher ? s.launcher.name : '');
+      const r = rows.get(key) || { s, n: 0 };
+      r.n++; rows.set(key, r);
+    }
+    for (const { s, n } of rows.values()) {
+      const tr = el('tr'), sc = el('td');
+      sc.appendChild(symbolCanvas(s.billet, 'blue', 22)); tr.appendChild(sc);
+      tr.appendChild(el('td', 'bname', s.title));
+      tr.appendChild(el('td', null, s.weapon.name));
+      tr.appendChild(el('td', null, s.weapon.mag === 1 ? s.ammoLeft + ' charges' : s.mags + 1 + ' × ' + s.weapon.mag));
+      const other = [s.launcher ? s.launcher.name + ' (' + s.lRounds + ')' : '', s.frags ? s.frags + ' ' + s.grenade.name : '', MELEE[s.meleeKey] && s.meleeKey !== 'butt' ? MELEE[s.meleeKey].name : ''].filter(Boolean).join(', ');
+      tr.appendChild(el('td', null, other || '—'));
+      tr.appendChild(el('td', 'kg', String(n)));
+      tbl.appendChild(tr);
+    }
+    tableWrap.appendChild(tbl); wrap.appendChild(tableWrap);
+    box.appendChild(wrap);
   },
 
   // Loadout by billet, editable while planning.
@@ -600,7 +691,7 @@ const UI = {
     const c = fighters.length ? centroid(fighters) : { x: (centroid(blue.all).x + G.enemyArea.x) / 2, y: (centroid(blue.all).y + G.enemyArea.y) / 2 };
     // Named for the nearest settlement or hill to where the fighting was.
     let name = null, bd = Infinity;
-    for (const p of m.places) { const d = dist(p.x, p.y, c.x, c.y); if (d < bd) { bd = d; name = p.name.replace(/ (Farm|Ranch)$/, ' $1'); } }
+    for (const p of m.places) { const d = dist(p.x, p.y, c.x, c.y); if (d < bd) { bd = d; name = p.name; } }
     for (const p of m.peaks) { const d = dist(p.x, p.y, c.x, c.y) * 1.3; if (d < bd) { bd = d; name = 'Hill ' + Math.round(m.elevBase + p.e); } }
     const box = el('table', 'wbox');
     const tr = (cls) => { const r = el('tr', cls); box.appendChild(r); return r; };
@@ -608,6 +699,8 @@ const UI = {
     const pair = (a, b, cls) => { const r = tr(cls); const x = el('td'), y = el('td'); for (const [cell, v] of [[x, a], [y, b]]) { if (v instanceof Node) cell.appendChild(v); else cell.innerHTML = v; } r.appendChild(x); r.appendChild(y); return r; };
     const lines = (arr) => arr.filter(Boolean).join('<br>');
     th('Battle of ' + (name || gridRef(c.x, c.y)), 'wtitle');
+    const sc = G.mission.scenario || SCENARIOS.modern, bi = forceInfo(blue.kind), ri = forceInfo(red.kind);
+    if (sc.war) th('Part of ' + sc.war + (sc.status ? ' · ' + sc.status : ''), 'wpart');
     th(G.mission.label + ' · Sand Table Exercise ' + String(G.settings.seed).padStart(5, '0') + ', ' + m.R.label, 'wpart');
     // A sketch of the field: the sheet around the fight, each man where he ended.
     const cell = el('td', 'wimg'); cell.colSpan = 2;
@@ -630,20 +723,21 @@ const UI = {
       if (!s.active) { ctx.strokeStyle = '#111'; ctx.lineWidth = 1.5; ctx.beginPath(); ctx.moveTo(px - 4, py - 4); ctx.lineTo(px + 4, py + 4); ctx.moveTo(px + 4, py - 4); ctx.lineTo(px - 4, py + 4); ctx.stroke(); }
     }
     cell.appendChild(cv);
-    cell.appendChild(el('div', 'wcap', 'The field at the end, H+' + fmtClock(Plan.stepOff != null ? G.time - Plan.stepOff : G.time) + ': Marines blue, enemy red, casualties crossed.'));
+    cell.appendChild(el('div', 'wcap', 'The field at the end, H+' + fmtClock(Plan.stepOff != null ? G.time - Plan.stepOff : G.time) + ': ' + bi.men + ' blue, enemy red, casualties crossed.'));
     tr().appendChild(cell);
     const kv = (k, v) => { const r = tr('wkv'); r.appendChild(el('th', 'wk', k)); const d = el('td'); d.innerHTML = v; r.appendChild(d); };
     const dur = Plan.stepOff != null ? G.time - Plan.stepOff : G.time;
-    kv('Date', 'H-hour to H+' + fmtClock(dur) + ' (' + Math.max(1, Math.round(dur / 60)) + ' min)');
-    kv('Location', m.R.label + '<br><span class="wlink">◉ Grid ' + gridRef(c.x, c.y) + '</span>');
-    kv('Result', result === 'victory' ? '<span class="wlink">United States</span> victory' : result === 'escaped' ? 'Inconclusive: the <span class="wlink">opposing force</span> escaped' : '<span class="wlink">Opposing force</span> victory');
+    kv('Date', (sc.date ? sc.date + ', ' : '') + 'H-hour to H+' + fmtClock(dur) + ' (' + Math.max(1, Math.round(dur / 60)) + ' min)');
+    kv('Location', (sc.place || m.R.label) + '<br><span class="wlink">◉ Grid ' + gridRef(c.x, c.y) + '</span>');
+    const bn = '<span class="wlink">' + bi.nation + '</span>', rn = '<span class="wlink">' + ri.nation + '</span>';
+    kv('Result', result === 'victory' ? bn + ' victory' : result === 'escaped' ? 'Inconclusive: the ' + rn + ' force escaped' : rn + ' victory');
     th('Belligerents');
-    pair('<span class="wlink">United States</span><br>U.S. Marine Corps', '<span class="wlink">Opposing force</span>');
+    pair(bn + (blue.kind === 'usmc' || /^usmc/.test(blue.kind) ? '<br>U.S. Marine Corps' : ''), rn);
     th('Commanders and leaders');
     const sl = blue.leader, el0 = red.leader || red.all[0];
-    pair('<span class="wlink">' + sl.rank + ' ' + sl.name + '</span>' + (sl.health === 'kia' ? ' †' : ''), '<span class="wlink">' + (el0 ? el0.title : 'Unknown') + '</span>' + (el0 && el0.health === 'kia' ? ' †' : ''));
+    pair('<span class="wlink">' + sl.label + '</span>' + (sl.health === 'kia' ? ' †' : ''), '<span class="wlink">' + (el0 ? el0.title : 'Unknown') + '</span>' + (el0 && el0.health === 'kia' ? ' †' : ''));
     th('Units involved');
-    pair('<span class="wlink">1st Squad</span>, three fire teams', '<span class="wlink">' + red.name + '</span>, ' + OPFOR_KINDS[red.kind || 'regular'].men);
+    pair('<span class="wlink">' + blue.name + '</span>, three ' + (blue.teamName || 'Fire Team').toLowerCase() + 's', '<span class="wlink">' + red.name + '</span>, ' + ri.men);
     th('Strength');
     const arms = (sq) => {
       const n = new Map();
@@ -651,13 +745,13 @@ const UI = {
       return [...n].map(([w, k]) => k + ' ' + w);
     };
     const sz = Plan.intel && Plan.intel.sizeReport;
-    pair(lines([blue.all.length + ' Marines', ...arms(blue)]), lines([red.all.length + ' men', ...arms(red), sz ? '<i>Reported: ' + sz.text.replace('OPFOR ', '') + '</i>' : '']));
+    pair(lines([blue.all.length + ' ' + bi.men, ...arms(blue)]), lines([red.all.length + ' men', ...arms(red), sz ? '<i>Reported: ' + sz.text.replace('OPFOR ', '') + '</i>' : '']));
     th('Casualties and losses');
     const loss = (sq, men) => {
       const kia = sq.all.filter(s => s.health === 'kia').length, ser = sq.all.filter(s => s.health === 'serious').length, wia = sq.all.filter(s => s.health === 'light').length, fled = sq.all.filter(s => s.routed || s.routing).length;
       return lines([kia + ' killed', ser + ' seriously wounded', wia + ' wounded', fled ? fled + ' fled' : '', (sq.all.length - kia - ser - fled) + ' of ' + sq.all.length + ' ' + men + ' still fighting']);
     };
-    pair(loss(blue, 'Marines'), loss(red, 'men'));
+    pair(loss(blue, bi.men), loss(red, 'men'));
     th('Ammunition expended');
     const spent = (sq) => {
       const rds = sq.all.reduce((n, s) => n + s.shots, 0), hits = sq.all.reduce((n, s) => n + s.hits, 0);

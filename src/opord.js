@@ -209,7 +209,10 @@ const OPORD = {
     if (ao.swampPct > 0.1) this.factRow(box, 'Swamp', Math.max(0.1, ao.swampPct).toFixed(1) + '% of the AO, low ground by the water; largest vic grid ' + gridRef(ao.swampAt.x, ao.swampAt.y) +
       '. Very slow going, no cover, good concealment.' + (f.swampM ? ' About ' + Math.round(f.swampM / 10) * 10 + ' m of it on the direct line.' : ''), ao.swampAt, 1.4);
     const pc = (k) => ao.pct(k), pf = (k) => (pc(k) < 1 ? pc(k).toFixed(1) : Math.round(pc(k))) + '% of the AO';
-    if (pc(TER.OCEAN) > 0.5) this.factRow(box, 'Pacific Ocean', 'The west edge of the AO. Impassable. The beach (' + pf(TER.BEACH).replace(' of the AO', '') + ') is soft sand, slow and wide open to the bluffs above it.', { x: G.map.coastAt(0.5) / 2, y: MAP_H / 2 }, 0.5);
+    const sea = (m.R.sea || 'Pacific Ocean').toLowerCase().replace(/(^|\s)\S/g, c => c.toUpperCase());
+    if (pc(TER.OCEAN) > 0.5 && m.R.island) this.factRow(box, sea, 'All round the island. Impassable. The beach (' + pf(TER.BEACH).replace(' of the AO', '') + ') is coral sand, slow and wide open; there is nowhere to go but across the island.', { x: MAP_W / 2, y: MAP_H * 0.08 }, 0.5);
+    else if (pc(TER.OCEAN) > 0.5) this.factRow(box, sea, 'The west edge of the AO. Impassable. The beach (' + pf(TER.BEACH).replace(' of the AO', '') + ') is soft sand, slow and wide open to the bluffs above it.', { x: G.map.coastAt(0.5) / 2, y: MAP_H / 2 }, 0.5);
+    if (pc(TER.PADDY) > 2) this.factRow(box, 'Rice paddies', pf(TER.PADDY) + '. Flooded fields, knee-deep mud: very slow going, no cover in the open paddy. The dikes between them, a meter high, are the only cover and the only fast way across.', null);
     if (pc(TER.CHAPARRAL) > 1) this.factRow(box, 'Chaparral', pf(TER.CHAPARRAL) + '. Dense, head-high brush on the slopes. Very slow going; hides men, stops no rounds.', null);
     if (pc(TER.BRUSH) > 1) this.factRow(box, 'Mesquite brush', pf(TER.BRUSH) + '. Thorn thickets two to three meters high. Slow; good concealment, no cover, short fields of fire inside.', null);
     if (pc(TER.DESERT) > 5) this.factRow(box, 'Desert', pf(TER.DESERT) + '. Open desert floor with scattered creosote. Fast going, long fields of fire, little concealment.', null);
@@ -226,7 +229,7 @@ const OPORD = {
       '. Fordable, at about a third of walking speed. The gullies give cover.', null);
     if (ao.woodsPct >= 1) this.factRow(box, 'Woods', ao.woodsPct + '% of the AO' + (pc(TER.ORCHARD) > 0.5 ? ', with orchards' : '') + '. Slow going, short fields of fire, good concealment.', null);
     if (ao.steepPct > 0.5) this.factRow(box, 'Steep ground', 'Slopes over 30% on ' + ao.steepPct.toFixed(1) + '% of the AO; steepest vic grid ' + gridRef(ao.worst.x, ao.worst.y) + '. Slow to climb.', ao.worst, 1.6);
-    if (ao.villages.length) this.factRow(box, 'Built-up', ao.villages.map(v => v.name.toUpperCase() + ' (' + gridRef(v.x, v.y) + ')').join(', ') + (ao.farms ? '; ' + ao.farms + ' ' + m.R.farmWord.toLowerCase() + (ao.farms > 1 ? (m.R.farmWord === 'Ranch' ? 'es' : 's') : '') : '') + '. ' + (pc(TER.WALL) > 0.05 ? 'Stone walls and buildings' : 'Buildings') + ': hard cover for a defender.', ao.villages[0], 1.6);
+    if (ao.villages.length) this.factRow(box, 'Built-up', ao.villages.map(v => v.name.toUpperCase() + ' (' + gridRef(v.x, v.y) + ')').join(', ') + (ao.farms ? '; ' + ao.farms + ' ' + farmNoun(m.R).toLowerCase() + (ao.farms > 1 ? (farmNoun(m.R) === 'Ranch' ? 'es' : 's') : '') : '') + '. ' + (pc(TER.WALL) > 0.05 ? 'Stone walls and buildings' : 'Buildings') + ': hard cover for a defender.', ao.villages[0], 1.6);
 
     box.appendChild(el('h4', null, 'Avenues of approach'));
     if (ao.road) this.factRow(box, 'Paved road', ao.road.text + ' Fastest going, open to observation.', ao.road.at, 1.4);
@@ -256,7 +259,8 @@ const OPORD = {
 
   // ------------------------------------------------------------ 2. Situation
   situation(box) {
-    const i = Plan.intel;
+    const i = Plan.intel, sc = G.mission.scenario;
+    if (sc && sc.history) this.para(box, sc.label.replace(/^\d+ · /, '') + ' (' + sc.status.toLowerCase() + ')', sc.date + ', ' + sc.place + '. ' + sc.history);
     this.para(box, 'Enemy forces: SALUTE', G.mission.label + '.');
     for (const [k, v] of [['Size', i.size], ['Activity', i.activity], ['Location', i.location], ['Unit', i.unit], ['Time', i.time], ['Equipment', i.equipment]]) {
       this.factRow(box, k, v, k === 'Location' ? Plan.reported : null, 1.6);
@@ -268,7 +272,9 @@ const OPORD = {
       row.appendChild(el('span', null, v));
       box.appendChild(row);
     }
-    this.para(box, 'Friendly forces', 'No higher or adjacent units are near you, and there is no indirect fire support. 1st Squad is on its own.');
+    const bq = G.squads.blue;
+    this.para(box, 'Friendly forces', (bq.kind !== 'usmc' ? forceInfo(bq.kind).unit + ' ' : '') + 'No higher or adjacent units are near you, and there is no indirect fire support. ' + bq.name + ' is on its own.');
+    this.para(box, 'Enemy doctrine', AI.D.label + '.');
     const M = G.mission, why = M.evacAt ? (M.key === 'helo' ? 'the pickup is expected then' : 'the truck should be running by then') : M.leaveAt ? 'the enemy should move on about then'
       : G.mode === 'meeting' ? 'the enemy could reach you by then' : M.digIn ? 'the enemy will have finished digging in by then' : 'the enemy may move by then';
     this.para(box, 'Time available', fmtClock(Plan.timeAvail) + ' (' + why +
@@ -446,8 +452,10 @@ const OPORD = {
 
   // ------------------------------------------------------------ 5. Admin & Logistics
   admin(box) {
-    this.para(box, 'Administration and logistics', 'No resupply. Every Marine carries the basic load below. Casualties go to the casualty collection point (CCP); place one in Execution. Redistribute ammunition at the CCP if the fight runs long.');
-    if (Plan.planning) UI.renderLoadout(box, () => applyLoadout(G.squads.blue, G.settings.loadout));
+    const bq = G.squads.blue;
+    this.para(box, 'Administration and logistics', 'No resupply. Every man carries the basic load below. Casualties go to the casualty collection point (CCP); place one in Execution. Redistribute ammunition at the CCP if the fight runs long.');
+    if (bq.kind !== 'usmc') UI.renderEraLoadout(box, bq);
+    else if (Plan.planning) UI.renderLoadout(box, () => applyLoadout(G.squads.blue, G.settings.loadout));
     else box.appendChild(el('p', 'onote', 'The loadout was fixed at step-off.'));
     const ccp = Plan.graphics.find(g => g.kind === 'ccp');
     this.factRow(box, 'CCP', ccp ? ccp.name + ' at grid ' + gridRef(ccp.pts[0].x, ccp.pts[0].y) + '.' : 'Not yet placed.', ccp ? ccp.pts[0] : null, 2);

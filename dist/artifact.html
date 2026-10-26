@@ -477,7 +477,7 @@ body:not(.roster-min) #btn3d, body:not(.roster-min) #ctl3d { margin-left: 0; }
     <div class="card">
       <div class="cardhead">
         <h2>New mission</h2>
-        <span class="eyebrow">1st Squad · Marine rifle squad, 13 men</span>
+        <span class="eyebrow" id="briefEyebrow">1st Squad · Marine rifle squad, 13 men</span>
       </div>
       <div id="briefBody"></div>
       <div class="cardfoot">
@@ -514,6 +514,8 @@ body:not(.roster-min) #btn3d, body:not(.roster-min) #ctl3d { margin-left: 0; }
         <p>Blue pieces are your Marines; red pieces are enemy you can see. A selected piece is lifted off the map in a gold halo. The shaded cone shows where a man is looking: he sweeps it left and right, wide and slow when calm, tighter and quicker when the enemy is near, fast and jerky under fire, and holds it on his target while firing. He is far more likely to spot an enemy inside his cone. The numeral beside him is his fire team. Cones toggles them (key V). Chits stacked on a piece show posture (STD, KNL, PRN), suppression (SUP, or PIN when pinned; a pinned man moves only by crawling), a wound (WIA) and no ammunition (AMO). A slash through a piece is a casualty; an X is killed. A red symbol in a dashed frame is where an enemy was last seen.</p>
         <h3>Overlay</h3>
         <p>Orders are drawn as on an acetate overlay: blue for friendly, red for enemy, black for targets. Blue lines with arrowheads are routes (long dashes for a rush, dots for a crawl); a heavy arrow with a solid head is an assault. OBJ marks the objective of a bounding drill. Dashed blue lines run from the shooters to a suppression target, a black cross in a circle. 40MM marks a grenade launcher target.</p>
+        <h3>Scenarios, eras and weapons</h3>
+        <p>New mission offers a scenario: today's generic enemy, or a force from history at its historical strength: a Wampanoag war party of about 200 at Swansea in 1675; a company of the 33rd Foot with Lord Cornwallis outside New York in 1779; a German Stoßtrupp and machine gun teams in Lorraine in 1917; 60 légionnaires of the 1er REP in the Algerian djebel in April 1961; Soviet motor rifles, naval infantry, paratroopers and spetsnaz from 1972 to 1987; an NVA platoon and Viet Cong guerrillas in Quang Nam in 1970; armed attachés at Les Cayes in 1994; PLA marines on a Spratly island; a Russian squad in a Zaporizhzhia tree line. Each says whether it is historical, a historical setting, historical fiction or alternate history. Your force is the era's own (Plymouth militia, Continental light infantry, Marines of 1918, 1970, 1983 or 1994, an ALN section, mujahideen) or any other, today's Marines included. Each force fights its own way: redcoats form line, hold their fire, give a volley at close range and charge with the bayonet; the war party fights from cover in loose order, works round the flanks and closes with the club when you waver; storm troops follow their machine gun's fire in with grenades and spades; a Soviet platoon attacks on line; guerrillas hold their fire to close range, hug you, and slip away; a gang fires wildly and scatters. Weapons follow their real range and power: hit chances fall off with range from each weapon's own figure, and wounds go with the round (an M16A4 hit is far more often fatal than a .22 from a Ruger 10/22; a .75 musket ball worst of all). Muzzle-loaders fire once and take 15 to 30 seconds to reload, and their black-powder smoke gives the shooter away; bows are nearly silent. Men within arm's reach fight hand to hand with bayonet, club, hatchet, sword or spade.</p>
         <h3>Map key</h3>
         <p>A squad fights on a 2 by 2 kilometer sheet of four 1-kilometer grid squares, starting 1 to 1.4 km from the enemy, beyond spotting range; larger units will get larger sheets. The sheet is in standard US military map colors. White is open ground. Light green with tufts is tall grass, which hides a man lying prone. Green is woods and hedgerows; rows of small green circles are orchards, green row lines are vineyards. Blue lines are streams, which run in shallow gullies that give cover; blue areas are ponds and cannot be crossed. A broad blue band is a river: it can be crossed only at a bridge (two black lines across the road) or at a ford, marked FORD in a dashed blue circle, where men wade slowly in the open. Pale blue-green ground with small blue tufts is swamp: very slow going and no cover, but it hides a man. Red-brown lines are contours (5 or 10 meters apart, as the margin states), with a heavier, numbered index contour every fifth line; numbers with a dot are hilltop heights. Black blocks are buildings. A black line with ticks is a stone wall, which gives hard cover to a kneeling or prone man. The red road is a paved road; the dashed double lines are dirt tracks. Each mission is set in one of six regions, chosen in the New mission dialog or at random: rolling farmland; the Southern California coast (Pacific Ocean on the west edge, sand beach, chaparral); South Texas brush country (mesquite thickets, pasture, stock tanks); North Carolina pine woods and blackwater swamp; the Arizona desert and mountains (open creosote flats, rock outcrops, dry washes shown as dashed blue lines); and the Montana mountains in winter (deep snow, lodgepole pine, frozen ponds). The ground changes the fight: snow, sand, chaparral and rock are slow; brush and grass hide a man lying down; rock gives cover; open desert gives long fields of fire. The 3D button (key T) turns the map into a sand table: the same sheet laid over the ground in 3D, heights exaggerated, with every man standing on it as a peg under his billet symbol (gray when hit; a red wire sphere marks where an enemy was last seen), and key terrain and the reported enemy position on flagpoles. Planning works there too: tap with a tool to place a control measure, drag one to move it, tap the ground with a unit selected for the plan menu. Drag to move, right-drag or two fingers to turn and tilt, wheel or pinch to zoom; the buttons beside it turn, tilt and zoom on a phone. Taps give the same orders as on the flat map. Fog of war: ground your squad can see now is clear; ground it has seen before is faded; ground it has never seen is faded more (key F toggles the wash). Point at the map to read the 8-digit grid reference. Measure (key M) lays a tape between two taps and marks the distance, grid bearing and mils on the map; tap a label to remove it. Point at a formation button to see the selected team or squad ghosted in that formation. Zoomed out, your men gather into one counter per fire team, then one for the squad, in the standard unit symbol: a rectangle with an infantry X for friendly, a diamond for enemy.</p>
         <h3>Camera</h3>
@@ -624,6 +626,7 @@ const TER = {
   OPEN: 0, GRASS: 1, WOODS: 2, ROAD: 3, BUILDING: 4, WALL: 5, PLOWED: 6,
   ORCHARD: 7, VINEYARD: 8, STREAM: 9, POND: 10, PAVED: 11, SWAMP: 12, RIVER: 13, FORD: 14,
   OCEAN: 15, BEACH: 16, CHAPARRAL: 17, BRUSH: 18, DESERT: 19, ROCK: 20, SNOW: 21, ICE: 22, WASH: 23,
+  PADDY: 24, DIKE: 25,
 };
 
 // losH: height above ground the feature blocks sight to.
@@ -655,6 +658,8 @@ const TERRAIN = [
   { name: 'Deep snow',    speed: 0.55, losH: 0,   density: 0,     cover: 0,   conceal: 0 },
   { name: 'Frozen pond',  speed: 0.5,  losH: 0,   density: 0,     cover: 0,   conceal: 0 },
   { name: 'Dry wash',     speed: 0.85, losH: 0,   density: 0,     cover: 0,   conceal: 0.25 },
+  { name: 'Rice paddy',   speed: 0.4,  losH: 0.6, density: 0.03,  cover: 0,   conceal: 0.3 },
+  { name: 'Paddy dike',   speed: 0.9,  losH: 0.8, solid: true,    cover: 0.8, conceal: 0.3 },
 ];
 
 // eye: sight height. center: center of mass. size: relative target size.
@@ -679,36 +684,122 @@ const MOVE = {
 
 // rounds: rounds per trigger pull. cycle: seconds between pulls at the rapid rate (a
 // rifle about 35 rounds a minute, the SAW about 220); the sustained rate is about a third
-// of that (see fireDelay). acc: chance per round to hit a standing, exposed man at 100 m
-// or less. mags: magazines (or belts) carried, the one in the weapon included: the Marine
-// basic load is 7 x 30 = 210 rounds for a rifleman, 21 magazines (630) for the IAR
-// gunner, 600 linked rounds for the SAW. magType: which men can share magazines.
+// of that (see fireDelay). acc: chance per round to hit a standing, exposed man close in.
+// r50: the range in meters at which that chance has fallen by half (it keeps falling with
+// the square of the range beyond). range: the longest range a man will engage at. dmg:
+// how badly a hit wounds, against 5.56 mm = 1 (a .22 rimfire about a third, a full-power
+// rifle round 1.2, a .75 musket ball 1.4). mags: magazines (or belts) carried, the one in
+// the weapon included: the Marine basic load is 7 x 30 = 210 rounds for a rifleman, 21
+// magazines (630) for the IAR gunner, 600 linked rounds for the SAW. A muzzle-loader has
+// a "magazine" of one: mags is the cartridges or charges carried. magType: which men can
+// share magazines. smoke: black powder, whose cloud gives the firer away. quiet: hardly
+// heard (a bow, a suppressed rifle). jam: chance per burst of a stoppage.
 const WEAPONS = {
-  M27:    { name: 'M27 IAR (rifle)', rounds: 1, cycle: 1.7, acc: 0.42, range: 600, supp: 6,  mag: 30,  mags: 7,  reload: 3, kg: 3.6 , magType: 'stanag' },
-  M27IAR: { name: 'M27 IAR (auto)',  rounds: 3, cycle: 1.3, acc: 0.30, range: 600, supp: 8,  mag: 30,  mags: 21, reload: 3, kg: 3.6 , magType: 'stanag' },
-  M16A4:  { name: 'M16A4',           rounds: 1, cycle: 1.8, acc: 0.40, range: 550, supp: 6,  mag: 30,  mags: 7,  reload: 3, kg: 3.4 , magType: 'stanag' },
-  M4:     { name: 'M4 carbine',      rounds: 1, cycle: 1.7, acc: 0.37, range: 500, supp: 6,  mag: 30,  mags: 7,  reload: 3, kg: 3.0 , magType: 'stanag' },
-  M249:   { name: 'M249 SAW',        rounds: 6, cycle: 1.6, acc: 0.18, range: 800, supp: 11, mag: 200, mags: 3,  reload: 7, kg: 7.5 , magType: 'belt556' },
-  AK74:   { name: 'AK-74M',          rounds: 1, cycle: 1.9, acc: 0.34, range: 500, supp: 6,  mag: 30,  mags: 7,  reload: 3, kg: 3.4 , magType: 'ak545' },
-  AKM:    { name: 'AKM',             rounds: 1, cycle: 1.9, acc: 0.30, range: 400, supp: 7,  mag: 30,  mags: 6,  reload: 3, kg: 3.6 , magType: 'ak762' },
-  AKS74U: { name: 'AKS-74U',         rounds: 1, cycle: 1.8, acc: 0.28, range: 300, supp: 6,  mag: 30,  mags: 5,  reload: 3, kg: 2.7 , magType: 'ak545' },
-  RPK74:  { name: 'RPK-74',          rounds: 4, cycle: 1.6, acc: 0.24, range: 600, supp: 9,  mag: 45,  mags: 9,  reload: 4, kg: 5.0 , magType: 'rpk545' },
-  PKM:    { name: 'PKM',             rounds: 6, cycle: 1.6, acc: 0.19, range: 1000, supp: 13, mag: 100, mags: 4,  reload: 8, kg: 7.5 , magType: 'belt762' },
-  SVD:    { name: 'SVD',             rounds: 1, cycle: 3.0, acc: 0.70, range: 800, supp: 7,  mag: 10,  mags: 8,  reload: 3, kg: 4.3 , magType: 'svd' },
+  // Marines today.
+  M27:    { name: 'M27 IAR (rifle)', rounds: 1, cycle: 1.7, acc: 0.42, r50: 260, range: 600, dmg: 1, supp: 6,  mag: 30,  mags: 7,  reload: 3, kg: 3.6 , magType: 'stanag' },
+  M27IAR: { name: 'M27 IAR (auto)',  rounds: 3, cycle: 1.3, acc: 0.30, r50: 240, range: 600, dmg: 1, supp: 8,  mag: 30,  mags: 21, reload: 3, kg: 3.6 , magType: 'stanag' },
+  M16A4:  { name: 'M16A4',           rounds: 1, cycle: 1.8, acc: 0.40, r50: 230, range: 550, dmg: 1, supp: 6,  mag: 30,  mags: 7,  reload: 3, kg: 3.4 , magType: 'stanag' },
+  M4:     { name: 'M4 carbine',      rounds: 1, cycle: 1.7, acc: 0.37, r50: 200, range: 500, dmg: 0.95, supp: 6, mag: 30, mags: 7, reload: 3, kg: 3.0 , magType: 'stanag' },
+  M249:   { name: 'M249 SAW',        rounds: 6, cycle: 1.6, acc: 0.18, r50: 220, range: 800, dmg: 1, supp: 11, mag: 200, mags: 3,  reload: 7, kg: 7.5 , magType: 'belt556' },
+  // Soviet and Russian.
+  AK74:   { name: 'AK-74',           rounds: 1, cycle: 1.9, acc: 0.34, r50: 190, range: 500, dmg: 1, supp: 6,  mag: 30,  mags: 7,  reload: 3, kg: 3.4 , magType: 'ak545' },
+  AKM:    { name: 'AKM',             rounds: 1, cycle: 1.9, acc: 0.30, r50: 160, range: 400, dmg: 1.05, supp: 7, mag: 30, mags: 6, reload: 3, kg: 3.6 , magType: 'ak762' },
+  AKMPBS: { name: 'AKMS with PBS-1 silencer', rounds: 1, cycle: 2.0, acc: 0.30, r50: 140, range: 350, dmg: 1, supp: 4, mag: 30, mags: 6, reload: 3, kg: 4.0, magType: 'ak762', quiet: true },
+  AKS74U: { name: 'AKS-74U',         rounds: 1, cycle: 1.8, acc: 0.28, r50: 120, range: 300, dmg: 0.9, supp: 6, mag: 30, mags: 5, reload: 3, kg: 2.7 , magType: 'ak545' },
+  RPK:    { name: 'RPK',             rounds: 4, cycle: 1.6, acc: 0.23, r50: 180, range: 600, dmg: 1.05, supp: 9, mag: 40, mags: 8, reload: 4, kg: 5.0 , magType: 'rpk762' },
+  RPK74:  { name: 'RPK-74',          rounds: 4, cycle: 1.6, acc: 0.24, r50: 200, range: 600, dmg: 1, supp: 9,  mag: 45,  mags: 9,  reload: 4, kg: 5.0 , magType: 'rpk545' },
+  PKM:    { name: 'PKM',             rounds: 6, cycle: 1.6, acc: 0.19, r50: 260, range: 1000, dmg: 1.2, supp: 13, mag: 100, mags: 4, reload: 8, kg: 7.5 , magType: 'belt762' },
+  SVD:    { name: 'SVD',             rounds: 1, cycle: 3.0, acc: 0.70, r50: 450, range: 800, dmg: 1.2, supp: 7, mag: 10,  mags: 8,  reload: 3, kg: 4.3 , magType: 'svd' },
+  AK12:   { name: 'AK-12',           rounds: 1, cycle: 1.8, acc: 0.38, r50: 220, range: 550, dmg: 1, supp: 6,  mag: 30,  mags: 8,  reload: 3, kg: 3.5 , magType: 'ak545' },
+  RPK16:  { name: 'RPK-16',          rounds: 4, cycle: 1.6, acc: 0.24, r50: 220, range: 700, dmg: 1, supp: 9,  mag: 95,  mags: 3,  reload: 5, kg: 5.5 , magType: 'rpk16' },
+  PKP:    { name: 'PKP Pecheneg',    rounds: 6, cycle: 1.6, acc: 0.20, r50: 280, range: 1000, dmg: 1.2, supp: 13, mag: 100, mags: 5, reload: 8, kg: 8.2 , magType: 'belt762' },
+  SVDM:   { name: 'SVDM',            rounds: 1, cycle: 3.0, acc: 0.70, r50: 480, range: 900, dmg: 1.2, supp: 7, mag: 10,  mags: 8,  reload: 3, kg: 5.3 , magType: 'svd' },
+  // Chinese.
+  QBZ191: { name: 'QBZ-191',         rounds: 1, cycle: 1.8, acc: 0.41, r50: 240, range: 600, dmg: 1, supp: 6,  mag: 30,  mags: 7,  reload: 3, kg: 3.3 , magType: 'dbp58' },
+  QJS161: { name: 'QJS-161',         rounds: 5, cycle: 1.6, acc: 0.22, r50: 230, range: 800, dmg: 1, supp: 10, mag: 75,  mags: 5,  reload: 5, kg: 6.0 , magType: 'drum58' },
+  QBU191: { name: 'QBU-191',         rounds: 1, cycle: 2.2, acc: 0.62, r50: 380, range: 800, dmg: 1, supp: 6,  mag: 30,  mags: 6,  reload: 3, kg: 4.0 , magType: 'dbp58' },
+  // Vietnam, both sides.
+  AK47:   { name: 'AK-47 (Type 56)', rounds: 1, cycle: 1.9, acc: 0.30, r50: 150, range: 400, dmg: 1.05, supp: 7, mag: 30, mags: 5, reload: 3, kg: 4.3 , magType: 'ak762' },
+  SKS:    { name: 'SKS (Type 56 carbine)', rounds: 1, cycle: 2.0, acc: 0.38, r50: 190, range: 400, dmg: 1.05, supp: 6, mag: 10, mags: 9, reload: 4, kg: 3.9, magType: 'clip762' },
+  RPD:    { name: 'RPD',             rounds: 4, cycle: 1.6, acc: 0.22, r50: 180, range: 700, dmg: 1.05, supp: 10, mag: 100, mags: 3, reload: 6, kg: 7.4 , magType: 'rpd' },
+  M16A1:  { name: 'M16A1 (20-rd)',   rounds: 1, cycle: 1.8, acc: 0.38, r50: 210, range: 460, dmg: 1, supp: 6,  mag: 20,  mags: 14, reload: 3, kg: 3.2 , magType: 'stanag20', jam: 0.006 },
+  M16A1AR:{ name: 'M16A1 (auto, bipod)', rounds: 3, cycle: 1.4, acc: 0.26, r50: 180, range: 460, dmg: 1, supp: 8, mag: 20, mags: 20, reload: 3, kg: 3.6, magType: 'stanag20', jam: 0.01 },
+  M16A130:{ name: 'M16A1',           rounds: 1, cycle: 1.8, acc: 0.38, r50: 210, range: 460, dmg: 1, supp: 6,  mag: 30,  mags: 7,  reload: 3, kg: 3.2 , magType: 'stanag' },
+  M16A1AR30:{ name: 'M16A1 (auto, bipod)', rounds: 3, cycle: 1.4, acc: 0.26, r50: 180, range: 460, dmg: 1, supp: 8, mag: 30, mags: 14, reload: 3, kg: 3.6, magType: 'stanag' },
+  M16A2:  { name: 'M16A2',           rounds: 1, cycle: 1.8, acc: 0.41, r50: 240, range: 550, dmg: 1, supp: 6,  mag: 30,  mags: 7,  reload: 3, kg: 3.6 , magType: 'stanag' },
+  // The world wars and after.
+  GEW98:  { name: 'Gewehr 98',       rounds: 1, cycle: 2.6, acc: 0.46, r50: 270, range: 600, dmg: 1.2, supp: 7, mag: 5,  mags: 24, reload: 4, kg: 4.1 , magType: 'mauser' },
+  MG0815: { name: 'MG 08/15',        rounds: 6, cycle: 1.6, acc: 0.19, r50: 300, range: 1000, dmg: 1.2, supp: 13, mag: 100, mags: 5, reload: 8, kg: 18 , magType: 'belt792' },
+  P08:    { name: 'Luger P08 pistol', rounds: 1, cycle: 1.2, acc: 0.25, r50: 22, range: 50, dmg: 0.6, supp: 2, mag: 8,  mags: 3,  reload: 3, kg: 0.9 , magType: 'p08' },
+  M1903:  { name: 'M1903 Springfield', rounds: 1, cycle: 2.5, acc: 0.46, r50: 270, range: 600, dmg: 1.2, supp: 7, mag: 5, mags: 20, reload: 4, kg: 3.9 , magType: 'clip3006' },
+  CHAUCHAT:{ name: 'Chauchat automatic rifle', rounds: 3, cycle: 1.8, acc: 0.18, r50: 170, range: 600, dmg: 1.2, supp: 9, mag: 20, mags: 12, reload: 5, kg: 9.1, magType: 'chauchat', jam: 0.05 },
+  M1911:  { name: 'M1911 pistol',    rounds: 1, cycle: 1.2, acc: 0.25, r50: 22, range: 50, dmg: 0.7, supp: 2, mag: 7,  mags: 3,  reload: 3, kg: 1.1 , magType: 'acp45' },
+  MAS4956:{ name: 'MAS 49/56',       rounds: 1, cycle: 2.0, acc: 0.43, r50: 250, range: 500, dmg: 1.15, supp: 6, mag: 10, mags: 9, reload: 3, kg: 4.0 , magType: 'mas75' },
+  MAT49:  { name: 'MAT 49',          rounds: 3, cycle: 1.2, acc: 0.22, r50: 45, range: 150, dmg: 0.6, supp: 5, mag: 32, mags: 5, reload: 3, kg: 3.5 , magType: 'mat9' },
+  AA52:   { name: 'AA-52',           rounds: 6, cycle: 1.6, acc: 0.19, r50: 260, range: 900, dmg: 1.15, supp: 12, mag: 50, mags: 8, reload: 6, kg: 9.9 , magType: 'belt75' },
+  FM2429: { name: 'FM 24/29',        rounds: 4, cycle: 1.6, acc: 0.24, r50: 240, range: 700, dmg: 1.15, supp: 9, mag: 25, mags: 11, reload: 4, kg: 9.0, magType: 'fm75' },
+  MAS36:  { name: 'MAS-36',          rounds: 1, cycle: 2.6, acc: 0.45, r50: 250, range: 550, dmg: 1.15, supp: 7, mag: 5,  mags: 11, reload: 4, kg: 3.7 , magType: 'clip75' },
+  ENFIELD:{ name: 'Lee-Enfield .303', rounds: 1, cycle: 2.0, acc: 0.46, r50: 260, range: 600, dmg: 1.2, supp: 7, mag: 10, mags: 6, reload: 5, kg: 4.1 , magType: 'clip303' },
+  BREN:   { name: 'Bren gun',        rounds: 4, cycle: 1.6, acc: 0.26, r50: 260, range: 700, dmg: 1.2, supp: 9, mag: 30, mags: 9, reload: 4, kg: 10 , magType: 'bren' },
+  GARAND: { name: 'M1 Garand',       rounds: 1, cycle: 2.0, acc: 0.43, r50: 250, range: 550, dmg: 1.2, supp: 7, mag: 8,  mags: 8,  reload: 2.5, kg: 4.3, magType: 'garand' },
+  CARBINE:{ name: 'M1 carbine',      rounds: 1, cycle: 1.9, acc: 0.34, r50: 120, range: 250, dmg: 0.75, supp: 5, mag: 15, mags: 4, reload: 3, kg: 2.5, magType: 'carbine' },
+  UZI:    { name: 'Uzi',             rounds: 3, cycle: 1.3, acc: 0.20, r50: 40, range: 120, dmg: 0.6, supp: 5, mag: 25, mags: 3, reload: 3, kg: 3.5 , magType: 'uzi' },
+  SHOTGUN:{ name: 'Pump shotgun, 12-gauge buckshot', rounds: 1, cycle: 1.6, acc: 0.55, r50: 22, range: 50, dmg: 1.1, supp: 5, mag: 6, mags: 2, reload: 6, kg: 3.4, magType: 'shells' , noun: 'pump shotgun' },
+  REVOLVER:{ name: '.38 revolver',   rounds: 1, cycle: 1.2, acc: 0.28, r50: 18, range: 50, dmg: 0.5, supp: 2, mag: 6, mags: 2, reload: 6, kg: 0.9 , magType: 'rev38' , noun: '.38 revolver' },
+  RUGER1022:{ name: 'Ruger 10/22 (.22 LR)', rounds: 1, cycle: 1.8, acc: 0.32, r50: 70, range: 150, dmg: 0.35, supp: 2, mag: 10, mags: 3, reload: 3, kg: 2.3, magType: 'r22' , noun: '.22 rifle' },
+  // Black powder: one shot, then a long reload. The charges carried are counted as magazines.
+  BESS:   { name: 'Short Land Pattern musket (Brown Bess)', rounds: 1, cycle: 1, acc: 0.30, r50: 55, range: 140, dmg: 1.4, supp: 8, mag: 1, mags: 39, reload: 15, kg: 4.4, magType: 'ball75', smoke: true },
+  CHARLEVILLE:{ name: 'Charleville 1766 musket', rounds: 1, cycle: 1, acc: 0.30, r50: 55, range: 140, dmg: 1.35, supp: 8, mag: 1, mags: 39, reload: 15, kg: 4.5, magType: 'ball69', smoke: true },
+  LONGRIFLE:{ name: 'Pennsylvania rifle', rounds: 1, cycle: 1, acc: 0.45, r50: 140, range: 250, dmg: 1.3, supp: 7, mag: 1, mags: 29, reload: 40, kg: 4.5, magType: 'ball50', smoke: true },
+  FIRELOCK:{ name: 'English firelock musket', rounds: 1, cycle: 1, acc: 0.28, r50: 55, range: 130, dmg: 1.4, supp: 8, mag: 1, mags: 23, reload: 22, kg: 5.0, magType: 'charge', smoke: true , noun: 'firelock' },
+  MATCHLOCK:{ name: 'Matchlock musket', rounds: 1, cycle: 1, acc: 0.24, r50: 50, range: 120, dmg: 1.4, supp: 8, mag: 1, mags: 19, reload: 30, kg: 5.5, magType: 'charge', smoke: true , noun: 'matchlock' },
+  FUSIL:  { name: 'Flintlock trade gun', rounds: 1, cycle: 1, acc: 0.32, r50: 65, range: 140, dmg: 1.3, supp: 8, mag: 1, mags: 19, reload: 20, kg: 3.6, magType: 'charge', smoke: true , noun: 'trade gun' },
+  BOW:    { name: 'Bow and arrows',  rounds: 1, cycle: 1, acc: 0.30, r50: 35, range: 90, dmg: 0.6, supp: 2, mag: 1, mags: 23, reload: 3, kg: 1.2, magType: 'arrow', quiet: true , noun: 'bow' },
 };
 // Magazine weight (kg) for the loadout weight figure.
 const MAG_KG = { 30: 0.5, 200: 3.2, 45: 0.8, 100: 3.0, 10: 0.3 };
 
-// scatter: miss distance per meter of range. lethal/casualty: radii in meters.
+// scatter: miss distance per meter of range. lethal/casualty: radii in meters. flat: a
+// rocket fired straight at the target, which bursts on the first wall or building.
 const LAUNCHERS = {
   M203: { name: 'M203 40mm', range: 350, min: 31, cycle: 6, scatter: 0.035, lethal: 5, casualty: 12, rounds: 18, vel: 76,  kg: 0.23 },
   M320: { name: 'M320 40mm', range: 350, min: 31, cycle: 6, scatter: 0.03,  lethal: 5, casualty: 12, rounds: 18, vel: 76,  kg: 0.23 },
+  M79:  { name: 'M79 40mm', range: 350, min: 31, cycle: 5, scatter: 0.035, lethal: 5, casualty: 12, rounds: 24, vel: 76,  kg: 0.23 },
   GP25: { name: 'GP-25 40mm', range: 400, min: 40, cycle: 7, scatter: 0.04, lethal: 5, casualty: 11, rounds: 10, vel: 76,  kg: 0.25 },
-  RPG7: { name: 'RPG-7 (OG-7V)', range: 300, min: 25, cycle: 12, scatter: 0.03, lethal: 6, casualty: 14, rounds: 3, vel: 120, kg: 2.0 },
+  GP34: { name: 'GP-34 40mm', range: 400, min: 40, cycle: 7, scatter: 0.04, lethal: 5, casualty: 11, rounds: 10, vel: 76,  kg: 0.25 },
+  QLG10:{ name: 'QLG-10 35mm', range: 350, min: 30, cycle: 6, scatter: 0.035, lethal: 4, casualty: 10, rounds: 12, vel: 75, kg: 0.2 },
+  VB:   { name: 'VB rifle grenade', range: 180, min: 30, cycle: 10, scatter: 0.06, lethal: 4, casualty: 10, rounds: 8, vel: 50, kg: 0.5 },
+  RIFGR:{ name: 'Rifle grenade (22 mm)', range: 200, min: 30, cycle: 10, scatter: 0.05, lethal: 5, casualty: 12, rounds: 4, vel: 55, kg: 0.5 },
+  RPG7: { name: 'RPG-7 (OG-7V)', range: 300, min: 25, cycle: 12, scatter: 0.03, lethal: 6, casualty: 14, rounds: 3, vel: 120, kg: 2.0, flat: true },
+  RPG7PG:{ name: 'RPG-7 (PG-7V)', range: 300, min: 25, cycle: 12, scatter: 0.03, lethal: 4, casualty: 10, rounds: 3, vel: 120, kg: 2.2, flat: true },
+  RPG16:{ name: 'RPG-16 (PG-16)', range: 300, min: 25, cycle: 12, scatter: 0.025, lethal: 4, casualty: 10, rounds: 3, vel: 130, kg: 2.0, flat: true },
+  B40:  { name: 'B40 (RPG-2)', range: 150, min: 20, cycle: 14, scatter: 0.045, lethal: 4, casualty: 10, rounds: 3, vel: 84, kg: 1.8, flat: true },
+  B41:  { name: 'B41 (RPG-7)', range: 300, min: 25, cycle: 12, scatter: 0.03, lethal: 4, casualty: 10, rounds: 3, vel: 120, kg: 2.2, flat: true },
+  PF89: { name: 'PF-89 80mm', range: 250, min: 25, cycle: 8, scatter: 0.025, lethal: 4, casualty: 10, rounds: 2, vel: 140, kg: 3.7, flat: true },
 };
+// Hand grenades. fuse: seconds from landing to burst. dud: share that fail to go off.
 const GRENADES = {
-  M67:  { name: 'M67 frag', range: 32, lethal: 5, casualty: 15, fuse: 1.6, kg: 0.4 },
-  RGD5: { name: 'RGD-5 frag', range: 35, lethal: 4, casualty: 13, fuse: 1.6, kg: 0.31 },
+  M67:   { name: 'M67 frag', range: 32, lethal: 5, casualty: 15, fuse: 1.6, kg: 0.4 },
+  RGD5:  { name: 'RGD-5 frag', range: 35, lethal: 4, casualty: 13, fuse: 1.6, kg: 0.31 },
+  F1:    { name: 'F-1 frag', range: 35, lethal: 5, casualty: 18, fuse: 1.8, kg: 0.6 },
+  STICK: { name: 'Stielhandgranate', range: 35, lethal: 3, casualty: 9, fuse: 2.5, kg: 0.6 },
+  F1FR:  { name: 'F1 grenade (French)', range: 30, lethal: 4, casualty: 12, fuse: 2.2, kg: 0.6 },
+  CHICOM:{ name: 'Type 67 stick grenade', range: 30, lethal: 3, casualty: 8, fuse: 2.2, kg: 0.6, dud: 0.15 },
+  DF37:  { name: 'DF 37 frag', range: 30, lethal: 4, casualty: 12, fuse: 2, kg: 0.6 },
+  MILLS: { name: 'Mills bomb', range: 30, lethal: 4, casualty: 14, fuse: 2, kg: 0.77 },
+  T82:   { name: 'Type 82-2 frag', range: 35, lethal: 4, casualty: 12, fuse: 1.6, kg: 0.26 },
+};
+// Hand-to-hand: chance to strike home in a second's fighting, and how badly.
+const MELEE = {
+  butt:    { name: 'Rifle butt and fists', skill: 0.7, dmg: 0.6 },
+  bayonet: { name: 'Bayonet', skill: 1.0, dmg: 1.2 },
+  club:    { name: 'War club', skill: 1.15, dmg: 1.3 },
+  hatchet: { name: 'Hatchet', skill: 1.1, dmg: 1.2 },
+  sword:   { name: 'Sword', skill: 1.0, dmg: 1.1 },
+  halberd: { name: 'Halberd', skill: 1.0, dmg: 1.2 },
+  machete: { name: 'Machete', skill: 0.9, dmg: 1.0 },
+  knife:   { name: 'Knife', skill: 0.8, dmg: 0.9 },
+  spade:   { name: 'Entrenching spade', skill: 1.0, dmg: 1.1 },
 };
 
 // The 13-man Marine rifle squad: squad leader and three four-man fire teams.
@@ -880,7 +971,120 @@ const REGIONS = {
     rivers: ['BIG HOLE RIVER', 'BITTERROOT RIVER', 'MUSSELSHELL RIVER', 'BOULDER RIVER', 'SMITH RIVER', 'RUBY RIVER'],
   },
 };
+
+// Regions for the historical scenarios: the ground of a real place, with its own names.
+// "era" regions are not drawn at random for a present-day mission. paved: false for a
+// time before hard-surfaced roads.
+const eraRegion = (base, o) => Object.assign({}, REGIONS[base], { era: true, nameA: null, nameB: null }, o);
+Object.assign(REGIONS, {
+  newengland: eraRegion('farmland', {
+    label: 'Plymouth Colony, 1670s',
+    brief: 'New England woods with clearings, scattered farms and a small town, cart tracks only.',
+    paved: false, woods: 0.6, hedges: 0.1, walls: 0, villages: [1, 2], farms: [4, 7], farmWord: 'Farm', yardWalls: [0, 0],
+    fields: [[TER.OPEN, 2], [TER.GRASS, 2.4], [TER.PLOWED, 1.4], [TER.ORCHARD, 0.2]],
+    whole: ['Swansea', 'Rehoboth', 'Mattapoisett', 'Kickemuit', 'Mount Hope', 'Wannamoisett', 'Sowams', 'Seekonk', 'Pocasset',
+      'Montaup', 'Miles Garrison', 'Bourne', 'Mattapoiset Neck', 'Toweset', 'Shawomet', 'Mosshassuck', 'Brown', 'Willet'],
+    rivers: ['PALMER RIVER', 'KICKEMUIT RIVER', 'TAUNTON RIVER', 'SOWAMS RIVER', 'RUNNINS RIVER'],
+  }),
+  hudson: eraRegion('farmland', {
+    label: 'Westchester, New York, 1770s',
+    brief: 'Farms and woodlots north of Manhattan, stone walls along the fields, dirt roads.',
+    paved: false, woods: 0.68, hedges: 0.2, walls: 0.4, villages: [1, 2], farms: [6, 9], farmWord: 'Farm',
+    whole: ['Kingsbridge', 'Spuyten Duyvil', 'Yonkers', 'Philipsburg', 'Morrisania', 'Fordham', 'Eastchester', "Valentine's Hill",
+      'Mile Square', 'Tuckahoe', "Dobbs Ferry", 'Van Cortlandt', 'Mosholu', "Tippett's Hill", 'Westchester', 'Delancey', 'Odell'],
+    rivers: ['BRONX RIVER', 'SAW MILL RIVER', 'HUTCHINSON RIVER', 'TIBBETTS BROOK'],
+  }),
+  lorraine: eraRegion('farmland', {
+    label: 'Lorraine, France, 1917',
+    brief: 'Open rolling farmland of the Lunéville sector: villages of stone, woods, a quiet front.',
+    walls: 0.3, hedges: 0.25, villages: [2, 3], farms: [4, 7], farmPrefix: 'Ferme de ', farmNote: 'Farm', yardWalls: [0.5, 0.6],
+    whole: ['Bathelémont', 'Sommerviller', 'Arracourt', 'Einville', 'Xures', 'Parroy', 'Bures', 'Moncel', 'Serres', 'Crion',
+      'Jolivet', 'Valhey', 'Hoéville', 'Courbesseaux', 'Réchicourt', 'Athienville', 'Drouville', 'Bauzemont'],
+    rivers: ['LE SANON', 'LA VEZOUZE', 'LA MEURTHE', 'LE LOEY'],
+  }),
+  hesse: eraRegion('farmland', {
+    label: 'Fulda Gap, West Germany',
+    brief: 'Hessian hill farms, beech woods and villages on the border with East Germany.',
+    walls: 0.05, villages: [2, 4], farmWord: 'Hof', farmNote: 'Farm',
+    whole: ['Hünfeld', 'Rasdorf', 'Tann', 'Hilders', 'Eiterfeld', 'Burghaun', 'Rhina', 'Mackenzell', 'Großenbach', 'Schlitz',
+      'Hofbieber', 'Wenigentaft', 'Buttlar', 'Setzelbach', 'Grüsselbach', 'Soisdorf', 'Steinbach'],
+    rivers: ['FULDA', 'HAUNE', 'ULSTER', 'FELDA'],
+  }),
+  ukraine: eraRegion('farmland', {
+    label: 'Zaporizhzhia steppe, Ukraine',
+    brief: 'Flat open steppe farmland cut into great fields by lines of trees; villages strung along the roads.',
+    relief: [25, 50], fields: [[TER.PLOWED, 3], [TER.OPEN, 2], [TER.GRASS, 1.5]], fieldSize: 320, hedges: 0.75, walls: 0,
+    woods: 0.86, riverChance: 0.3, villages: [2, 3], farms: [2, 4], farmWord: 'farm',
+    whole: ['Robotyne', 'Verbove', 'Novoprokopivka', 'Mala Tokmachka', 'Orikhiv', 'Kopani', 'Novodanylivka', "P'iatykhatky",
+      'Zherebianky', 'Stepove', 'Mala Ternivka', 'Myrne', 'Novofedorivka', 'Levadne', 'Nesteryanka', 'Shcherbaky'],
+    rivers: ['KONKA', 'MOKRA', 'TOKMAK'],
+  }),
+  algeria: eraRegion('arizona', {
+    label: 'Nementcha mountains, Algeria',
+    brief: 'Bare limestone ridges over stony desert flats and dry oueds; mechtas of stone and mud.',
+    farmPrefix: 'Mechta ', farmNote: 'Mechta', villages: [1, 2], farms: [3, 5],
+    whole: ['Bir el Ater', 'Négrine', 'Chéria', 'Oued Hellal', 'Djebel Onk', 'Ferkane', 'El Ma Labiod', 'Babar', 'Khenchela',
+      'Ksar Sbahi', 'Tazbent', 'Aïn Zerga', 'Draa Bou Diab', 'Oum Kif', 'Djellal', 'Tabarka', 'Bou Hamama'],
+    rivers: ['OUED HELLAL', 'OUED DJERCH', 'OUED EL ARAB', 'OUED BADJER'],
+  }),
+  panjshir: eraRegion('arizona', {
+    label: 'Panjshir valley, Afghanistan',
+    brief: 'A green river valley of walled fields and qalas between bare, steep mountains.',
+    base0: TER.DESERT, fields: [[TER.PLOWED, 2], [TER.GRASS, 1], [TER.OPEN, 1.5], [TER.ORCHARD, 0.6]], walls: 0.45, hedges: 0.05,
+    riverChance: 0.95, riverWidth: [14, 22], dryStreams: true, villages: [2, 3], farms: [4, 6], farmPrefix: 'Qala-i ', farmNote: 'Qala', yardWalls: [0.8, 0.9],
+    whole: ['Rokha', 'Bazarak', 'Anaba', 'Dashtak', 'Khenj', 'Astana', 'Paryan', 'Peshghor', 'Shutul', 'Jangalak', 'Malaspa',
+      'Omarz', 'Dalan Sang', 'Safed Chir', 'Abdullah Khel', 'Changaram'],
+    rivers: ['PANJSHIR RIVER', 'DARA RIVER', 'HAZARA RIVER'],
+  }),
+  kandahar: eraRegion('arizona', {
+    label: 'Zabul desert, Afghanistan',
+    brief: 'Desert plain and low barren hills along the Kabul-Kandahar road; walled qalas and karez lines.',
+    relief: [140, 240], farmPrefix: 'Qala-i ', farmNote: 'Qala', villages: [1, 2], farms: [3, 5], yardWalls: [0.9, 1],
+    whole: ['Shahjoy', 'Qalat', 'Tarnak', 'Mizan', 'Daman', 'Maruf', 'Arghistan', 'Shinkay', 'Mukur', 'Jaldak', 'Naubahar',
+      'Atghar', 'Khaki Safed', 'Sur Ghar', 'Tazi'],
+    rivers: ['TARNAK RIVER', 'ARGHANDAB RIVER'],
+  }),
+  norway: eraRegion('montana', {
+    label: 'Finnmark, Norway',
+    brief: 'Snow-covered hills above a fjord: birch scrub, frozen lakes, a fishing village and a coast road.',
+    relief: [180, 300], coast: true, sea: 'PORSANGERFJORD', treeline: 0.55, farmWord: 'gård', farmNote: 'Farm', villages: [1, 2],
+    whole: ['Lakselv', 'Porsanger', 'Banak', 'Skoganvarre', 'Børselv', 'Stabbursnes', 'Olderfjord', 'Russenes', 'Kistrand',
+      'Leirpollen', 'Smørfjord', 'Brennelv', 'Indre Billefjord', 'Ytre Billefjord', 'Kolvik'],
+    rivers: ['LAKSELVA', 'STABBURSELVA', 'BØRSELVA'],
+  }),
+  jungle: eraRegion('carolina', {
+    label: 'Quang Nam lowlands, Vietnam',
+    brief: 'Rice paddies behind dikes, hamlets in bamboo and tree lines, jungle on the hills above.',
+    relief: [60, 140], base: [5, 20], fields: [[TER.PADDY, 5], [TER.GRASS, 1.2], [TER.OPEN, 0.5]], fieldSize: 70,
+    hedges: 0.95, hedgeKind: TER.DIKE, walls: 0, woods: 0.7, highWoods: 0.5, riverChance: 0.8, riverWidth: [18, 30], riparian: 4,
+    swamp: { reach: 6, low: 0.2, noise: 0.5 }, villages: [2, 3], farms: [5, 8], farmWord: ['(1)', '(2)', '(3)', '(4)'], farmNote: 'Hamlet', yardWalls: [0, 0],
+    whole: ['Phu Loc', 'Que Son', 'Hiep Duc', 'Thang Binh', 'Duy Xuyen', 'Dai Loc', 'Dien Ban', 'Go Noi', 'An Hoa', 'Phu Nhuan',
+      'Le Bac', 'Chau Lam', 'Son Thang', 'Ky Lam', 'Phong Ho', 'Xuan Dai', 'Bao An', 'Thu Bon', 'Nong Son', 'Loc Son'],
+    rivers: ['SONG THU BON', 'SONG VU GIA', 'SONG LY LY', 'SONG CHIEN DAN'],
+  }),
+  haiti: eraRegion('socal', {
+    label: 'Sud department, Haiti',
+    brief: 'Coastal plain and bare hills: cane and gardens, scrub, a market town and its dirt roads.',
+    sea: 'CARIBBEAN SEA', fields: [[TER.PLOWED, 2], [TER.GRASS, 2], [TER.BRUSH, 2], [TER.OPEN, 1.5], [TER.ORCHARD, 0.6]],
+    woods: 0.84, riverChance: 0.6, villages: [2, 3], farms: [4, 7], farmPrefix: 'Habitation ', farmNote: 'Habitation',
+    whole: ['Les Cayes', 'Torbeck', 'Camp-Perrin', 'Chantal', 'Maniche', 'Cavaillon', 'Laborde', 'Port-Salut', 'Simon', 'Bergeau',
+      'Ducis', 'Gelée', 'Mercy', 'Fond-des-Blancs', 'Bourdet', 'Charpentier', 'Moreau', 'Dory'],
+    rivers: ["RIVIÈRE DE L'ISLET", 'RAVINE DU SUD', 'RIVIÈRE CAVAILLON', 'RIVIÈRE DE TORBECK'],
+  }),
+  island: eraRegion('socal', {
+    label: 'Spratly Islands, South China Sea',
+    brief: 'A low coral island in open sea: beach all round, scrub and palms, a garrison compound and an airstrip track.',
+    relief: [6, 14], base: [0, 0], coast: false, island: true, sea: 'SOUTH CHINA SEA', paved: false,
+    fields: [[TER.BRUSH, 3], [TER.GRASS, 2], [TER.OPEN, 1.5]], woods: 0.66, riverChance: 0, dryStreams: false, ponds: null,
+    villages: [1, 1], farms: [1, 2], farmWord: 'Post', farmNote: 'Post', yardWalls: [0.3, 0.5],
+    whole: ['Thitu', 'Pag-asa', 'Itu Aba', 'Namyit', 'Sin Cowe', 'Loaita', 'Sand Cay', 'West York', 'Flat Island', 'Nanshan',
+      'Northeast Cay', 'Southwest Cay', 'Spratly', 'Amboyna', 'Swallow'],
+    rivers: ['LAGOON'],
+  }),
+});
 const REGION_KEYS = Object.keys(REGIONS);
+// What a farm is called in a region, for the order: Farm, Ranch, Mechta, Hamlet.
+function farmNoun(R) { return R.farmNote || (typeof R.farmWord === 'string' ? R.farmWord : 'Farm'); }
 
 // ---- src/map.js
 'use strict';
@@ -898,7 +1102,7 @@ class GameMap {
     this.places = [];    // { name, x, y }
     setSeed(seed);
     // The region is drawn from the seed when not chosen, so a map number always gives the same sheet.
-    const pickR = pick(REGION_KEYS);
+    const pickR = pick(REGION_KEYS.filter(k => !REGIONS[k].era));
     this.region = REGIONS[region] ? region : pickR;
     this.R = REGIONS[this.region];
     this.ci = this.R.ci; this.index = this.R.index;
@@ -944,7 +1148,7 @@ class GameMap {
   // ---------------------------------------------------------------- generation
   generate() {
     this.genElevation();
-    if (this.R.coast) this.genCoast();
+    if (this.inland) this.genCoast();
     this.genHydrology();
     this.genSwamps();
     this.genFields();
@@ -990,6 +1194,15 @@ class GameMap {
     const fa = randRange(0, Math.PI * 2), fx = Math.cos(fa), fy = Math.sin(fa);
     const front = (u, v) => clamp(0.5 + ((u - 0.5) * fx + (v - 0.5) * fy) * 1.3, 0, 1);
     if (R.coast) this.coastAt = (v) => MAP_W * (0.07 + coastX(0.5, v) * 0.09);
+    // How far inland a point is: from the west coast, or from the shore of an island in
+    // the middle of the sheet (negative at sea).
+    if (R.island) {
+      const rr = this.noise(5, 5), r0 = MAP_W * randRange(0.27, 0.32);
+      this.inland = (x, y) => {
+        const a = Math.atan2(y - MAP_H / 2, x - MAP_W / 2), u = 0.5 + Math.cos(a) * 0.4, v = 0.5 + Math.sin(a) * 0.4;
+        return r0 * (0.75 + rr(u, v) * 0.5) - dist(x, y, MAP_W / 2, MAP_H / 2);
+      };
+    } else if (R.coast) this.inland = (x, y) => x - this.coastAt(y / MAP_H);
     let lo = Infinity, hi = -Infinity;
     for (let cy = 0; cy < GH; cy++) for (let cx = 0; cx < GW; cx++) {
       const u = (cx + 0.5) / GW, v = (cy + 0.5) / GH;
@@ -1011,9 +1224,9 @@ class GameMap {
         const rv = MAP_K < 1 ? front(u, v) * 0.75 + range(u, v) * 0.35 - 0.05 : range(u, v);
         t = Math.pow(t, 1.8) * (R.floor + (1 - R.floor) * smooth(clamp((rv - 0.3) / 0.4, 0, 1)));
       }
-      if (R.coast) {
-        const x = (i % GW + 0.5) * CELL, c = this.coastAt((Math.floor(i / GW) + 0.5) / GH);
-        t *= 0.12 + 0.88 * smooth(clamp((x - c) / (MAP_W * 0.5), 0, 1));
+      if (this.inland) {
+        const d = this.inland((i % GW + 0.5) * CELL, (Math.floor(i / GW) + 0.5) * CELL);
+        t *= 0.12 + 0.88 * smooth(clamp(d / (MAP_W * (R.island ? 0.25 : 0.5)), 0, 1));
       }
       this.elev[i] = t * relief;
     }
@@ -1023,13 +1236,14 @@ class GameMap {
   genCoast() {
     const nb = this.noise(4, 30);
     for (let cy = 0; cy < GH; cy++) {
-      const v = (cy + 0.5) / GH, c = this.coastAt(v), beach = 25 + nb(0.5, v) * 45;
+      const v = (cy + 0.5) / GH;
       for (let cx = 0; cx < GW; cx++) {
-        const x = (cx + 0.5) * CELL, i = cy * GW + cx;
-        if (x < c) { this.ter[i] = TER.OCEAN; this.elev[i] = 0; }
+        const x = (cx + 0.5) * CELL, y = (cy + 0.5) * CELL, i = cy * GW + cx, d = this.inland(x, y);
+        const beach = (this.R.island ? 15 : 25) + nb(this.R.island ? x / MAP_W : 0.5, v) * (this.R.island ? 25 : 45);
+        if (d < 0) { this.ter[i] = TER.OCEAN; this.elev[i] = 0; }
         else {
           this.elev[i] += 1.5;
-          if (x < c + beach) { this.ter[i] = TER.BEACH; this.elev[i] = Math.min(this.elev[i], 1.5 + (x - c) * 0.05); }
+          if (d < beach) { this.ter[i] = TER.BEACH; this.elev[i] = Math.min(this.elev[i], 1.5 + d * 0.05); }
         }
       }
     }
@@ -1229,7 +1443,7 @@ class GameMap {
       }
       return;
     }
-    const S = 200, nx = Math.ceil(MAP_W / S) + 1, ny = Math.ceil(MAP_H / S) + 1;
+    const S = R.fieldSize || 200, nx = Math.ceil(MAP_W / S) + 1, ny = Math.ceil(MAP_H / S) + 1;
     const kinds = R.fields;
     const total = kinds.reduce((n, k) => n + k[1], 0);
     const pickKind = () => { let r = rand() * total; for (const [k, w] of kinds) { if ((r -= w) <= 0) return k; } return TER.OPEN; };
@@ -1251,7 +1465,7 @@ class GameMap {
     const edgeKind = new Map();
     const edgeFor = (a, b) => {
       const key = Math.min(a, b) * 100000 + Math.max(a, b);
-      if (!edgeKind.has(key)) { const r = rand(); edgeKind.set(key, { kind: r < R.hedges ? TER.WOODS : r < R.hedges + R.walls ? TER.WALL : -1, phase: randInt(0, 30) }); }
+      if (!edgeKind.has(key)) { const r = rand(); edgeKind.set(key, { kind: r < R.hedges ? (R.hedgeKind != null ? R.hedgeKind : TER.WOODS) : r < R.hedges + R.walls ? TER.WALL : -1, phase: randInt(0, 30) }); }
       return edgeKind.get(key);
     };
     for (let cy = 0; cy < GH - 1; cy++) for (let cx = 0; cx < GW - 1; cx++) {
@@ -1279,6 +1493,8 @@ class GameMap {
       const slope = Math.hypot(this.elev[c + 1] - this.elev[c - 1], this.elev[c + GW] - this.elev[c - GW]) / (2 * CELL);
       const f = n1(u, v) * 0.7 + n2(u, v) * 0.3 + Math.min(0.18, slope * 1.5) + this.elev[c] / maxE * 0.08;
       if (f > this.R.woods && !(this.R.treeline && this.elev[c] / maxE > this.R.treeline)) this.ter[c] = TER.WOODS;
+      // Jungle on the hills above the paddy land.
+      else if (this.R.highWoods && this.elev[c] / maxE > this.R.highWoods + (n2(u, v) - 0.5) * 0.1) this.ter[c] = TER.WOODS;
     }
     // Trees along the watercourses: live oak and pecan, gum and cypress, cottonwood.
     const rip = this.R.riparian;
@@ -1354,6 +1570,8 @@ class GameMap {
   }
 
   layRoad(cells, kind) {
+    // Before the motor age there are no hard-surfaced roads: cart tracks only.
+    if (this.R.paved === false) kind = 'track';
     const t = kind === 'paved' ? TER.PAVED : TER.ROAD;
     // Where the road crosses the river, a bridge: one per run of river cells.
     let run = [];
@@ -1379,6 +1597,19 @@ class GameMap {
   }
 
   genRoads() {
+    if (this.R.island) {
+      // One track across the island from shore to shore.
+      const a = randRange(0, Math.PI * 2), end = (ang) => {
+        for (let r = MAP_W * 0.45; r > 0; r -= 8) {
+          const x = MAP_W / 2 + Math.cos(ang) * r, y = MAP_H / 2 + Math.sin(ang) * r;
+          if (this.inland(x, y) > 30) return [Math.floor(x / CELL), Math.floor(y / CELL)];
+        }
+        return [Math.floor(GW / 2), Math.floor(GH / 2)];
+      };
+      const [p, q] = [end(a), end(a + Math.PI)], tr = this.routeRoad(p[0], p[1], q[0], q[1]);
+      if (tr) this.layRoad(tr, 'track');
+      return;
+    }
     if (this.R.coast) {
       // The coast highway runs north and south a little inland; a canyon road climbs east.
       const off = (v) => Math.floor((this.coastAt(v) + MAP_W * randRange(0.09, 0.2)) / CELL);
@@ -1435,6 +1666,12 @@ class GameMap {
     }
   }
 
+  // A farm's name in the region's fashion: "Ashby Farm", "Ferme de Crion", "Phu Loc (2)".
+  farmName() {
+    const R = this.R, w = Array.isArray(R.farmWord) ? pick(R.farmWord) : R.farmWord;
+    return R.farmPrefix ? R.farmPrefix + this.placeName() : this.placeName() + ' ' + w;
+  }
+
   placeName() {
     const R = this.R, one = () => R.whole && (!R.nameA || chance(0.35)) ? pick(R.whole) : pick(R.nameA) + pick(R.nameB);
     for (let i = 0; i < 30; i++) {
@@ -1489,7 +1726,7 @@ class GameMap {
       for (let k = 0; k < randInt(0, 2); k++) this.placeBuilding(c.cx + randInt(-6, 6), c.cy + randInt(4, 7) * (chance(0.5) ? 1 : -1), randInt(2, 3), 2);
       if (chance(this.R.yardWalls[1])) this.yardWall(b);
       made++;
-      this.places.push({ name: this.placeName() + ' ' + this.R.farmWord, x: b.x1 + 6, y: b.y0, kind: 'farm' });
+      this.places.push({ name: this.farmName(), x: b.x1 + 6, y: b.y0, kind: 'farm' });
       // Track to the nearest road cell.
       let best = -1, bd = Infinity;
       for (let i = 0; i < roadCells.length; i += 3) {
@@ -1513,7 +1750,7 @@ class GameMap {
       for (let j = -R; j <= R && top; j += 5) for (let i = -R; i <= R; i += 5) {
         if ((i || j) && this.elev[(cy + j) * GW + cx + i] > e) { top = false; break; }
       }
-      if (top) peaks.push({ x: (cx + 0.5) * CELL, y: (cy + 0.5) * CELL, e });
+      if (top && this.ter[cy * GW + cx] !== TER.OCEAN) peaks.push({ x: (cx + 0.5) * CELL, y: (cy + 0.5) * CELL, e });
     }
     peaks.sort((a, b) => b.e - a.e);
     this.peaks = [];
@@ -1762,6 +1999,7 @@ function simplifyLine(pts, tol) {
 
 let NEXT_ID = 1;
 const ORDINAL = ['1st', '2nd', '3rd', '4th'];
+function ordinal(n) { const t = n % 100, u = n % 10; return n + (t > 10 && t < 14 ? 'th' : u === 1 ? 'st' : u === 2 ? 'nd' : u === 3 ? 'rd' : 'th'); }
 
 class Soldier {
   constructor(side, billet, team, cfg) {
@@ -1786,8 +2024,11 @@ class Soldier {
     this.launcherKey = cfg.launcher || null;
     this.launcher = cfg.launcher ? LAUNCHERS[cfg.launcher] : null;
     this.lRounds = this.launcher ? (cfg.lRounds != null ? cfg.lRounds : this.launcher.rounds) : 0;
-    this.grenade = side === 'blue' ? GRENADES.M67 : GRENADES.RGD5;
+    this.grenadeKey = cfg.grenade || (side === 'blue' ? 'M67' : 'RGD5');
+    this.grenade = GRENADES[this.grenadeKey];
     this.frags = cfg.frags != null ? cfg.frags : 2;
+    this.meleeKey = cfg.melee || 'butt';
+    this.skill = cfg.skill || team.squad.skill || 1; // marksmanship
     this.fireControl = 'free';
     this.targetId = null; this.priorityId = null; this.suppressPt = null; this.launchQueue = null;
     this.fireCD = randRange(0.3, 1.5); this.reloadT = 0; this.launchCD = randRange(2, 5); this.fragCD = 0;
@@ -1850,7 +2091,7 @@ class Team {
   }
   get leader() { return this.members.find(s => s.active) || null; }
   get active() { return this.members.filter(s => s.active); }
-  get short() { return this.num ? ORDINAL[this.num - 1] + ' FT' : 'SL'; }
+  get short() { return this.num ? ordinal(this.num) + ' ' + (this.squad.teamWord || 'FT') : this.squad.hqShort || 'SL'; }
   get broken() { return this.morale < 12; }
   get shaken() { return this.morale < 28; }
 }
@@ -1862,6 +2103,8 @@ class Squad {
     this.formation = 'wedge';
     this.spacing = 1; // interval between teams, as a share of the standard
     this.training = 1;
+    this.skill = 1;
+    this.teamWord = 'FT'; this.teamName = 'Fire Team';
   }
   get all() { return [this.hq, ...this.teams].flatMap(t => t.members); }
   get active() { return this.all.filter(s => s.active); }
@@ -1893,12 +2136,12 @@ function applyLoadout(sq, lo) {
 
 function buildUSMCSquad(loadout) {
   const sq = new Squad('blue', '1st Squad', 82);
-  sq.training = 0.85;
+  sq.training = 0.85; sq.kind = 'usmc';
   const names = shuffle(SURNAMES.slice());
   const make = (key, team) => {
     const b = USMC_BILLETS[key], lo = loadout[key];
     const s = new Soldier('blue', key, team, { title: b.title, rank: b.rank, name: names.pop(), weapon: lo.weapon,
-      mags: lo.mags, frags: lo.frags, launcher: lo.launcher, lRounds: lo.lRounds });
+      mags: lo.mags, frags: lo.frags, launcher: lo.launcher, lRounds: lo.lRounds, melee: 'bayonet' });
     team.members.push(s);
     return s;
   };
@@ -1953,6 +2196,11 @@ function placeSquad(sq, map, x, y, heading) {
   });
   const so = scaled(squadLeaderSlot(sq.formation), sq.spacing), w = rotateOffset(so.x, so.y, heading);
   put(sq.leader, x + w.x, y + w.y);
+  // Anyone else at the command post (a deputy, a sniper, a radio operator) beside the leader.
+  sq.hq.members.filter(s => s !== sq.leader).forEach((s, i) => {
+    const o = rotateOffset(so.x + (i % 2 ? -4 : 4) * Math.ceil((i + 1) / 2), so.y - 3, heading);
+    put(s, x + o.x, y + o.y);
+  });
 }
 
 // ---- src/combat.js
@@ -1980,7 +2228,13 @@ function exposure(s, e) {
 function updateSpotting() {
   for (const side of ['blue', 'red']) {
     const known = G.known[side];
-    const observers = G.soldiers.filter(s => s.side === side && s.active);
+    let observers = G.soldiers.filter(s => s.side === side && s.active);
+    // A large force (a war party, a company) looks with a share of its men each check, in
+    // turn, so a check stays quick; what any one of them sees, all know.
+    if (observers.length > 48) {
+      const k = Math.ceil(observers.length / 48), ph = (G.spotPhase = ((G.spotPhase || 0) + 1) % 997);
+      observers = observers.filter((o, i) => (i + ph) % k === 0 || (o.billet === 'SL' || o.billet === 'TL'));
+    }
     const fresh = [];
     for (const e of G.soldiers) {
       if (e.side === side || e.routed) continue;
@@ -1988,22 +2242,26 @@ function updateSpotting() {
       for (const o of observers) {
         const d = dist(o.x, o.y, e.x, e.y);
         if (d > SPOT_RANGE) continue;
-        const v = sightLine(o, e);
-        if (v <= 0) continue;
-        if (entry && entry.visible) { seenBy = o; break; }
+        if (entry && entry.visible) { if (sightLine(o, e) > 0) { seenBy = o; break; } continue; }
         let p = 0.55 * Math.pow(clamp(1 - d / 760, 0.03, 1), 1.6);
         p *= POSTURE[e.posture].size + 0.1;
         if (e.moving) p *= e.moveMode === 'rush' ? 2.6 : e.moveMode === 'walk' ? 1.8 : 1.1;
-        if (G.time - e.lastFired < 4) p *= 5;
+        // A shot gives a man away: for a few seconds, longer under a cloud of black-powder
+        // smoke; hardly at all with a bow or a silenced rifle.
+        if (G.time - e.lastFired < (e.weapon.smoke ? 12 : e.weapon.quiet ? 2 : 4)) p *= e.weapon.quiet ? 1.6 : 5;
         if (!e.alive || e.health === 'serious') p *= 0.5;
-        p *= v;
         // Inside the cone a man sees well; at the edge of his vision poorly; behind him hardly at all.
         const off = Math.abs(angleDiff(o.look, angleTo(o.x, o.y, e.x, e.y)));
         p *= off <= o.coneHalf ? 1.25 : off < 1.75 ? 0.45 : 0.12;
         p *= 1 - o.supp / 120;
         if (o.relaxed) p *= 0.3; // at rest, not on watch
-        if (d < 25) p = Math.max(p, 0.5 * v);
-        if (chance(Math.min(0.95, p))) { seenBy = o; break; }
+        // The chance is p times the share of the line of sight that is clear. Rolling first
+        // and tracing the line only when the roll could succeed gives the same odds, cheaply.
+        const r = rand(), close = d < 25 ? 0.5 : 0;
+        if (r >= Math.min(0.95, Math.max(p, close))) continue;
+        const v = sightLine(o, e);
+        if (v <= 0) continue;
+        if (r < Math.min(0.95, Math.max(p * v, close * v))) { seenBy = o; break; }
       }
       if (seenBy) {
         if (!entry) {
@@ -2102,9 +2360,12 @@ function updateCombat(s, dt) {
   if (s.reloadT > 0) {
     s.reloadT -= dt;
     if (s.reloadT <= 0) s.inMag = s.weapon.mag;
+    // Caught reloading, a man still fights whoever reaches him.
+    if (s.active && !s.routing && s.postureBusy <= 0) updateMelee(s, dt);
     return;
   }
   if (!s.active || s.routing || s.postureBusy > 0) return;
+  if (updateMelee(s, dt)) return;
 
   // An explicit 40mm mission is fired even under hold fire.
   if (s.launchQueue && !s.moving && s.launchCD <= 0) {
@@ -2172,8 +2433,10 @@ function updateCombat(s, dt) {
 
 function hitChance(s, e, exp, d) {
   const W = s.weapon;
-  let p = W.acc * (d <= 100 ? 1 : Math.pow(100 / d, 1.1));
+  // Close in, the weapon's best; halved at its r50 and falling with the square of the range.
+  let p = W.acc / (1 + (d / W.r50) * (d / W.r50));
   if (d > W.range) p *= 0.4;
+  p *= s.skill || 1;
   p *= POSTURE[e.posture].size;
   p *= 1 - 0.35 * Plan.digIn(e); // dug-in defenders are harder to hit
   if (e.moving && e.moveMode === 'rush') p *= 0.6;
@@ -2201,6 +2464,7 @@ function fireBurst(s, e, exp) {
   const W = s.weapon, n = Math.min(W.rounds, s.inMag), d = dist(s.x, s.y, e.x, e.y);
   s.inMag -= n; s.shots += n; s.lastFired = G.time;
   s.facing = angleTo(s.x, s.y, e.x, e.y);
+  muzzle(s);
   const p = hitChance(s, e, exp, d);
   let hit = false;
   for (let i = 0; i < n; i++) {
@@ -2216,7 +2480,20 @@ function fireBurst(s, e, exp) {
   }
   noteFiredUpon(e.team, s);
   s.fireCD = fireDelay(s, d, exp >= 0.6) * randRange(0.8, 1.3) * (s.pinned ? 2.5 : 1) * (s.moving ? 1.6 : 1);
+  stoppage(s);
   if (s.inMag <= 0) startReload(s);
+}
+
+// Black powder leaves a cloud of white smoke at the muzzle.
+function muzzle(s) {
+  if (s.weapon.smoke) G.effects.push({ type: 'smoke', x: s.x + Math.cos(s.facing) * 2, y: s.y + Math.sin(s.facing) * 2, t: 0, life: 9 });
+}
+
+// A weapon prone to stoppages (the Chauchat above all) sometimes has to be cleared.
+function stoppage(s) {
+  if (!s.weapon.jam || !chance(s.weapon.jam)) return;
+  s.fireCD = Math.max(s.fireCD, randRange(5, 10));
+  if (s.side === 'blue' && G.time - (s.jamLogT || -99) > 30) { s.jamLogT = G.time; G.log(s.team.short + ': ' + s.label + '\'s ' + s.weapon.name + ' has jammed.', 'warn'); }
 }
 
 // Fire at a place rather than a man: suppresses anyone near it, seen or not.
@@ -2226,6 +2503,7 @@ function fireArea(s, x, y, rate) {
   const n = Math.min(W.rounds, s.inMag);
   s.inMag -= n; s.shots += n; s.lastFired = G.time;
   s.facing = angleTo(s.x, s.y, x, y);
+  muzzle(s);
   const spread = 2 + d * 0.015;
   for (let i = 0; i < n; i++) addTracer(s, x + gauss() * spread, y + gauss() * spread, i * 0.07);
   for (const o of G.soldiers) {
@@ -2240,6 +2518,7 @@ function fireArea(s, x, y, rate) {
     }
   }
   s.fireCD = fireDelay(s, d, false) * randRange(0.9, 1.4) * (s.pinned ? 2.5 : 1) / (rate || 1);
+  stoppage(s);
   if (s.inMag <= 0) startReload(s);
 }
 
@@ -2306,7 +2585,7 @@ function launchAt(s, x, y) {
   if (d < L.min || d > L.range) return false;
   const sc = L.scatter * d * (1 + s.supp / 100) + 1;
   let tx = x + gauss() * sc, ty = y + gauss() * sc;
-  const kind = s.launcherKey === 'RPG7' ? 'rpg' : '40mm';
+  const kind = L.flat ? 'rpg' : '40mm';
   if (kind === 'rpg') ({ x: tx, y: ty } = flatImpact(s.x, s.y, tx, ty));
   G.projectiles.push({ x0: s.x, y0: s.y, x1: tx, y1: ty, t: 0, flight: dist(s.x, s.y, tx, ty) / L.vel + 0.05, fuse: 0,
     spec: L, side: s.side, shooter: s, kind });
@@ -2331,7 +2610,7 @@ function throwFrag(s, x, y) {
   }
   const sc = 1 + d * 0.08 + s.supp / 40;
   G.projectiles.push({ x0: s.x, y0: s.y, x1: x + gauss() * sc, y1: y + gauss() * sc, t: 0, flight: d / 14, fuse: R.fuse,
-    spec: R, side: s.side, shooter: s, kind: 'frag' });
+    spec: R, side: s.side, shooter: s, kind: 'frag', dud: R.dud && chance(R.dud) });
   s.frags--; s.fragCD = 8; s.lastFired = G.time;
   s.loadKg = s.computeLoad();
   if (s.side === 'blue') G.log(s.team.short + ': Frag out!', 'fire');
@@ -2342,7 +2621,7 @@ function updateProjectiles(dt) {
     const p = G.projectiles[i];
     p.t += dt;
     if (p.t >= p.flight + p.fuse) {
-      explode(p.x1, p.y1, p.spec, p.side, p.shooter);
+      if (!p.dud) explode(p.x1, p.y1, p.spec, p.side, p.shooter);
       G.projectiles.splice(i, 1);
     }
   }
@@ -2368,12 +2647,21 @@ function explode(x, y, spec, side, shooter) {
 }
 
 // ---------------------------------------------------------------- wounds and morale
-function applyHit(t, shooter, blast) {
+// How badly a hit wounds goes with what made it (dmg, against 5.56 mm = 1): a .22 rimfire
+// round mostly wounds lightly, a musket ball or a full-power rifle round seldom does.
+function applyHit(t, shooter, blast, dmg) {
   if (!t.alive || t.health === 'serious') return;
+  const m = blast ? 1.1 : dmg != null ? dmg : shooter && shooter.weapon ? shooter.weapon.dmg || 1 : 1;
   const r = rand();
   let res;
-  if (t.health === 'light') res = r < 0.4 ? 'kia' : 'serious';
-  else res = r < (blast ? 0.3 : 0.25) ? 'kia' : r < 0.62 ? 'serious' : 'light';
+  if (t.health === 'light') {
+    const k = clamp(0.4 * m, 0.1, 0.7), sv = clamp(0.6 * Math.sqrt(m), 0.2, 0.9);
+    res = r < k ? 'kia' : r < k + sv ? 'serious' : 'light';
+    if (res === 'light') { t.supp = Math.min(100, t.supp + 30); t.lastHitAt = G.time; return; }
+  } else {
+    const k = clamp(0.25 * Math.pow(m, 1.3), 0.03, 0.6), sv = clamp(0.37 * Math.pow(m, 0.7), 0.1, 0.55);
+    res = r < k ? 'kia' : r < k + sv ? 'serious' : 'light';
+  }
   t.health = res; t.lastHitAt = G.time;
   G.stats[t.side][res]++;
   if (res === 'light') {
@@ -2396,15 +2684,53 @@ function casualtyEvent(t, res) {
   for (const o of sq.all) if (o !== t && o.active && dist(o.x, o.y, t.x, t.y) < 30) addSupp(o, 22);
   if (t.side === 'blue') {
     const what = res === 'kia' ? 'killed' : 'down, serious casualty';
-    G.log((leader ? t.title + ' ' : '') + t.label + ' is ' + what + '.', 'loss');
+    G.log((leader ? t.title + ' ' + t.name : t.label) + ' is ' + what + '.', 'loss');
     if (t.billet === 'TL' && team.leader) G.log(team.short + ': ' + team.leader.label + ' takes command of the team.', 'info');
     if (t.billet === 'SL') {
       const next = sq.teams.map(tm => tm.members.find(s => s.billet === 'TL' && s.active)).find(Boolean);
-      if (next) G.log(next.label + ' assumes command of the squad.', 'info');
+      if (next) G.log(next.label + ' assumes command.', 'info');
     }
   } else if (G.known.blue.get(t.id)?.visible) {
     G.log('Enemy ' + t.title.toLowerCase() + ' hit.', 'kill');
   }
+}
+
+// ---------------------------------------------------------------- hand to hand
+// A man with an enemy within arm's reach fights him: a loaded weapon is fired point-blank,
+// otherwise it is the bayonet, the club, the hatchet or the rifle butt.
+function updateMelee(s, dt) {
+  s.meleeCD = (s.meleeCD || 0) - dt;
+  if (s.meleeCD > 0 || !s.active || s.routing) return false;
+  let foe = null, fd = 2.6, near = Infinity;
+  for (const o of G.soldiers) {
+    if (o.side === s.side || !o.active) continue;
+    const dx = Math.abs(o.x - s.x), dy = Math.abs(o.y - s.y), m = Math.max(dx, dy);
+    if (m < near) near = m;
+    if (dx > fd || dy > fd) continue;
+    const d = Math.hypot(dx, dy);
+    if (d < fd) { fd = d; foe = o; }
+  }
+  // No one within reach: look again when the nearest enemy could have closed the distance.
+  if (!foe) { s.meleeCD = Math.max(0.4, (near - 3) / 8); return false; }
+  s.meleeCD = randRange(0.9, 1.5);
+  s.facing = angleTo(s.x, s.y, foe.x, foe.y);
+  s.lastFired = G.time; s.path = [];
+  noteFiredUpon(foe.team, s);
+  addSupp(foe, 15);
+  if (s.inMag > 0 && s.reloadT <= 0 && !s.weapon.quiet && s.weapon.range > 60 && chance(0.5)) {
+    s.inMag--; s.shots++; muzzle(s);
+    if (chance(0.6 * (s.skill || 1))) { applyHit(foe, s); s.hits++; }
+    if (s.inMag <= 0) startReload(s);
+    return true;
+  }
+  const M = MELEE[s.meleeKey] || MELEE.butt, F = MELEE[foe.meleeKey] || MELEE.butt;
+  // The better armed and the less shaken man has the edge.
+  const p = 0.32 * M.skill / Math.sqrt(F.skill) * (1 - s.supp / 200) * (foe.supp > 50 ? 1.3 : 1) * (s.skill || 1);
+  if (chance(clamp(p, 0.05, 0.7))) {
+    applyHit(foe, s, false, M.dmg); s.hits++;
+    if (s.side === 'blue' && G.time - (s.team.meleeLogT || -99) > 20) { s.team.meleeLogT = G.time; G.log(s.team.short + ': Hand to hand!', 'contact'); }
+  }
+  return true;
 }
 
 // ---- src/fog.js
@@ -2614,15 +2940,34 @@ function squadMove(sq, x, y, mode, face) {
   if (!act.length) return;
   const c = centroid(act), heading = face != null ? face : angleTo(c.x, c.y, x, y);
   const teams = sq.teams.filter(t => t.members.some(commandable));
+  // On a long move the whole force follows one route, each man at his station on it.
+  if (face == null && dist(c.x, c.y, x, y) > 120) {
+    const route = G.map.findPath(c.x, c.y, x, y);
+    if (route) {
+      const along = (s, ox, oy) => {
+        s.nudging = false; s.resume = null; s.holdFacing = null;
+        s.path = G.map.offsetPath(s.x, s.y, route, ox, oy); s.moveMode = mode; s.faceAngle = null;
+      };
+      teams.forEach((t, k) => {
+        const q = scaled(squadSlot(sq.formation, k, teams.length), sq.spacing);
+        t.members.filter(commandable).forEach((s, i) => { const o = scaled(teamSlot(t.formation, i), t.spacing); along(s, q.x + o.x, q.y + o.y); });
+      });
+      const so = scaled(squadLeaderSlot(sq.formation), sq.spacing);
+      sq.hq.members.forEach((s, i) => { if (commandable(s)) along(s, so.x + (i ? (i % 2 ? -4 : 4) * Math.ceil(i / 2) : 0), so.y); });
+      return;
+    }
+  }
   teams.forEach((t, k) => {
     const o = scaled(squadSlot(sq.formation, k, teams.length), sq.spacing), w = rotateOffset(o.x, o.y, heading);
     teamMove(t, x + w.x, y + w.y, mode, heading, false);
   });
-  const sl = sq.hq.members[0];
-  if (commandable(sl)) {
-    const o = scaled(squadLeaderSlot(sq.formation), sq.spacing), w = rotateOffset(o.x, o.y, heading);
-    orderMove(sl, x + w.x, y + w.y, mode);
-  }
+  // The leader at his place; anyone else with him (a deputy, a sniper) beside him.
+  const so = scaled(squadLeaderSlot(sq.formation), sq.spacing);
+  sq.hq.members.forEach((s, i) => {
+    if (!commandable(s)) return;
+    const w = rotateOffset(so.x + (i ? (i % 2 ? -4 : 4) * Math.ceil(i / 2) : 0), so.y, heading);
+    orderMove(s, x + w.x, y + w.y, mode);
+  });
 }
 
 // Move along a route: one route is plotted through the waypoints and every man keeps his
@@ -3033,16 +3378,70 @@ const Nudge = {
 };
 // ---- src/ai.js
 'use strict';
-// Enemy squad AI. On contact the heaviest group becomes the base of fire and the
-// others try to flank and assault. It breaks contact after heavy losses.
+// Enemy AI. On contact the heaviest group becomes the base of fire and the others try to
+// flank and assault; it breaks contact after heavy losses. How it does so goes with the
+// force's doctrine: redcoats in line, a war party in the woods, a Stoßtrupp, a Soviet
+// platoon on line, guerrillas in ambush, a gang with no plan at all.
 
-const AI = { mode: 'defend', objective: null, contact: false, withdrawing: false, timer: 0, lastContact: -99, routine: null, breakOff: false, escape: null };
+// hold: the share of the force still fighting below which it breaks contact. maneuvers:
+// teams sent round the flanks (the rest hold, the heaviest is the base of fire). flank: how
+// wide they go, in meters. assault: whether they close: true; 'weak', only on an enemy that
+// is shaken or thinned out; false, never. cover: how far a man looks for cover when contact
+// comes (0, he keeps his place in the ranks). ambush: in a defense, fire is held until the
+// enemy is this close. hug: maneuver teams close to this range and fight from there.
+// breakAfter: seconds of fighting before it pulls out whatever its losses. scatter: it pulls
+// out by teams, each its own way. line: it forms line, fires volleys and charges with the
+// bayonet (volley, charge: ranges). charge: the assault goes in at a run, every man for the
+// nearest enemy, to fight hand to hand. rigid: a team whose leader falls stops where it is.
+const DOCTRINES = {
+  modern:    { label: 'Fire and maneuver', hold: 0.45, maneuvers: 1, flank: 55, assault: true, cover: 14 },
+  line:      { label: 'Line, volley and bayonet', hold: 0.4, line: true, volley: 90, charge: 45, assault: true, cover: 0 },
+  woodland:  { label: 'From cover, round the flanks; the club when the enemy wavers', hold: 0.7, maneuvers: 2, flank: 90, assault: 'weak', charge: 30, cover: 16, ambush: 70, open: true },
+  stoss:     { label: 'Machine gun base of fire; grenades and spades in the assault', hold: 0.45, maneuvers: 2, flank: 40, assault: true, cover: 14, rushes: true },
+  soviet:    { label: 'Frontal assault on line, fire on the move', hold: 0.4, maneuvers: 9, flank: 10, assault: true, cover: 10, rigid: true },
+  elite:     { label: 'Fix, then envelop from both flanks', hold: 0.35, maneuvers: 2, flank: 65, assault: true, cover: 14 },
+  spetsnaz:  { label: 'Strike from ambush, then break contact', hold: 0.6, maneuvers: 1, flank: 50, assault: 'weak', cover: 14, ambush: 120, breakAfter: 240, scatter: true },
+  nva:       { label: 'Hug the enemy close, then pull back', hold: 0.6, maneuvers: 2, flank: 35, assault: true, hug: 35, cover: 14, ambush: 60, breakAfter: 360, scatter: true, open: true },
+  guerrilla: { label: 'Ambush close, then slip away', hold: 0.7, maneuvers: 1, flank: 35, assault: 'weak', hug: 40, cover: 14, ambush: 50, breakAfter: 180, scatter: true, open: true },
+  gang:      { label: 'No plan: fire from where they stand, scatter when hurt', hold: 0.8, maneuvers: 0, assault: false, cover: 5, scatter: true },
+};
+
+const AI = { mode: 'defend', objective: null, contact: false, withdrawing: false, timer: 0, lastContact: -99, routine: null, breakOff: false, escape: null,
+  D: DOCTRINES.modern, ambushing: false, contactStart: null };
 
 function initAI(mode, objective, extra) {
   AI.mode = mode; AI.objective = objective;
   AI.contact = false; AI.withdrawing = false; AI.timer = 2; AI.lastContact = -99;
   AI.routine = extra && extra.routine || null; AI.breakOff = !!(extra && extra.breakOff); AI.escape = extra && extra.escape || null;
-  for (const t of [G.squads.red.hq, ...G.squads.red.teams]) t.task = null;
+  AI.D = DOCTRINES[extra && extra.doctrine] || DOCTRINES.modern; AI.contactStart = null;
+  const sq = G.squads.red;
+  for (const t of [sq.hq, ...sq.teams]) { t.task = null; t.escape = null; }
+  // Forces that fight in open order move spread out.
+  if (AI.D.open) { sq.spacing = 1.8; for (const t of sq.teams) t.spacing = 1.8; }
+  if (AI.D.line) { sq.formation = 'line'; for (const t of sq.teams) t.formation = 'line'; }
+  // Lying in wait: no one fires until the enemy is close.
+  AI.ambushing = !!AI.D.ambush && mode === 'defend';
+  if (AI.ambushing) for (const s of sq.all) s.fireControl = 'hold';
+}
+
+// The enemy is shaken or thinned out: time to close.
+function blueWeak() {
+  const b = G.squads.blue, act = b.all.filter(s => s.active && !s.routing);
+  if (act.length < 0.65 * b.all.length) return true;
+  return act.length && act.reduce((n, s) => n + s.supp, 0) / act.length > 45;
+}
+
+// Every man runs at the nearest enemy he knows of, to fight hand to hand.
+function charge(m) {
+  const known = [...G.known.red.values()].filter(k => G.time - k.t < 20 && G.byId.get(k.id)?.active);
+  for (const s of m) {
+    let best = null, bd = Infinity;
+    for (const k of known) { const d = dist(s.x, s.y, k.x, k.y); if (d < bd) { bd = d; best = k; } }
+    if (!best) continue;
+    const e = G.byId.get(best.id), tx = best.visible ? e.x : best.x, ty = best.visible ? e.y : best.y;
+    orderMove(s, tx, ty, 'rush');
+    s.assault = true; s.homePosture = 'stand'; s.fireControl = 'free';
+  }
 }
 
 // Defenders start dug in: each man takes the best cover near the position.
@@ -3058,11 +3457,11 @@ function setupDefense(sq, threat) {
   }
 }
 
-function aiTakeCover(members, threat) {
+function aiTakeCover(members, threat, radius) {
   const reserved = [];
   for (const s of members) {
     s.assault = false;
-    const c = G.map.findCover(s.x, s.y, threat.x, threat.y, 14, reserved);
+    const c = G.map.findCover(s.x, s.y, threat.x, threat.y, radius || 14, reserved);
     reserved.push(c);
     orderMove(s, c.x, c.y, 'rush');
     s.homePosture = c.posture;
@@ -3075,15 +3474,34 @@ function firepower(t) {
 }
 
 function assignTasks(sq) {
-  const teams = sq.teams.filter(t => t.members.some(commandable)).sort((a, b) => firepower(b) - firepower(a));
+  const D = AI.D, teams = sq.teams.filter(t => t.members.some(commandable)).sort((a, b) => firepower(b) - firepower(a));
+  sq.hq.task = { type: 'hold' };
+  if (D.line) { for (const t of teams) t.task = { type: 'line', phase: 'form', t0: G.time }; return; }
   let maneuvers = 0;
   teams.forEach((t, i) => {
-    if (i === 0) { t.task = { type: 'base' }; return; }
-    const go = t.morale > 45 && (AI.mode === 'advance' ? true : maneuvers === 0 && chance(0.55));
-    t.task = go ? { type: 'maneuver', phase: 'start', t0: G.time } : { type: 'hold' };
+    if (i === 0 || !D.maneuvers) { t.task = { type: i === 0 && D.maneuvers ? 'base' : 'hold' }; return; }
+    // Attacking, every team allowed goes; defending, one may go out after a flank, and a force
+    // that envelops (a war party, paratroopers) always does.
+    const eager = AI.mode === 'advance' || D.maneuvers >= 2 || D.rigid;
+    const go = t.morale > 45 && maneuvers < D.maneuvers && (eager || (maneuvers === 0 && chance(0.55)));
+    t.task = go ? { type: 'maneuver', phase: 'start', t0: G.time, side: maneuvers % 2 ? -1 : 1 } : { type: 'hold' };
     if (go) maneuvers++;
   });
-  sq.hq.task = { type: 'hold' };
+}
+
+// Pull out: the whole force for one edge, or each team its own way.
+function breakContact(sq, enemyC, why) {
+  const c = centroid(sq.all.filter(commandable).length ? sq.all.filter(commandable) : sq.all);
+  AI.withdrawing = true;
+  if (AI.D.scatter && enemyC) {
+    const away = angleTo(enemyC.x, enemyC.y, c.x, c.y);
+    [sq.hq, ...sq.teams].forEach((t, i) => {
+      const m = t.members.filter(commandable);
+      if (m.length) t.escape = edgeFrom(centroid(m), away + (i % 3 - 1) * 0.7 + gauss() * 0.2);
+    });
+  }
+  for (const t of [sq.hq, ...sq.teams]) startRouting(t, 'withdraw');
+  if (sq.all.some(s => G.known.blue.get(s.id)?.visible)) G.log(why || 'Enemy is breaking contact.', 'kill');
 }
 
 // The planning time in a meeting engagement: nothing moves while the order is planned, but
@@ -3152,16 +3570,29 @@ function updateAI(dt) {
   const act = sq.all.filter(commandable);
   if (!act.length || AI.withdrawing) return;
 
-  if (sq.active.length / sq.all.length < 0.45) {
-    AI.withdrawing = true;
-    for (const t of [sq.hq, ...sq.teams]) startRouting(t, 'withdraw');
-    if (sq.all.some(s => G.known.blue.get(s.id)?.visible)) G.log('Enemy is breaking contact.', 'kill');
-    return;
-  }
-
   const contacts = [...G.known.red.values()].filter(k => G.time - k.t < 30 && G.byId.get(k.id)?.active);
   if (contacts.length) AI.lastContact = G.time;
   const enemyC = contacts.length ? centroid(contacts) : null;
+
+  if (sq.active.length / sq.all.length < AI.D.hold) { breakContact(sq, enemyC); return; }
+  if (AI.D.breakAfter && AI.contactStart != null && G.time - AI.contactStart > AI.D.breakAfter) {
+    breakContact(sq, enemyC, 'The enemy is pulling back.'); return;
+  }
+
+  // An ambush is sprung when the enemy comes close enough, or fires first.
+  if (AI.ambushing) {
+    const close = contacts.some(k => k.visible && act.some(s => dist(s.x, s.y, k.x, k.y) < AI.D.ambush));
+    const firedOn = sq.all.some(s => G.time - s.team.lastFiredUpon < 3);
+    if (close || firedOn) {
+      AI.ambushing = false;
+      for (const s of sq.all) s.fireControl = 'free';
+    } else if (contacts.length) {
+      // Waiting: still, and silent.
+      AI.contact = true;
+      for (const s of sq.all) s.relaxed = false;
+      return;
+    }
+  }
 
   // Done at the water point (or wherever it stopped): it moves on, away from the squad.
   const M = G.mission;
@@ -3186,8 +3617,8 @@ function updateAI(dt) {
     return;
   }
 
-  if (!AI.contact) {
-    AI.contact = true;
+  if (!AI.contact || AI.contactStart == null) {
+    AI.contact = true; AI.contactStart = G.time;
     // Men at rest come awake.
     for (const s of sq.all) s.relaxed = false;
     // A force out to watch, forage or get away breaks contact and makes for the edge.
@@ -3198,6 +3629,7 @@ function updateAI(dt) {
       for (const t of [sq.hq, ...sq.teams]) startRouting(t, 'withdraw');
       return;
     }
+    if (AI.D.line && sq.all.some(s => G.known.blue.get(s.id)?.visible)) G.log('The enemy is forming line.', 'contact');
     assignTasks(sq);
     if (AI.mode === 'advance') {
       for (const s of act) { s.path = []; }
@@ -3212,17 +3644,26 @@ function updateAI(dt) {
 }
 
 function runTask(t, m, enemyC) {
-  const task = t.task;
+  const task = t.task, D = AI.D;
   const avgSupp = m.reduce((n, s) => n + s.supp, 0) / m.length;
+  const c = centroid(m), dE = dist(c.x, c.y, enemyC.x, enemyC.y);
+
+  if (task.type === 'line') { runLine(t, m, enemyC, dE); return; }
 
   if (task.type === 'base' || task.type === 'hold') {
-    if (!task.covered) { aiTakeCover(m, enemyC); task.covered = true; }
+    if (!task.covered) {
+      if (D.cover) aiTakeCover(m, enemyC, D.cover);
+      else for (const s of m) { s.faceAngle = angleTo(s.x, s.y, enemyC.x, enemyC.y); s.homePosture = 'kneel'; }
+      task.covered = true;
+    }
     // Automatic weapons in the base of fire keep rounds on the enemy's last position.
     if (task.type === 'base') {
       for (const s of m) {
         if ((s.billet === 'MG' || s.billet === 'AR') && !s.targetId) s.suppressPt = { x: enemyC.x + gauss() * 4, y: enemyC.y + gauss() * 4 };
       }
     }
+    // A war party holding its ground still closes on a beaten enemy.
+    if (D.charge && D.assault === 'weak' && blueWeak() && dE < 120 && t.morale > 40 && !task.charged) { task.charged = true; charge(m); }
     return;
   }
 
@@ -3231,13 +3672,15 @@ function runTask(t, m, enemyC) {
     t.task = { type: 'hold' };
     return;
   }
-  const c = centroid(m);
+  // A drilled conscript team without its leader goes no further.
+  if (D.rigid && !t.members.some(s => s.active && s.billet === 'TL')) { t.task = { type: 'hold' }; return; }
   if (task.phase === 'start') {
-    const toUs = angleTo(enemyC.x, enemyC.y, c.x, c.y);
-    const options = [1, -1].map(side => {
+    const toUs = angleTo(enemyC.x, enemyC.y, c.x, c.y), fl = D.flank || 55;
+    const sides = task.side && D.maneuvers >= 2 ? [task.side] : [1, -1];
+    const options = sides.map(side => {
       const a = toUs + side * Math.PI / 2;
-      const x = clamp(enemyC.x + Math.cos(a) * 55 + Math.cos(toUs) * 25, 6, MAP_W - 6);
-      const y = clamp(enemyC.y + Math.sin(a) * 55 + Math.sin(toUs) * 25, 6, MAP_H - 6);
+      const x = clamp(enemyC.x + Math.cos(a) * fl + Math.cos(toUs) * (D.hug || 25), 6, MAP_W - 6);
+      const y = clamp(enemyC.y + Math.sin(a) * fl + Math.sin(toUs) * (D.hug || 25), 6, MAP_H - 6);
       let cover = 0;
       for (let i = 1; i <= 8; i++) {
         const k = G.map.terAt(lerp(c.x, x, i / 8), lerp(c.y, y, i / 8));
@@ -3245,31 +3688,80 @@ function runTask(t, m, enemyC) {
       }
       return { x, y, score: cover + rand() * 2 };
     });
-    const p = options[0].score > options[1].score ? options[0] : options[1];
+    const p = options.length > 1 && options[1].score > options[0].score ? options[1] : options[0];
     task.flank = p;
     task.phase = 'flank';
     task.t0 = G.time;
-    teamMove(t, p.x, p.y, 'walk');
+    // Storm troops cover the last stretch in rushes.
+    teamMove(t, p.x, p.y, D.rushes && dist(c.x, c.y, p.x, p.y) < 90 ? 'rush' : 'walk');
+    if (D.rigid) for (const s of m) { s.assault = true; s.fireControl = 'free'; }
     return;
   }
   if (task.phase === 'flank') {
     if (m.every(s => !s.moving || s.pinned) || G.time - task.t0 > 70) {
+      // Guerrillas hug the enemy and fight from close in; they go in only on a beaten enemy.
+      if (D.assault === false || (D.assault === 'weak' && !blueWeak())) { task.phase = 'hug'; task.t0 = G.time; return; }
       task.phase = 'assault';
       task.t0 = G.time;
-      teamMove(t, enemyC.x, enemyC.y, 'walk');
+      if (D.charge) charge(m);
+      else teamMove(t, enemyC.x, enemyC.y, 'walk');
       for (const s of m) { s.assault = true; s.fireControl = 'free'; }
     }
     return;
   }
+  if (task.phase === 'hug') {
+    if (!task.covered) { aiTakeCover(m, enemyC, D.cover || 14); task.covered = true; }
+    if (D.assault && (D.assault === true ? G.time - task.t0 > 40 : blueWeak())) { task.phase = 'flank'; task.t0 = G.time - 71; task.covered = false; }
+    return;
+  }
   if (task.phase === 'assault') {
     if (m.every(s => !s.moving)) {
-      if (dist(c.x, c.y, enemyC.x, enemyC.y) > 20 && G.time - task.t0 < 90) {
-        teamMove(t, enemyC.x, enemyC.y, 'walk');
+      if (dE > 20 && G.time - task.t0 < 90) {
+        if (D.charge) charge(m); else teamMove(t, enemyC.x, enemyC.y, 'walk');
         for (const s of m) s.assault = true;
       } else {
         t.task = { type: 'hold' };
       }
     }
+  }
+}
+
+// Infantry of the line: form line facing the enemy, march up without firing, give fire by
+// volley at close range, then go in with the bayonet. Beaten back, it re-forms and fires.
+function runLine(t, m, enemyC, dE) {
+  const task = t.task, D = AI.D;
+  if (task.phase === 'form') {
+    t.formation = 'line';
+    for (const s of m) { s.homePosture = 'stand'; s.fireControl = 'hold'; }
+    if (AI.mode !== 'defend' && dE > D.volley + 25) {
+      const a = angleTo(enemyC.x, enemyC.y, centroid(m).x, centroid(m).y), stop = D.volley * 0.85;
+      teamMove(t, enemyC.x + Math.cos(a) * stop, enemyC.y + Math.sin(a) * stop, 'walk', a + Math.PI, false);
+    }
+    task.phase = 'advance'; task.t0 = G.time;
+    return;
+  }
+  if (task.phase === 'advance') {
+    // Defending, the line holds its fire until the enemy is close.
+    if (dE < D.volley || (AI.mode !== 'defend' && m.every(s => !s.moving))) {
+      // Halt, present, fire: the whole team together.
+      for (const s of m) { s.path = []; s.fireControl = 'free'; s.fireCD = randRange(0, 0.5); s.faceAngle = angleTo(s.x, s.y, enemyC.x, enemyC.y); }
+      task.phase = 'volley'; task.t0 = G.time;
+      if (G.time - (AI.volleyLogT || -99) > 30 && G.squads.red.all.some(s => G.known.blue.get(s.id)?.visible)) { AI.volleyLogT = G.time; G.log('The enemy line fires a volley.', 'contact'); }
+    }
+    return;
+  }
+  if (task.phase === 'volley') {
+    // Two volleys or so, then the bayonet; sooner on a shaken enemy, or one already close.
+    if ((G.time - task.t0 > 32 || blueWeak() || dE < D.charge) && t.morale > 40) {
+      task.phase = 'charge'; task.t0 = G.time;
+      charge(m);
+      if (G.time - (AI.chargeLogT || -99) > 30 && G.squads.red.all.some(s => G.known.blue.get(s.id)?.visible)) { AI.chargeLogT = G.time; G.log('The enemy is charging with the bayonet!', 'contact'); }
+    }
+    return;
+  }
+  if (task.phase === 'charge') {
+    if (G.time - task.t0 > 50 || t.morale < 35) { task.phase = 'form'; return; }
+    if (m.every(s => !s.moving)) charge(m);
   }
 }
 
@@ -3626,9 +4118,13 @@ function around(p, r, n) { return shuffle(circle(p, r, n)).map(q => { const c = 
 // ---------------------------------------------------------------- choosing and building a mission
 // Pick a mission (or take the one asked for), a site for it on this sheet and a start for
 // the squad 1.0 to 1.4 km from it, then build and place the enemy.
-function setupMission(key, blue) {
+function setupMission(key, blue, sc) {
   const m = G.map, ech = G.echelon, M0 = ech.margin;
-  const keys = key && MISSIONS[key] ? [key] : shuffle(MISSION_KEYS.slice());
+  sc = sc || SCENARIOS.modern;
+  // A scenario has its own missions; one picked outside them is not used.
+  const pool = sc.missions || MISSION_KEYS;
+  const keys = key && MISSIONS[key] && pool.includes(key) ? [key] : shuffle(pool.slice());
+  const sep = sc.sep || ech.sep;
   for (const k of [...keys, 'attack']) {
     const D = MISSIONS[k];
     let sites = [];
@@ -3638,25 +4134,48 @@ function setupMission(key, blue) {
     // The squad's start: on passable ground at the echelon's distance from the site.
     let start = null;
     for (let t = 0; t < 600 && !start; t++) {
-      const a = randRange(0, Math.PI * 2), d = randRange(ech.sep[0], ech.sep[1]);
+      const a = randRange(0, Math.PI * 2), d = randRange(sep[0], sep[1]);
       const x = site.x + Math.cos(a) * d, y = site.y + Math.sin(a) * d;
       if (Sites.inside(x, y, M0) && TERRAIN[m.terAt(x, y)].speed > 0) start = { x, y };
     }
     if (!start) continue;
+    let red;
+    if (sc.opfor) {
+      // A historical force at its historical strength.
+      const n = randInt(sc.size[0], sc.size[1]), F = FORCES[sc.opfor];
+      red = buildForce(sc.opfor, 'red', n, { leader: sc.hvt || null, groups: sc.groups || null });
+      if (D.morale) red.morale = Math.min(red.morale, randRange(D.morale[0], D.morale[1]) + 15);
+      if (D.leader === 'CO' && !sc.hvt) { red.leader.billet = 'CO'; red.leader.title = red.leader.name = F.coTitle || 'Commander'; }
+      // A downed helicopter's crew, where the force has aircrew.
+      if (D.kind === 'crew' && F.billets.CR) {
+        const B = F.billets.CR;
+        for (const s of red.all.filter(s => s !== red.leader).slice(0, 3)) {
+          s.billet = 'CR'; s.title = s.name = B.title; s.weaponKey = B.weapon; s.weapon = WEAPONS[B.weapon]; s.inMag = s.weapon.mag; s.mags = s.weapon.mags - 1;
+          s.launcher = null; s.launcherKey = null; s.lRounds = 0; s.ammoStart = s.ammoLeft;
+        }
+      }
+    } else {
     const n = randInt(D.size[0], D.size[1]);
-    const red = buildOpfor(n, D.kind, { leader: D.leader });
+    red = buildOpfor(n, D.kind, { leader: D.leader });
     if (D.morale) red.morale = randRange(D.morale[0], D.morale[1]);
-    if (D.billets) red.teams.forEach((t, i) => t.members.forEach((s, j) => {
+    }
+    if (D.billets && !sc.opfor) red.teams.forEach((t, i) => t.members.forEach((s, j) => {
       const b = D.billets[(i * 4 + j) % D.billets.length], B = OPFOR_BILLETS[b];
       s.billet = b; s.title = B.title; s.name = B.title; s.weaponKey = B.weapon; s.weapon = WEAPONS[B.weapon]; s.inMag = s.weapon.mag; s.mags = s.weapon.mags - 1; s.ammoStart = s.ammoLeft;
     }));
     placeSquad(blue, m, start.x, start.y, angleTo(start.x, start.y, site.x, site.y));
+    // The objective named as history has it (Swansea), where the mission is in a town.
+    if (sc.siteName && site.kind === 'village') {
+      const pl = m.places.find(p => p.kind === 'village' && dist(p.x, p.y, site.x, site.y) < 5);
+      if (pl) pl.name = sc.siteName;
+      site.name = sc.siteName.toUpperCase();
+    }
     const ctx = { key: k, D, site, blue: start, red, objects: [], ai: null, wounded: 0 };
     D.setup(ctx);
     // Some of a beaten force are already hurt.
     for (const s of red.all) if (ctx.wounded && chance(ctx.wounded)) s.health = 'light';
     const M = { key: k, def: D, label: D.label, site, objects: ctx.objects, mode: D.mode || 'attack', digIn: !!D.digIn, reach: D.reach || null,
-      escape: D.escape || 0, hvt: D.hvt ? red.leader : null, kind: D.kind };
+      escape: D.escape || 0, hvt: D.hvt || sc.hvt ? red.leader : null, kind: sc.opfor || D.kind, scenario: sc };
     if (D.evac) M.evacAt = randInt(D.evac[0], D.evac[1]) * 60;
     if (D.leaveAt) M.leaveAt = randInt(D.leaveAt[0], D.leaveAt[1]) * 60;
     return { M, red, start, site, ai: ctx.ai };
@@ -3667,22 +4186,549 @@ function setupMission(key, blue) {
 // What the intelligence says about the enemy's size. Reports differ in quality, and the
 // order says how far to trust each: some are right, some are wrong, some do not say.
 function intelSize(n, kindKey) {
-  const K = OPFOR_KINDS[kindKey], men = K.men, r = rand();
+  // Counts are rougher for a larger force: to the man for a squad, to the ten for a war party.
+  const men = forceInfo(kindKey).men, r = rand(), k = Math.max(1, Math.round(n / 12));
   if (r < 0.4) {
-    const lo = Math.max(3, n - randInt(0, 2)), hi = Math.max(lo + 1, n + randInt(0, 2));
+    const lo = Math.max(3, n - randInt(0, 2) * k), hi = Math.max(lo + 1, n + randInt(0, 2) * k);
     return { text: 'OPFOR of ' + lo + '-' + hi + ' ' + men + '.', note: 'Confirmed by two sources. Considered reliable.', right: true };
   }
   if (r < 0.65) {
     // A wrong count: off by several men, either way, from a single source.
-    const off = (chance(0.6) ? -1 : 1) * randInt(3, 5), c = Math.max(3, n + off);
-    return { text: 'OPFOR of ' + Math.max(3, c - 1) + '-' + (c + 1) + ' ' + men + '.', note: 'A single report, not confirmed. Treat with caution.', right: false };
+    const off = (chance(0.6) ? -1 : 1) * randInt(3, 5) * k, c = Math.max(3, n + off);
+    return { text: 'OPFOR of ' + Math.max(3, c - k) + '-' + (c + k) + ' ' + men + '.', note: 'A single report, not confirmed. Treat with caution.', right: false };
   }
   if (r < 0.85) {
-    const floor = n <= 5 ? 'fire team' : n <= 9 ? 'section' : 'squad';
+    const floor = n <= 5 ? 'fire team' : n <= 9 ? 'section' : n <= 16 ? 'squad' : n <= 45 ? 'platoon' : 'company';
     return { text: 'OPFOR at least ' + floor + '-sized.', note: 'Only part of the force was seen. It may be larger.', right: true, vague: true };
   }
   return { text: 'OPFOR of unknown size.', note: 'Contact was brief; no count was made.', right: null };
 }
+
+// ---- src/factions.js
+'use strict';
+// Forces of other times and places, and the scenarios that set them against each other.
+// Each force gives its organization, weapons and way of fighting; the enemy is built from
+// one, and so is the player's own side when it is not today's Marine squad.
+
+// Variants of weapons in data.js under the names a force knew them by.
+WEAPONS.AKS74 = Object.assign({}, WEAPONS.AK74, { name: 'AKS-74' });
+WEAPONS.RPKS74 = Object.assign({}, WEAPONS.RPK74, { name: 'RPKS-74' });
+WEAPONS.AKMS = Object.assign({}, WEAPONS.AKM, { name: 'AKMS' });
+WEAPONS.AK74M = Object.assign({}, WEAPONS.AK74, { name: 'AK-74M' });
+WEAPONS.K98K = Object.assign({}, WEAPONS.GEW98, { name: 'Mauser Kar98k', r50: 260 });
+WEAPONS.PISTOL = { name: 'Flintlock pistol', rounds: 1, cycle: 1, acc: 0.25, r50: 15, range: 30, dmg: 1.2, supp: 4, mag: 1, mags: 9, reload: 20, kg: 1.2, magType: 'ball', smoke: true };
+
+// Surnames for the men of the player's side in other eras.
+const ERA_NAMES = {
+  colonial: ['Brown', 'Church', 'Mason', 'Bourne', 'Salisbury', 'Cole', 'Hale', 'Gorham', 'Willett', 'Bowen', 'Paine', 'Thurston',
+    'Mann', 'Peck', 'Jenckes', 'Wheaton', 'Bullock', 'Cushing', 'Bradford', 'Southworth', 'Howland', 'Fuller', 'Winslow', 'Cooke',
+    'Barnes', 'Sabin', 'Read', 'Carpenter', 'Ide', 'Walker', 'Thomas', 'Allen', 'Rogers', 'Kingsley', 'Luther', 'Cranston', 'Martin'],
+  continental: ['Allen', 'Ballard', 'Clark', 'Crane', 'Doane', 'Dunlap', 'Ellis', 'Fenton', 'Gibbs', 'Hart', 'Hubbell', 'Irvine', 'Ives',
+    'Jameson', 'Judd', 'Knox', 'Lyman', 'Mead', 'Nash', 'Olcott', 'Porter', 'Reed', 'Starr', 'Tuttle', 'Upham', 'Vail', 'Wells',
+    'Yates', 'Fleming', 'McKean', 'Gordon', 'Hardin', 'Shreve', 'Stoddard', 'Bissell', 'Talmadge', 'Webb', 'Hull', 'Meigs', 'Hay'],
+  algerian: ['Ben Ali', 'Bouzid', 'Mansouri', 'Haddad', 'Belkacem', 'Saadi', 'Brahimi', 'Zerrouki', 'Messaoudi', 'Chérif', 'Boudiaf',
+    'Amrani', 'Khelifa', 'Laïdi', 'Rahmani', 'Touati', 'Hamdi', 'Benaïssa', 'Djebbar', 'Ouali', 'Kaci', 'Larbi', 'Mebarki', 'Nouri',
+    'Ziane', 'Guerfi', 'Hamlaoui', 'Benboulaïd', 'Chihani', 'Lamouri', 'Aouchria', 'Bouchemal', 'Meziani', 'Ferhat', 'Soltani'],
+  afghan: ['Gul', 'Khan', 'Jan', 'Rahim', 'Wali', 'Nur', 'Shah', 'Akbar', 'Habib', 'Zaman', 'Karim', 'Qadir', 'Hamid', 'Sadiq', 'Nabi',
+    'Rasul', 'Daud', 'Yusuf', 'Amin', 'Hakim', 'Malang', 'Sher', 'Faizullah', 'Ghulam', 'Bismillah', 'Wakil', 'Najib', 'Aziz', 'Panah'],
+};
+
+// Each force: label; nation (its side in the battle box); men (plural); unit (what the
+// order's intelligence, or its friendly forces paragraph, says of it); doctrine (how its AI
+// fights, DOCTRINES in ai.js); morale range; training (how much fire shakes it, 1 regular);
+// skill (marksmanship, 1 a trained modern rifleman); grenade and frags. billets: role (the
+// symbol and the man's part: SL TL R AR MG G RPG MM CO CR), title, rank, weapon (a key or
+// a weighted list), launcher, melee, frags. leader and hq: the command. groups: its groups,
+// templates of billet keys used in turn; or pool and groupSize for bands without a fixed
+// organization. The player's forces have three teams (teamWord, teamName) and names.
+const FORCES = {
+  // ------------------------------------------------------------ the player's side in other eras
+  usmc1994: {
+    label: 'USMC rifle squad, 1994', side: 'blue', nation: 'United States', unitName: '1st Squad', men: 'Marines', year: 1994,
+    unit: 'A Marine rifle squad of 1994: M16A2 rifles, an M249 SAW and an M203 in each fire team.',
+    morale: 82, training: 0.85, skill: 1, grenade: 'M67', frags: 2, names: 'usmc',
+    billets: {
+      SL: { role: 'SL', title: 'Squad Leader', rank: 'Sgt', weapon: 'M16A2', melee: 'bayonet' },
+      TL: { role: 'TL', title: 'Fire Team Leader', rank: 'Cpl', weapon: 'M16A2', melee: 'bayonet' },
+      AR: { role: 'AR', title: 'Automatic Rifleman', rank: 'LCpl', weapon: 'M249', melee: 'knife' },
+      G:  { role: 'G', title: 'Grenadier', rank: 'LCpl', weapon: 'M16A2', launcher: 'M203', melee: 'bayonet' },
+      R:  { role: 'R', title: 'Rifleman', rank: 'PFC', weapon: 'M16A2', melee: 'bayonet' },
+    },
+    leader: 'SL', groups: [['TL', 'AR', 'G', 'R']],
+  },
+  usmc1983: {
+    label: 'USMC rifle squad, 1983', side: 'blue', nation: 'United States', unitName: '1st Squad', men: 'Marines', year: 1983,
+    unit: 'A Marine rifle squad of 1983: M16A1 rifles, an M16A1 on automatic as each team\'s automatic rifle (the M249 is not yet issued), and an M203.',
+    morale: 80, training: 0.85, skill: 1, grenade: 'M67', frags: 2, names: 'usmc',
+    billets: {
+      SL: { role: 'SL', title: 'Squad Leader', rank: 'Sgt', weapon: 'M16A130', melee: 'bayonet' },
+      TL: { role: 'TL', title: 'Fire Team Leader', rank: 'Cpl', weapon: 'M16A130', melee: 'bayonet' },
+      AR: { role: 'AR', title: 'Automatic Rifleman', rank: 'LCpl', weapon: 'M16A1AR30', melee: 'bayonet' },
+      G:  { role: 'G', title: 'Grenadier', rank: 'LCpl', weapon: 'M16A130', launcher: 'M203', melee: 'bayonet' },
+      R:  { role: 'R', title: 'Rifleman', rank: 'PFC', weapon: 'M16A130', melee: 'bayonet' },
+    },
+    leader: 'SL', groups: [['TL', 'AR', 'G', 'R']],
+  },
+  usmc1970: {
+    label: 'USMC rifle squad, 1970', side: 'blue', nation: 'United States', unitName: '1st Squad', men: 'Marines', year: 1970,
+    unit: 'A Marine rifle squad in Vietnam, 1970: M16A1 rifles with 20-round magazines, an M16A1 on automatic as each team\'s automatic rifle, and an M79 grenadier with a .45 pistol.',
+    morale: 78, training: 0.85, skill: 1, grenade: 'M67', frags: 3, names: 'usmc',
+    billets: {
+      SL: { role: 'SL', title: 'Squad Leader', rank: 'Sgt', weapon: 'M16A1', melee: 'bayonet' },
+      TL: { role: 'TL', title: 'Fire Team Leader', rank: 'Cpl', weapon: 'M16A1', melee: 'bayonet' },
+      AR: { role: 'AR', title: 'Automatic Rifleman', rank: 'LCpl', weapon: 'M16A1AR', melee: 'bayonet' },
+      G:  { role: 'G', title: 'Grenadier (M79)', rank: 'LCpl', weapon: 'M1911', launcher: 'M79', melee: 'knife' },
+      R:  { role: 'R', title: 'Rifleman', rank: 'PFC', weapon: 'M16A1', melee: 'bayonet' },
+    },
+    leader: 'SL', groups: [['TL', 'AR', 'G', 'R']],
+  },
+  usmc1918: {
+    label: 'USMC rifle section, 1917-18', side: 'blue', nation: 'United States', unitName: 'Rifle section, 5th Marines', men: 'Marines', year: 1918,
+    unit: 'A Marine rifle section of the 4th Brigade in France: three eight-man squads with M1903 Springfields, a Chauchat automatic rifle and two VB rifle grenadiers each. Marines are noted marksmen.',
+    morale: 82, training: 0.85, skill: 1.1, grenade: 'F1FR', frags: 2, names: 'usmc', teamWord: 'Sqd', teamName: 'Squad', hqShort: 'Lt',
+    billets: {
+      LT:  { role: 'SL', title: 'Section Leader', rank: '2ndLt', weapon: 'M1903', melee: 'bayonet' },
+      CPL: { role: 'TL', title: 'Squad Leader', rank: 'Cpl', weapon: 'M1903', melee: 'bayonet' },
+      AR:  { role: 'AR', title: 'Automatic Rifleman', rank: 'Pvt', weapon: 'CHAUCHAT', melee: 'knife' },
+      AAR: { role: 'R', title: 'Assistant Automatic Rifleman', rank: 'Pvt', weapon: 'M1903', melee: 'bayonet' },
+      VB:  { role: 'G', title: 'Rifle Grenadier', rank: 'Pvt', weapon: 'M1903', launcher: 'VB', melee: 'bayonet' },
+      R:   { role: 'R', title: 'Rifleman', rank: 'Pvt', weapon: 'M1903', melee: 'bayonet' },
+    },
+    leader: 'LT', groups: [['CPL', 'AR', 'AAR', 'VB', 'VB', 'R', 'R', 'R']],
+  },
+  continental1779: {
+    label: 'Continental light infantry, 1779', side: 'blue', nation: 'United States', unitName: 'Light infantry company', men: 'Continentals', year: 1779,
+    unit: 'A company of Continental light infantry, picked men from the line regiments: Charleville muskets and bayonets, no cartridges to spare. Trained under von Steuben\'s drill; they fight in line and use the bayonet.',
+    morale: 74, training: 0.95, skill: 0.9, grenade: null, frags: 0, names: 'continental', teamWord: 'Sec', teamName: 'Section', hqShort: 'Capt',
+    billets: {
+      CAPT: { role: 'SL', title: 'Company Commander', rank: 'Capt', weapon: 'CHARLEVILLE', melee: 'sword' },
+      SGT:  { role: 'TL', title: 'Sergeant', rank: 'Sgt', weapon: 'CHARLEVILLE', melee: 'bayonet' },
+      CPL:  { role: 'R', title: 'Corporal', rank: 'Cpl', weapon: 'CHARLEVILLE', melee: 'bayonet' },
+      PVT:  { role: 'R', title: 'Private', rank: 'Pvt', weapon: 'CHARLEVILLE', melee: 'bayonet' },
+    },
+    leader: 'CAPT', groups: [['SGT', 'CPL', 'PVT', 'PVT', 'PVT', 'PVT', 'PVT', 'PVT', 'PVT', 'PVT', 'PVT', 'PVT', 'PVT']],
+  },
+  plymouth1675: {
+    label: 'Plymouth Colony militia, 1675', side: 'blue', nation: 'Plymouth Colony', unitName: 'Militia company', men: 'militiamen', year: 1675,
+    unit: 'A company of Plymouth Colony militia: farmers under their elected officers, with flintlock firelocks and some old matchlocks, swords and a sergeant\'s halberd. Brave enough, little drilled, unused to fighting in the woods.',
+    morale: 68, training: 1.15, skill: 0.85, grenade: null, frags: 0, names: 'colonial', teamWord: 'Sec', teamName: 'Section', hqShort: 'Capt',
+    billets: {
+      CAPT: { role: 'SL', title: 'Captain', rank: 'Capt', weapon: 'FIRELOCK', melee: 'sword' },
+      SGT:  { role: 'TL', title: 'Sergeant', rank: 'Sgt', weapon: 'FIRELOCK', melee: 'halberd' },
+      CPL:  { role: 'R', title: 'Corporal', rank: 'Cpl', weapon: 'FIRELOCK', melee: 'sword' },
+      SOL:  { role: 'R', title: 'Soldier', rank: 'Pvt', weapon: [['FIRELOCK', 7], ['MATCHLOCK', 3]], melee: 'sword' },
+    },
+    leader: 'CAPT', groups: [['SGT', 'CPL', 'SOL', 'SOL', 'SOL', 'SOL', 'SOL', 'SOL', 'SOL', 'SOL', 'SOL', 'SOL']],
+  },
+  aln1961: {
+    label: 'ALN section, 1961', side: 'blue', nation: 'Algeria (FLN)', unitName: 'ALN ferka', men: 'moudjahidine', year: 1961,
+    unit: 'A section (ferka) of the ALN in the Aurès-Nementcha: MAS-36 and Lee-Enfield rifles, Mausers, a captured MAT 49 for each group leader, an FM 24/29 or Bren. Hardened by seven years of war and the Challe offensives; fights from the rocks and disperses when pressed.',
+    morale: 74, training: 1, skill: 0.85, grenade: 'MILLS', frags: 1, names: 'algerian', teamWord: 'Grp', teamName: 'Group', hqShort: 'Ldr',
+    billets: {
+      LDR:  { role: 'SL', title: 'Section Leader', rank: 'Moulazim', weapon: 'MAT49', melee: 'knife' },
+      ARIF: { role: 'TL', title: 'Group Leader', rank: 'Arif', weapon: 'MAT49', melee: 'knife' },
+      FM:   { role: 'AR', title: 'Machine Gunner', rank: 'Djoundi', weapon: [['FM2429', 1], ['BREN', 1]], melee: 'knife' },
+      DJ:   { role: 'R', title: 'Moudjahid', rank: 'Djoundi', weapon: [['MAS36', 4], ['ENFIELD', 3], ['K98K', 2], ['MAT49', 1]], melee: 'knife' },
+    },
+    leader: 'LDR', groups: [['ARIF', 'FM', 'DJ', 'DJ', 'DJ', 'DJ', 'DJ', 'DJ', 'DJ', 'DJ']],
+  },
+  mujahideen1980: {
+    label: 'Afghan mujahideen, 1980s', side: 'blue', nation: 'Afghan mujahideen', unitName: 'Mujahideen group', men: 'mujahideen', year: 1980,
+    unit: 'A mujahideen group of Jamiat-e Islami: Lee-Enfield .303 rifles and captured AKMs, an RPD and an RPG-7 for each group. Fine shots at long range from the heights; they know every path.',
+    morale: 76, training: 1, skill: 0.95, grenade: 'RGD5', frags: 1, names: 'afghan', teamWord: 'Grp', teamName: 'Group', hqShort: 'Cdr',
+    billets: {
+      CDR: { role: 'SL', title: 'Commander', rank: '', weapon: 'AKM', melee: 'knife' },
+      TL:  { role: 'TL', title: 'Group Leader', rank: '', weapon: 'AKM', melee: 'knife' },
+      RPG: { role: 'RPG', title: 'RPG Gunner', rank: '', weapon: 'ENFIELD', launcher: 'RPG7PG', melee: 'knife' },
+      MG:  { role: 'AR', title: 'Machine Gunner', rank: '', weapon: 'RPD', melee: 'knife' },
+      R:   { role: 'R', title: 'Mujahid', rank: '', weapon: [['ENFIELD', 6], ['AKM', 2]], melee: 'knife' },
+    },
+    leader: 'CDR', groups: [['TL', 'RPG', 'MG', 'R', 'R', 'R', 'R', 'R']],
+  },
+
+  // ------------------------------------------------------------ enemies
+  wampanoag1675: {
+    label: 'Wampanoag war party', nation: 'Wampanoag', men: 'Wampanoag warriors', year: 1675, doctrine: 'woodland',
+    unit: 'Wampanoag warriors of Metacom (King Philip), with Pocasset and Sakonnet men. Most carry flintlock trade guns and shoot well; some still use the bow. War clubs and hatchets for close work. They fight from cover in loose order, work round the flanks and avoid a stand-up fight; they close with the club when the enemy wavers.',
+    morale: [62, 80], training: 0.9, skill: 1.1, grenade: null, frags: [0, 0],
+    billets: {
+      LEAD: { role: 'SL', title: 'War captain', weapon: 'FUSIL', melee: 'club' },
+      CAPT: { role: 'TL', title: 'War leader', weapon: 'FUSIL', melee: 'hatchet' },
+      GUN:  { role: 'R', title: 'Warrior', weapon: 'FUSIL', melee: 'club' },
+      BOW:  { role: 'R', title: 'Warrior (bow)', weapon: 'BOW', melee: 'hatchet' },
+    },
+    leader: 'LEAD', groupLead: 'CAPT', pool: [['GUN', 7], ['BOW', 3]], groupSize: [9, 14], groupWord: 'band',
+  },
+  foot33_1779: {
+    label: '33rd Regiment of Foot', nation: 'Great Britain', men: 'British regulars', year: 1779, doctrine: 'line',
+    unit: 'A company of the 33rd (1st West Riding) Regiment of Foot: redcoat regulars, veterans of Brandywine and Monmouth, with Short Land Pattern muskets and bayonets. They form a two-deep line, fire by volley at close range and close with the bayonet.',
+    morale: [74, 88], training: 0.8, skill: 0.85, grenade: null, frags: [0, 0], coTitle: 'Lt Gen Earl Cornwallis',
+    billets: {
+      CAPT: { role: 'SL', title: 'Captain', weapon: 'BESS', melee: 'sword' },
+      LT:   { role: 'TL', title: 'Lieutenant', weapon: 'BESS', melee: 'sword' },
+      SGT:  { role: 'TL', title: 'Sergeant', weapon: 'BESS', melee: 'halberd' },
+      CPL:  { role: 'R', title: 'Corporal', weapon: 'BESS', melee: 'bayonet' },
+      PVT:  { role: 'R', title: 'Private', weapon: 'BESS', melee: 'bayonet' },
+      GEN:  { role: 'CO', title: 'Lt Gen Earl Cornwallis', weapon: 'PISTOL', melee: 'sword' },
+    },
+    leader: 'CAPT', hq: ['LT'], groups: [['SGT', 'CPL', 'PVT', 'PVT', 'PVT', 'PVT', 'PVT', 'PVT', 'PVT', 'PVT', 'PVT']],
+  },
+  german1917: {
+    label: 'German Stoßtrupp and MG team', nation: 'German Empire', men: 'German infantry', year: 1917, doctrine: 'stoss',
+    unit: 'German infantry of a Stoßtrupp (storm detachment) with an MG 08/15 team: Gewehr 98 rifles, stick grenades carried by the dozen, sharpened entrenching spades for hand-to-hand. They work forward behind the machine gun\'s fire and clear positions with grenades.',
+    morale: [66, 82], training: 0.85, skill: 1, grenade: 'STICK', frags: [2, 3],
+    billets: {
+      LT:   { role: 'SL', title: 'Leutnant', weapon: 'P08', melee: 'spade', frags: 2 },
+      UFFZ: { role: 'TL', title: 'Unteroffizier', weapon: 'GEW98', melee: 'spade', frags: 4 },
+      GREN: { role: 'R', title: 'Grenadier', weapon: 'GEW98', melee: 'spade', frags: 3 },
+      BOMB: { role: 'R', title: 'Grenade thrower', weapon: 'GEW98', melee: 'spade', frags: 8 },
+      MGF:  { role: 'MG', title: 'MG gunner', weapon: 'MG0815', melee: 'knife', frags: 1 },
+      MGS:  { role: 'R', title: 'MG crewman', weapon: 'GEW98', melee: 'spade', frags: 2 },
+    },
+    leader: 'LT', groups: [['UFFZ', 'GREN', 'GREN', 'BOMB', 'BOMB', 'GREN', 'GREN', 'GREN'], ['MGF', 'MGS', 'MGS', 'MGS'], ['UFFZ', 'GREN', 'BOMB', 'GREN', 'BOMB', 'GREN', 'GREN', 'GREN']],
+  },
+  rep1961: {
+    label: '1er REP', nation: 'France', men: 'légionnaires', year: 1961, doctrine: 'elite',
+    unit: 'Légionnaires of the 1er Régiment Étranger de Parachutistes in camouflage smocks and green berets: MAS 49/56 rifles with rifle grenades, MAT 49s for the NCOs, FM 24/29 and AA-52 machine guns. Elite, aggressive, at the top of their form, weeks before the regiment led the generals\' putsch.',
+    morale: [80, 92], training: 0.75, skill: 1.1, grenade: 'DF37', frags: [2, 2],
+    billets: {
+      LT:  { role: 'SL', title: 'Lieutenant', weapon: 'MAT49', melee: 'knife' },
+      RAD: { role: 'R', title: 'Radio operator', weapon: 'MAT49', melee: 'knife' },
+      SGT: { role: 'TL', title: 'Sergent', weapon: 'MAT49', melee: 'knife', frags: 3 },
+      CPL: { role: 'TL', title: 'Caporal-chef', weapon: 'MAS4956', melee: 'bayonet' },
+      FM:  { role: 'AR', title: 'Tireur FM', weapon: 'FM2429', melee: 'knife' },
+      MG:  { role: 'MG', title: 'Tireur AA-52', weapon: 'AA52', melee: 'knife' },
+      GR:  { role: 'G', title: 'Grenadier-voltigeur', weapon: 'MAS4956', launcher: 'RIFGR', melee: 'bayonet' },
+      LEG: { role: 'R', title: 'Légionnaire', weapon: 'MAS4956', melee: 'bayonet' },
+    },
+    leader: 'LT', hq: ['RAD'], groups: [['SGT', 'FM', 'LEG', 'LEG', 'GR', 'LEG', 'LEG', 'LEG'], ['SGT', 'FM', 'LEG', 'GR', 'LEG', 'LEG', 'LEG', 'LEG'], ['CPL', 'MG', 'LEG', 'LEG']],
+  },
+  soviet1972: {
+    label: 'Soviet motor rifle platoon', nation: 'Soviet Union', men: 'Soviet motor riflemen', year: 1972, doctrine: 'soviet',
+    unit: 'A Soviet motor rifle platoon dismounted from its BTR-60PBs: AKM rifles, a PKM and an RPK in each squad, RPG-7s firing PG-7V, an SVD sniper. Conscripts, drilled to attack on line behind their fire, the junior leaders tied to the plan.',
+    morale: [60, 74], training: 1, skill: 0.85, grenade: 'RGD5', frags: [2, 2],
+    billets: {
+      PL:   { role: 'SL', title: 'Platoon leader', weapon: 'AKM', melee: 'bayonet' },
+      DPL:  { role: 'TL', title: 'Deputy platoon leader', weapon: 'AKM', melee: 'bayonet' },
+      SNP:  { role: 'MM', title: 'Sniper', weapon: 'SVD', melee: 'knife' },
+      SQL:  { role: 'TL', title: 'Squad leader', weapon: 'AKM', melee: 'bayonet' },
+      MG:   { role: 'MG', title: 'Machine gunner', weapon: 'PKM', melee: 'knife' },
+      RPG:  { role: 'RPG', title: 'RPG gunner', weapon: 'AKM', launcher: 'RPG7PG', melee: 'knife' },
+      ARPG: { role: 'R', title: 'Assistant RPG gunner', weapon: 'AKM', melee: 'bayonet' },
+      AR:   { role: 'AR', title: 'Light machine gunner', weapon: 'RPK', melee: 'knife' },
+      R:    { role: 'R', title: 'Motor rifleman', weapon: 'AKM', melee: 'bayonet' },
+      CR:   { role: 'CR', title: 'Helicopter crewman', weapon: 'AKMS', melee: 'knife' },
+    },
+    leader: 'PL', hq: ['DPL', 'SNP'], groups: [['SQL', 'MG', 'RPG', 'ARPG', 'AR', 'R', 'R']],
+  },
+  navinf1978: {
+    label: 'Soviet naval infantry', nation: 'Soviet Union', men: 'Soviet naval infantry', year: 1978, doctrine: 'soviet',
+    unit: 'Soviet naval infantry (morskaya pekhota) of the Northern Fleet, landed from the sea: black berets and striped shirts, AKM and AKMS rifles, PKM and RPK machine guns, RPG-7s. Picked men, better trained than the motor rifles and aggressive in the assault.',
+    morale: [68, 82], training: 0.9, skill: 0.9, grenade: 'RGD5', frags: [2, 3],
+    billets: {
+      PL:   { role: 'SL', title: 'Platoon leader', weapon: 'AKMS', melee: 'bayonet' },
+      DPL:  { role: 'TL', title: 'Deputy platoon leader', weapon: 'AKMS', melee: 'bayonet' },
+      SNP:  { role: 'MM', title: 'Sniper', weapon: 'SVD', melee: 'knife' },
+      SQL:  { role: 'TL', title: 'Squad leader', weapon: 'AKMS', melee: 'bayonet' },
+      MG:   { role: 'MG', title: 'Machine gunner', weapon: 'PKM', melee: 'knife' },
+      RPG:  { role: 'RPG', title: 'RPG gunner', weapon: 'AKMS', launcher: 'RPG7PG', melee: 'knife' },
+      AR:   { role: 'AR', title: 'Light machine gunner', weapon: 'RPK', melee: 'knife' },
+      R:    { role: 'R', title: 'Naval infantryman', weapon: [['AKM', 2], ['AKMS', 1]], melee: 'bayonet' },
+    },
+    leader: 'PL', hq: ['DPL', 'SNP'], groups: [['SQL', 'MG', 'RPG', 'R', 'AR', 'R', 'R']],
+  },
+  vdv1980: {
+    label: 'Soviet airborne (VDV) platoon', nation: 'Soviet Union', men: 'Soviet paratroopers', year: 1980, doctrine: 'elite',
+    unit: 'Soviet airborne troops (VDV): striped telnyashka and blue berets, AKS-74 and RPKS-74, a PKM, RPG-16s and the new GP-25. The best of the Soviet army in Afghanistan; well led, aggressive, quick to flank and to seize the heights.',
+    morale: [74, 86], training: 0.85, skill: 1, grenade: 'RGD5', frags: [2, 3],
+    billets: {
+      PL:  { role: 'SL', title: 'Platoon leader', weapon: 'AKS74', melee: 'bayonet' },
+      SNP: { role: 'MM', title: 'Sniper', weapon: 'SVD', melee: 'knife' },
+      SQL: { role: 'TL', title: 'Squad leader', weapon: 'AKS74', launcher: 'GP25', melee: 'bayonet' },
+      MG:  { role: 'MG', title: 'Machine gunner', weapon: 'PKM', melee: 'knife' },
+      RPG: { role: 'RPG', title: 'Grenade launcher gunner', weapon: 'AKS74', launcher: 'RPG16', melee: 'knife' },
+      AR:  { role: 'AR', title: 'Light machine gunner', weapon: 'RPKS74', melee: 'knife' },
+      R:   { role: 'R', title: 'Paratrooper', weapon: 'AKS74', melee: 'bayonet' },
+      CR:  { role: 'CR', title: 'Helicopter crewman', weapon: 'AKS74U', melee: 'knife' },
+    },
+    leader: 'PL', hq: ['SNP'], groups: [['SQL', 'MG', 'RPG', 'AR', 'R', 'R', 'R']],
+  },
+  soviet1983: {
+    label: 'Soviet motor rifle platoon', nation: 'Soviet Union', men: 'Soviet motor riflemen', year: 1983, doctrine: 'soviet',
+    unit: 'A Soviet motor rifle platoon dismounted from its BMP-2s: AK-74 rifles with GP-25 grenade launchers, a PKM and an RPK-74 in each squad, RPG-7s, an SVD sniper. Conscripts, drilled to attack on line with fire on the move; the junior leaders seldom depart from the plan.',
+    morale: [60, 74], training: 1, skill: 0.85, grenade: 'RGD5', frags: [2, 2],
+    billets: {
+      PL:   { role: 'SL', title: 'Platoon leader', weapon: 'AK74', melee: 'bayonet' },
+      DPL:  { role: 'TL', title: 'Deputy platoon leader', weapon: 'AK74', melee: 'bayonet' },
+      SNP:  { role: 'MM', title: 'Sniper', weapon: 'SVD', melee: 'knife' },
+      SQL:  { role: 'TL', title: 'Squad leader', weapon: 'AK74', melee: 'bayonet' },
+      MG:   { role: 'MG', title: 'Machine gunner', weapon: 'PKM', melee: 'knife' },
+      RPG:  { role: 'RPG', title: 'RPG gunner', weapon: 'AK74', launcher: 'RPG7PG', melee: 'knife' },
+      ARPG: { role: 'R', title: 'Assistant RPG gunner', weapon: 'AK74', melee: 'bayonet' },
+      AR:   { role: 'AR', title: 'Light machine gunner', weapon: 'RPK74', melee: 'knife' },
+      G:    { role: 'G', title: 'Grenadier', weapon: 'AK74', launcher: 'GP25', melee: 'bayonet' },
+      R:    { role: 'R', title: 'Motor rifleman', weapon: 'AK74', melee: 'bayonet' },
+    },
+    leader: 'PL', hq: ['DPL', 'SNP'], groups: [['SQL', 'MG', 'RPG', 'ARPG', 'AR', 'G', 'R']],
+  },
+  spetsnaz1987: {
+    label: 'Soviet spetsnaz group', nation: 'Soviet Union', men: 'Soviet spetsnaz', year: 1987, doctrine: 'spetsnaz',
+    unit: 'A Soviet special purpose (spetsnaz) group of the 186th Separate Detachment, out to ambush caravans: AKS-74s with GP-25s, silenced AKMS, a PKM, an SVD. Hard, experienced men who strike from ambush and are gone before help comes.',
+    morale: [80, 92], training: 0.78, skill: 1.1, grenade: 'F1', frags: [3, 4],
+    billets: {
+      CDR: { role: 'SL', title: 'Group commander', weapon: 'AKS74', launcher: 'GP25', melee: 'knife' },
+      SQL: { role: 'TL', title: 'Senior scout', weapon: 'AKS74', melee: 'knife' },
+      SIL: { role: 'R', title: 'Scout (silenced rifle)', weapon: 'AKMPBS', melee: 'knife' },
+      MG:  { role: 'MG', title: 'Machine gunner', weapon: 'PKM', melee: 'knife' },
+      G:   { role: 'G', title: 'Scout-grenadier', weapon: 'AKS74', launcher: 'GP25', melee: 'knife' },
+      R:   { role: 'R', title: 'Scout', weapon: 'AKS74', melee: 'knife' },
+      MM:  { role: 'MM', title: 'Sniper', weapon: 'SVD', melee: 'knife' },
+    },
+    leader: 'CDR', groups: [['SQL', 'SIL', 'MG', 'G', 'R', 'MM'], ['SQL', 'R', 'G', 'SIL', 'R']],
+  },
+  nva1970: {
+    label: 'North Vietnamese Army platoon', nation: 'North Vietnam', men: 'NVA soldiers', year: 1970, doctrine: 'nva',
+    unit: 'A North Vietnamese Army (PAVN) infantry platoon in pith helmets and khaki: AK-47 (Type 56) rifles and SKS carbines, RPD machine guns, B41 rocket launchers, stick grenades. Disciplined and well camouflaged; they hug close to stay inside your supporting fires, and pull back when it costs too much.',
+    morale: [70, 84], training: 0.85, skill: 0.95, grenade: 'CHICOM', frags: [2, 3],
+    billets: {
+      PL:  { role: 'SL', title: 'Platoon leader', weapon: 'AK47', melee: 'bayonet' },
+      POL: { role: 'TL', title: 'Political officer', weapon: 'AK47', melee: 'bayonet' },
+      SQL: { role: 'TL', title: 'Squad leader', weapon: 'AK47', melee: 'bayonet' },
+      AR:  { role: 'AR', title: 'RPD gunner', weapon: 'RPD', melee: 'knife' },
+      B41: { role: 'RPG', title: 'B41 gunner', weapon: 'AK47', launcher: 'B41', melee: 'knife' },
+      R:   { role: 'R', title: 'Soldier', weapon: 'AK47', melee: 'bayonet' },
+      SKS: { role: 'R', title: 'Soldier', weapon: 'SKS', melee: 'bayonet' },
+    },
+    leader: 'PL', hq: ['POL'], groups: [['SQL', 'AR', 'B41', 'R', 'R', 'SKS', 'R', 'SKS', 'R']],
+  },
+  vc1970: {
+    label: 'Viet Cong local force', nation: 'Viet Cong (NLF)', men: 'Viet Cong guerrillas', year: 1970, doctrine: 'guerrilla',
+    unit: 'Viet Cong local-force guerrillas in black pajamas: SKS carbines, captured M1 carbines and Garands, a few AK-47s, an RPD, a B40, homemade grenades. They live among the hamlets in three-man cells, fight from bunkers and tree lines, hold fire until close and slip away.',
+    morale: [52, 70], training: 1, skill: 0.85, grenade: 'CHICOM', frags: [1, 2],
+    billets: {
+      LEAD: { role: 'SL', title: 'Squad leader', weapon: 'AK47', melee: 'knife' },
+      CELL: { role: 'TL', title: 'Cell leader', weapon: 'SKS', melee: 'knife' },
+      SKS:  { role: 'R', title: 'Guerrilla', weapon: 'SKS', melee: 'knife' },
+      CARB: { role: 'R', title: 'Guerrilla', weapon: 'CARBINE', melee: 'knife' },
+      GAR:  { role: 'R', title: 'Guerrilla', weapon: 'GARAND', melee: 'knife' },
+      MAT:  { role: 'R', title: 'Guerrilla', weapon: 'MAT49', melee: 'knife' },
+      AK:   { role: 'R', title: 'Guerrilla', weapon: 'AK47', melee: 'knife' },
+      B40:  { role: 'RPG', title: 'B40 gunner', weapon: 'SKS', launcher: 'B40', melee: 'knife' },
+      RPD:  { role: 'AR', title: 'RPD gunner', weapon: 'RPD', melee: 'knife' },
+    },
+    leader: 'LEAD', groupLead: 'CELL', pool: [['SKS', 4], ['CARB', 2], ['GAR', 1], ['MAT', 1], ['AK', 2], ['B40', 1], ['RPD', 0.7]], groupSize: [3, 4], groupWord: 'cell',
+  },
+  haiti1994: {
+    label: 'Armed attachés and FRAPH', nation: 'Haitian paramilitaries', men: 'armed attachés', year: 1994, doctrine: 'gang',
+    unit: 'Armed attachés and FRAPH gangs of Les Cayes, with former FAd\'H soldiers among them: old M1 Garands and M1 carbines, Uzis, pump shotguns, .38 revolvers, Ruger .22 rifles, machetes. Undisciplined, poor shots, quick to scatter once they take casualties.',
+    morale: [24, 44], training: 1.5, skill: 0.55, grenade: null, frags: [0, 0],
+    billets: {
+      BOSS: { role: 'SL', title: 'Gang boss', weapon: 'UZI', melee: 'machete' },
+      LT:   { role: 'TL', title: 'Gang lieutenant', weapon: 'GARAND', melee: 'machete' },
+      GAR:  { role: 'R', title: 'Attaché', weapon: 'GARAND', melee: 'machete' },
+      CARB: { role: 'R', title: 'Attaché', weapon: 'CARBINE', melee: 'machete' },
+      SHOT: { role: 'R', title: 'Attaché', weapon: 'SHOTGUN', melee: 'machete' },
+      REV:  { role: 'R', title: 'Attaché', weapon: 'REVOLVER', melee: 'machete' },
+      R22:  { role: 'R', title: 'Attaché', weapon: 'RUGER1022', melee: 'machete' },
+      UZI:  { role: 'R', title: 'Attaché', weapon: 'UZI', melee: 'machete' },
+    },
+    leader: 'BOSS', groupLead: 'LT', pool: [['GAR', 3], ['CARB', 3], ['SHOT', 2], ['REV', 2], ['R22', 2], ['UZI', 1]], groupSize: [4, 6], groupWord: 'gang',
+  },
+  prc2027: {
+    label: 'PLA Navy Marine squad', nation: "People's Republic of China", men: 'PLA marines', year: 2027, doctrine: 'modern',
+    unit: 'A PLA Navy Marine Corps rifle squad garrisoning the island: QBZ-191 rifles, a QLG-10 grenade launcher, a QJS-161 light machine gun, a QBU-191 marksman rifle and PF-89 rockets. Well equipped and fit; untested in battle.',
+    morale: [60, 76], training: 0.95, skill: 0.95, grenade: 'T82', frags: [2, 2],
+    billets: {
+      SL:  { role: 'SL', title: 'Squad leader', weapon: 'QBZ191', melee: 'bayonet' },
+      DSL: { role: 'TL', title: 'Deputy squad leader', weapon: 'QBZ191', melee: 'bayonet' },
+      TL:  { role: 'TL', title: 'Team leader', weapon: 'QBZ191', melee: 'bayonet' },
+      AR:  { role: 'AR', title: 'Light machine gunner', weapon: 'QJS161', melee: 'knife' },
+      G:   { role: 'G', title: 'Grenadier', weapon: 'QBZ191', launcher: 'QLG10', melee: 'bayonet' },
+      PF:  { role: 'RPG', title: 'Rocket gunner', weapon: 'QBZ191', launcher: 'PF89', melee: 'bayonet' },
+      MM:  { role: 'MM', title: 'Marksman', weapon: 'QBU191', melee: 'knife' },
+      R:   { role: 'R', title: 'Rifleman', weapon: 'QBZ191', melee: 'bayonet' },
+    },
+    leader: 'SL', groups: [['DSL', 'AR', 'G', 'R', 'PF'], ['TL', 'MM', 'R', 'AR', 'R']],
+  },
+  russia2023: {
+    label: 'Russian motor rifle squad', nation: 'Russia', men: 'Russian soldiers', year: 2023, doctrine: 'modern',
+    unit: 'A Russian motor rifle squad holding a tree line: AK-74M and AK-12 rifles, RPK-74 and PKP machine guns, GP-25 grenade launchers, RPG-7V2 with fragmentation rounds, an SVD. Mixed quality, veterans beside mobilized men; they dig in well and hold a position until it costs them.',
+    morale: [40, 66], training: 1.05, skill: 0.85, grenade: 'RGD5', frags: [2, 3],
+    billets: {
+      SL:  { role: 'SL', title: 'Squad leader', weapon: 'AK12', melee: 'bayonet' },
+      TL:  { role: 'TL', title: 'Senior soldier', weapon: 'AK74M', melee: 'bayonet' },
+      AR:  { role: 'AR', title: 'Machine gunner', weapon: [['RPK74', 2], ['RPK16', 1]], melee: 'knife' },
+      MG:  { role: 'MG', title: 'PKP gunner', weapon: 'PKP', melee: 'knife' },
+      G:   { role: 'G', title: 'Grenadier', weapon: 'AK74M', launcher: 'GP25', melee: 'bayonet' },
+      RPG: { role: 'RPG', title: 'RPG gunner', weapon: 'AK74M', launcher: 'RPG7', melee: 'knife' },
+      MM:  { role: 'MM', title: 'Sniper', weapon: [['SVD', 2], ['SVDM', 1]], melee: 'knife' },
+      R:   { role: 'R', title: 'Rifleman', weapon: [['AK74M', 3], ['AK12', 1]], melee: 'bayonet' },
+    },
+    leader: 'SL', groups: [['TL', 'AR', 'G', 'R', 'RPG', 'MG'], ['TL', 'MM', 'R', 'R', 'R']],
+  },
+};
+
+// ---------------------------------------------------------------- scenarios
+// A scenario: the enemy force and its strength, the era's own friendly force, the ground,
+// the missions that fit, a place name for the objective, and the history behind it. status
+// says how much of it happened.
+const SCENARIOS = {
+  modern: {
+    label: 'Present day · Generic OPFOR', status: null, opfor: null, blue: 'usmc', region: null, missions: null,
+  },
+  swansea1675: {
+    label: '1675 · Wampanoag war party, Swansea', status: 'Historical', date: '24 June 1675', place: 'Swansea, Plymouth Colony', war: "King Philip's War",
+    opfor: 'wampanoag1675', size: [180, 220], blue: 'plymouth1675', region: 'newengland', missions: ['townAttack', 'meeting', 'column'], siteName: 'Swansea',
+    history: 'On 20 June 1675 Wampanoag warriors of Metacom (King Philip) began looting abandoned houses at Swansea; on 24 June they killed settlers there, the opening blows of King Philip\'s War. About two hundred warriors are reported on the move.',
+  },
+  cornwallis1779: {
+    label: '1779 · 33rd Foot with Cornwallis, outside New York', status: 'Historical fiction', date: 'October 1779', place: 'Westchester County, north of New York City', war: 'American Revolutionary War',
+    opfor: 'foot33_1779', size: [44, 52], blue: 'continental1779', region: 'hudson', missions: ['meeting', 'column', 'attack', 'village'], hvt: 'GEN',
+    history: 'In 1779 the British held New York City and the ground north of it to Kingsbridge. Lt Gen Charles, Earl Cornwallis, colonel of the 33rd Foot since 1766, was with the army there until he sailed for Charleston in December. Here a company of his regiment is out beyond the lines with Cornwallis himself riding with it: an invention, but one the units and the ground allow.',
+  },
+  bathelemont1917: {
+    label: '1917 · German trench raid, Lorraine', status: 'Historical setting', date: '3 November 1917', place: 'Bathelémont, Lorraine', war: 'First World War',
+    opfor: 'german1917', size: [20, 26], blue: 'usmc1918', region: 'lorraine', missions: ['meeting'],
+    history: 'Before dawn on 3 November 1917 a German raiding party struck the trenches of the U.S. 16th Infantry at Bathelémont and killed the first three American soldiers of the war. Here it is a Marine section that stands in the way.',
+  },
+  mgnest1917: {
+    label: '1917 · German machine gun nest, Lorraine', status: 'Historical fiction', date: 'December 1917', place: 'Lunéville sector, Lorraine', war: 'First World War',
+    opfor: 'german1917', size: [18, 24], blue: 'usmc1918', region: 'lorraine', missions: ['hillStrongpoint', 'village', 'treeLine'],
+    groups: [['MGF', 'MGS', 'MGS', 'MGS'], ['UFFZ', 'GREN', 'GREN', 'BOMB', 'GREN', 'GREN'], ['MGF', 'MGS', 'MGS', 'MGS'], ['UFFZ', 'GREN', 'BOMB', 'GREN', 'GREN']],
+    history: 'German machine gun teams held the woods and villages of the quiet Lorraine sector, where the first American units learned the trade. A Marine section is sent to clear one of their posts.',
+  },
+  rep1961: {
+    label: '1961 · 1er REP sweep, Algerian djebel', status: 'Historical setting', date: 'early April 1961', place: 'Nementcha mountains, eastern Algeria', war: 'Algerian War',
+    opfor: 'rep1961', size: [56, 64], blue: 'aln1961', region: 'algeria', missions: ['meeting', 'crossingFront', 'camp', 'hillStrongpoint'],
+    history: 'In the spring of 1961 the 1er REP was hunting ALN bands in the Aurès-Nementcha. On 21 April its officers took the regiment into Algiers in the generals\' putsch; it was disbanded that June. Here, weeks before, the légionnaires sweep through the djebel.',
+  },
+  fulda1972: {
+    label: '1972 · Soviet motor rifles in the Fulda Gap', status: 'Alternate history', date: 'August 1972', place: 'near Hünfeld, Hesse, West Germany', war: 'Third World War (fictional)',
+    opfor: 'soviet1972', size: [22, 26], blue: 'usmc1970', region: 'hesse', missions: ['meeting', 'village', 'bridge', 'treeLine', 'hillStrongpoint', 'column'],
+    history: 'There was no Soviet attack into West Germany. In this timeline the Cold War turns hot in the summer of 1972, and a Marine squad, flown in to reinforce the Central Front, meets a Soviet motor rifle platoon in the hills of Hesse.',
+  },
+  finnmark1978: {
+    label: '1978 · Soviet naval infantry, northern Norway', status: 'Alternate history', date: 'March 1978', place: 'Porsanger, Finnmark, Norway', war: 'Third World War (fictional)',
+    opfor: 'navinf1978', size: [20, 26], blue: 'usmc1983', region: 'norway', missions: ['meeting', 'village', 'bridge', 'relay', 'hillStrongpoint'],
+    history: 'NATO planned to reinforce northern Norway with Marines, and the Soviet Northern Fleet\'s naval infantry trained to land there. In this timeline they do.',
+  },
+  panjshir1980: {
+    label: '1980 · Soviet airborne in the Panjshir', status: 'Historical setting', date: 'April 1980', place: 'Panjshir valley, Afghanistan', war: 'Soviet-Afghan War',
+    opfor: 'vdv1980', size: [20, 25], blue: 'mujahideen1980', region: 'panjshir', missions: ['village', 'meeting', 'hillStrongpoint', 'helo', 'withdrawal'],
+    history: 'In April 1980 Soviet airborne and motor rifle troops pushed up the Panjshir valley against Ahmad Shah Massoud\'s mujahideen, the first of nine Soviet offensives there.',
+  },
+  ablearcher1983: {
+    label: '1983 · Soviet motor rifles, Able Archer goes hot', status: 'Alternate history', date: 'November 1983', place: 'near Rasdorf, Hesse, West Germany', war: 'Third World War (fictional)',
+    opfor: 'soviet1983', size: [22, 26], blue: 'usmc1983', region: 'hesse', missions: ['meeting', 'village', 'bridge', 'treeLine', 'hillStrongpoint', 'commandPost', 'column'],
+    history: 'In November 1983 NATO\'s Able Archer exercise alarmed the Soviet leadership; it went no further. Here it does, and a Soviet motor rifle platoon (Sukhoputnyye Voyska) comes over the hills toward a Marine squad.',
+  },
+  shahjoy1987: {
+    label: '1987 · Spetsnaz ambush group, Zabul', status: 'Historical setting', date: 'summer 1987', place: 'Shahjoy district, Zabul, Afghanistan', war: 'Soviet-Afghan War',
+    opfor: 'spetsnaz1987', size: [12, 16], blue: 'mujahideen1980', region: 'kandahar', missions: ['ambush', 'observationPost', 'withdrawal', 'reconTown'],
+    history: 'From 1985 the Soviet 186th Separate Spetsnaz Detachment, based at Shahjoy, ambushed mujahideen supply caravans on the roads and tracks out of Pakistan.',
+  },
+  quesonnva1970: {
+    label: '1970 · NVA platoon, Que Son', status: 'Historical setting', date: 'May 1970', place: 'Que Son, Quang Nam province, South Vietnam', war: 'Vietnam War',
+    opfor: 'nva1970', size: [26, 34], blue: 'usmc1970', region: 'jungle', missions: ['ambush', 'meeting', 'camp', 'depot', 'treeLine', 'village', 'column'],
+    history: 'In 1970 the 1st Marine Division fought NVA regiments in the Que Son valley and the "Arizona Territory" of Quang Nam province.',
+  },
+  quangnamvc1970: {
+    label: '1970 · Viet Cong guerrillas, Quang Nam', status: 'Historical setting', date: 'August 1970', place: 'Dien Ban, Quang Nam province, South Vietnam', war: 'Vietnam War',
+    opfor: 'vc1970', size: [10, 18], blue: 'usmc1970', region: 'jungle', missions: ['farmRest', 'village', 'ambush', 'foragers', 'checkpoint', 'depot', 'stragglers'],
+    history: 'Marine squads of the Combined Action Program and the line battalions hunted Viet Cong local forces through the hamlets and paddies around Da Nang.',
+  },
+  lescayes1994: {
+    label: '1994 · Armed attachés, Les Cayes', status: 'Historical fiction', date: 'September 1994', place: 'Les Cayes, Haiti', war: 'Operation Uphold Democracy',
+    opfor: 'haiti1994', size: [12, 20], blue: 'usmc1994', region: 'haiti', missions: ['checkpoint', 'townAttack', 'village', 'truck', 'stragglers', 'farmRest'],
+    history: 'In September 1994 U.S. forces landed in Haiti. On 24 September a Marine patrol at Cap-Haïtien killed ten Haitian soldiers in a firefight. Here a Marine squad goes after the armed attachés of Les Cayes.',
+  },
+  spratly2027: {
+    label: '2027 · PLA marines on a Spratly island', status: 'Alternate history', date: '2027', place: 'Spratly Islands, South China Sea', war: 'Pacific war (fictional)',
+    opfor: 'prc2027', size: [10, 12], blue: 'usmc', region: 'island', missions: ['village', 'hillStrongpoint', 'observationPost', 'relay', 'depot', 'treeLine'], sep: [450, 800],
+    history: 'No war has come to the Spratlys. In this one a Marine squad, landed by night, must take a Chinese-held island.',
+  },
+  robotyne2023: {
+    label: '2023 · Russian squad in a tree line, Zaporizhzhia', status: 'Historical setting', date: 'summer 2023', place: 'Robotyne, Zaporizhzhia oblast, Ukraine', war: 'Russo-Ukrainian War',
+    opfor: 'russia2023', size: [10, 16], blue: 'usmc', region: 'ukraine', missions: ['treeLine', 'village', 'hillStrongpoint', 'observationPost', 'depot', 'meeting'],
+    history: 'In the summer of 2023 Ukraine\'s counteroffensive fought through the Russian tree lines and minefields south of Orikhiv. The enemy and the ground are as they were; the Marine squad is not.',
+  },
+};
+const SCENARIO_KEYS = Object.keys(SCENARIOS);
+// The forces the player can command: today's Marines and each era's own.
+const FRIENDLY_KEYS = ['usmc', 'usmc1994', 'usmc1983', 'usmc1970', 'usmc1918', 'continental1779', 'plymouth1675', 'aln1961', 'mujahideen1980'];
+function friendlyLabel(k) { return k === 'usmc' ? 'USMC rifle squad, today' : FORCES[k].label; }
+
+// What the order and the battle box say of a force: its men, its description, its nation.
+function forceInfo(kind) {
+  if (FORCES[kind]) return FORCES[kind];
+  if (kind === 'usmc') return { men: 'Marines', nation: 'United States', unitName: '1st Squad', unit: 'A Marine rifle squad: three fire teams.' };
+  return Object.assign({ nation: 'Opposing force', doctrine: 'modern' }, OPFOR_KINDS[kind] || OPFOR_KINDS.regular);
+}
+
+function pickWeighted(w) {
+  if (typeof w === 'string') return w;
+  const tot = w.reduce((n, x) => n + x[1], 0);
+  let r = rand() * tot;
+  for (const [k, n] of w) if ((r -= n) <= 0) return k;
+  return w[0][0];
+}
+
+// Build a force. The player's side has its three teams; the enemy n men in groups, from the
+// templates in turn (the last one cut short), or bands drawn from the pool.
+function buildForce(key, side, n, opts) {
+  const F = FORCES[key], o = opts || {};
+  const morale = Array.isArray(F.morale) ? randRange(F.morale[0], F.morale[1]) : F.morale;
+  const sq = new Squad(side, side === 'blue' ? F.unitName : 'Enemy ' + (n <= 15 ? 'squad' : n <= 40 ? 'platoon' : 'company'), morale);
+  sq.training = F.training; sq.skill = F.skill; sq.kind = key; sq.force = F;
+  if (F.teamWord) { sq.teamWord = F.teamWord; sq.teamName = F.teamName; }
+  if (F.hqShort) sq.hqShort = F.hqShort;
+  const names = side === 'blue' ? shuffle((ERA_NAMES[F.names] || SURNAMES).slice()) : null;
+  const fr = Array.isArray(F.frags) ? F.frags : [F.frags || 0, F.frags || 0];
+  const make = (bk, team) => {
+    const b = F.billets[bk], wk = pickWeighted(b.weapon);
+    const s = new Soldier(side, b.role, team, {
+      title: b.title, rank: side === 'blue' ? b.rank : '', name: side === 'blue' ? (names.pop() || 'Smith') : b.title,
+      weapon: wk, launcher: b.launcher || null, melee: b.melee, grenade: F.grenade || 'M67',
+      frags: F.grenade ? (b.frags != null ? b.frags : randInt(fr[0], fr[1])) : 0, skill: F.skill,
+    });
+    s.billetKey = bk;
+    team.members.push(s);
+    return s;
+  };
+  sq.hq = new Team(side, sq, 0, side === 'blue' ? (F.billets[F.leader].title) : 'Enemy leader');
+  sq.leader = make(o.leader || F.leader, sq.hq);
+  for (const h of F.hq || []) make(h, sq.hq);
+  const groups = o.groups || F.groups;
+  if (side === 'blue') {
+    for (let k = 1; k <= 3; k++) {
+      const t = new Team(side, sq, k, ORDINAL[k - 1] + ' ' + (F.teamName || 'Fire Team'));
+      for (const bk of groups[(k - 1) % groups.length]) make(bk, t);
+      sq.teams.push(t);
+    }
+    return sq;
+  }
+  let left = n - sq.hq.members.length, k = 0;
+  while (left > 0) {
+    let tpl;
+    if (groups) tpl = groups[k % groups.length].slice();
+    else { const size = randInt(F.groupSize[0], F.groupSize[1]); tpl = [F.groupLead]; while (tpl.length < size) tpl.push(pickWeighted(F.pool)); }
+    // Too few left for a group of their own: they join the last one.
+    if (left < 3 && sq.teams.length) { for (const bk of tpl.slice(1, 1 + left)) make(bk, sq.teams[sq.teams.length - 1]); break; }
+    const t = new Team(side, sq, ++k, 'Enemy ' + (F.groupWord || 'group') + ' ' + k);
+    for (const bk of tpl.slice(0, left)) make(bk, t);
+    left -= t.members.length;
+    sq.teams.push(t);
+  }
+  return sq;
+}
+
+// The player's force for a new mission: today's Marines with the chosen loadout, or another era's.
+function buildBlue(set) {
+  const k = set.friendly && set.friendly !== 'era' ? set.friendly : (scenarioOf(set).blue || 'usmc');
+  if (k === 'usmc' || !FORCES[k]) return buildUSMCSquad(set.loadout);
+  return buildForce(k, 'blue');
+}
+function scenarioOf(set) { return SCENARIOS[set && set.scenario] || SCENARIOS.modern; }
 
 // ---- src/symbols.js
 'use strict';
@@ -3850,6 +4896,8 @@ const MAPC = {
   snow: [241, 245, 249],
   ice: [222, 238, 248],
   wash: [242, 232, 206],
+  paddy: [222, 238, 224],
+  dike: [226, 214, 182],
   water: [176, 220, 244],
   waterEdge: [40, 140, 205],
   contour: [168, 84, 50],
@@ -3859,7 +4907,7 @@ const CLASS_COLORS = {
   [TER.WOODS]: MAPC.woods, [TER.GRASS]: MAPC.grass, [TER.PLOWED]: MAPC.plowed, [TER.ORCHARD]: MAPC.orchard,
   [TER.VINEYARD]: MAPC.vineyard, [TER.POND]: MAPC.water, [TER.SWAMP]: MAPC.swamp, [TER.BEACH]: MAPC.beach,
   [TER.CHAPARRAL]: MAPC.chaparral, [TER.BRUSH]: MAPC.brush, [TER.DESERT]: MAPC.desert, [TER.ROCK]: MAPC.rock,
-  [TER.SNOW]: MAPC.snow, [TER.ICE]: MAPC.ice, [TER.WASH]: MAPC.wash,
+  [TER.SNOW]: MAPC.snow, [TER.ICE]: MAPC.ice, [TER.WASH]: MAPC.wash, [TER.PADDY]: MAPC.paddy, [TER.DIKE]: MAPC.dike,
 };
 const CLASS_COLOR = (k) => CLASS_COLORS[k] || MAPC.paper;
 // Ground that draws as a tinted area; river, ford and sea water draw like a pond.
@@ -4012,6 +5060,13 @@ function drawMapRegion(ctx, map, x0, y0, w, h, ppm, level) {
         // Sand: brown stipple.
         ctx.fillStyle = '#a07a4a';
         ctx.beginPath(); ctx.arc(x + ((cx * 3) % 3 - 1), y + ((cy * 5) % 3 - 1), level === 2 ? 0.45 : 0.9, 0, Math.PI * 2); ctx.fill();
+      } else if (k === TER.PADDY && (cx * 3 + cy * 5) % 3 === 0) {
+        // Rice: a green tuft over a short blue water line.
+        const s = level === 2 ? 1.4 : 2.8;
+        ctx.strokeStyle = BLUE_LINE;
+        ctx.beginPath(); ctx.moveTo(x - s * 1.2, y); ctx.lineTo(x + s * 1.2, y); ctx.stroke();
+        ctx.strokeStyle = '#4f8a3a';
+        ctx.beginPath(); ctx.moveTo(x, y); ctx.lineTo(x, y - s); ctx.moveTo(x, y); ctx.lineTo(x - s * 0.7, y - s * 0.8); ctx.moveTo(x, y); ctx.lineTo(x + s * 0.7, y - s * 0.8); ctx.stroke();
       } else if (k === TER.GRASS && level === 2 && (cx * 7 + cy * 13) % 5 === 0) {
         ctx.strokeStyle = '#6f9a52';
         const s = 1.4;
@@ -4034,14 +5089,24 @@ function drawMapRegion(ctx, map, x0, y0, w, h, ppm, level) {
     ctx.setLineDash([]);
   }
   // The sea's name, along the coast.
-  if (map.R.coast && x0 < 600) {
+  const seaName = (map.R.sea || 'PACIFIC OCEAN').split('').join(' ');
+  if (map.R.island) {
+    // Around an island: the sea's name above and below it.
+    const fs = (level === 0 ? 34 : 22) / ppm;
+    for (const yy of [MAP_H * 0.1, MAP_H * 0.9]) {
+      if (!inBox(MAP_W / 2, yy, 900)) continue;
+      ctx.font = 'italic 700 ' + fs + 'px "Saira Condensed", "Arial Narrow", sans-serif';
+      ctx.textAlign = 'center'; ctx.textBaseline = 'middle'; ctx.fillStyle = BLUE_LINE;
+      ctx.fillText(seaName, MAP_W / 2, yy);
+    }
+  } else if (map.R.coast && x0 < 600) {
     const fs = (level === 0 ? 34 : 22) / ppm;
     for (const yy of [800, 2200]) {
       if (!inBox(110, yy, 600)) continue;
       ctx.save(); ctx.translate(map.coastAt(yy / MAP_H) / 2, yy); ctx.rotate(-Math.PI / 2);
       ctx.font = 'italic 700 ' + fs + 'px "Saira Condensed", "Arial Narrow", sans-serif';
       ctx.textAlign = 'center'; ctx.textBaseline = 'middle'; ctx.fillStyle = BLUE_LINE;
-      ctx.fillText('P A C I F I C   O C E A N', 0, 0);
+      ctx.fillText(seaName, 0, 0);
       ctx.restore();
     }
   }
@@ -4262,9 +5327,9 @@ function buildTerrain(map) {
     ['woods', 'Woods, hedgerow', has[TER.WOODS]], ['grass', 'Tall grass', has[TER.GRASS]], ['orchard', 'Orchard', has[TER.ORCHARD]],
     ['vineyard', 'Vineyard', has[TER.VINEYARD]], ['chaparral', 'Chaparral', has[TER.CHAPARRAL]], ['brush', 'Mesquite brush', has[TER.BRUSH]],
     ['desert', 'Desert scrub', has[TER.DESERT]], ['rock', 'Rock outcrop, talus', has[TER.ROCK]], ['snow', 'Deep snow', has[TER.SNOW]],
-    ['beach', 'Sand beach', has[TER.BEACH]],
+    ['beach', 'Sand beach', has[TER.BEACH]], ['paddy', 'Rice paddy, dike', has[TER.PADDY]],
     ['paved', 'Hard surface road', 1], ['road', 'Unimproved road', 1], ['wall', 'Stone wall', has[TER.WALL]], ['building', 'Building', 1],
-    ['stream', 'Stream', wet], ['wash', 'Dry wash', dry], ['pond', map.R.ponds === 'ice' ? 'Frozen pond' : map.R.coast ? 'Pond, ocean' : 'Pond', has[TER.POND] || has[TER.ICE] || has[TER.OCEAN]],
+    ['stream', 'Stream', wet], ['wash', 'Dry wash', dry], ['pond', map.R.ponds === 'ice' ? 'Frozen pond' : map.R.coast || map.R.island ? 'Pond, sea' : 'Pond', has[TER.POND] || has[TER.ICE] || has[TER.OCEAN]],
     ['index', 'Index contour (' + ii + ' m)', 1], ['contour', 'Contour (' + map.ci + ' m)', 1],
     ['river', 'River, bridge, ford', !!map.river], ['swamp', 'Swamp, marsh', has[TER.SWAMP]],
   ].filter(r => r[2]);
@@ -4282,6 +5347,10 @@ function buildTerrain(map) {
       for (let t = 0; t < n; t++) { ctx.beginPath(); ctx.arc(x + 10 + t * (72 / Math.max(1, n - 1)), y + (t % 2 ? 6 : -6), 3, 0, Math.PI * 2); ctx.fill(); }
     }
     else if (k === 'rock') { sw(MAPC.rock); ctx.fillStyle = '#7a5a3c'; for (let t = 10; t < 90; t += 16) { ctx.beginPath(); ctx.moveTo(x + t - 5, y + 5 - (t % 3) * 3); ctx.lineTo(x + t, y - 6 - (t % 3) * 3); ctx.lineTo(x + t + 5, y + 5 - (t % 3) * 3); ctx.fill(); } }
+    else if (k === 'paddy') {
+      sw(MAPC.paddy); ctx.strokeStyle = 'rgb(' + MAPC.dike.map(v => v - 60).join(',') + ')'; ctx.lineWidth = 3; ctx.strokeRect(x + 2, y - 14, 86, 28);
+      for (const tx of [22, 45, 68]) { ctx.strokeStyle = BLUE_LINE; ctx.lineWidth = 2; ctx.beginPath(); ctx.moveTo(tx + x - 8, y + 6); ctx.lineTo(tx + x + 8, y + 6); ctx.stroke(); ctx.strokeStyle = '#4f8a3a'; ctx.beginPath(); ctx.moveTo(x + tx, y + 6); ctx.lineTo(x + tx, y - 6); ctx.moveTo(x + tx, y + 6); ctx.lineTo(x + tx - 6, y - 3); ctx.moveTo(x + tx, y + 6); ctx.lineTo(x + tx + 6, y - 3); ctx.stroke(); }
+    }
     else if (k === 'snow') { sw(MAPC.snow); ctx.strokeStyle = '#999'; ctx.lineWidth = 1; ctx.strokeRect(x, y - 16, 90, 32); }
     else if (k === 'beach' || k === 'wash') {
       sw(MAPC[k]); ctx.fillStyle = '#a07a4a';
@@ -4384,7 +5453,6 @@ function tileDist(key) {
 }
 
 // ---------------------------------------------------------------- frame
-const TEAM_TAG = ['', '1', '2', '3', '4'];
 // Overlay colors follow US doctrine for graphics on a map overlay:
 // blue for friendly, red for enemy, black for fire support targets.
 const OVL = { blue: '#1f4fbf', red: '#c62828', black: '#161616' };
@@ -4790,9 +5858,9 @@ function drawUnits(ctx) {
       ctx.font = '700 ' + Math.round(r * 0.9) + 'px "Saira Condensed", "Arial Narrow", sans-serif';
       ctx.textAlign = 'left'; ctx.textBaseline = 'middle';
       ctx.lineWidth = 3; ctx.strokeStyle = 'rgba(247,245,236,0.95)';
-      ctx.strokeText(TEAM_TAG[s.team.num], q.x + r + 3, y - r * 0.55);
+      ctx.strokeText(String(s.team.num), q.x + r + 3, y - r * 0.55);
       ctx.fillStyle = s.side === 'blue' ? OVL.blue : OVL.red;
-      ctx.fillText(TEAM_TAG[s.team.num], q.x + r + 3, y - r * 0.55);
+      ctx.fillText(String(s.team.num), q.x + r + 3, y - r * 0.55);
     }
     const chits = [[POSTURE[s.posture].short, '#f3eedc', OVL.black]];
     if (s.pinned) chits.push(['PIN', '#b3261e', '#fff']);
@@ -5244,6 +6312,12 @@ function drawEffects(ctx) {
         ctx.beginPath(); ctx.arc(p.x + Math.cos(a) * 22 * burst, p.y - h + Math.sin(a) * 14 * burst, 4, 0, Math.PI * 2); ctx.fill();
       }
       ctx.globalAlpha = 1;
+    } else if (e.type === 'smoke') {
+      // Black-powder smoke: a white cloud that swells, drifts and thins.
+      const p = toScreen(e.x + f * 6, e.y - f * 4), rr = (1.5 + 5 * Math.sqrt(f)) * z;
+      ctx.fillStyle = 'rgba(236,236,230,' + (0.75 * (1 - f)) + ')';
+      ctx.strokeStyle = 'rgba(120,120,120,' + (0.35 * (1 - f)) + ')'; ctx.lineWidth = 1;
+      ctx.beginPath(); ctx.arc(p.x, p.y, Math.max(3, rr), 0, Math.PI * 2); ctx.fill(); ctx.stroke();
     } else if (e.type === 'flash') {
       const p = toScreen(e.x, e.y);
       ctx.fillStyle = 'rgba(232,135,30,' + (1 - f) + ')';
@@ -5942,11 +7016,54 @@ const UI = {
   hideModal(id) { $(id).hidden = true; },
 
   // New mission: choose the kind of mission and the map. The order itself follows on the map.
+  // Team buttons named for the force: fire teams, squads, sections, groups.
+  labelTeams() {
+    const sq = G.squads.blue;
+    this.chipTeams.forEach((c, i) => { c.textContent = ORDINAL[i] + ' ' + (sq.teamWord || 'FT'); });
+  },
+
   showBriefing() {
     const set = G.settings;
     const box = $('briefBody');
     box.innerHTML = '';
     const sit = el('div', 'bsit');
+    // The scenario: the enemy, the era, the ground. Today's generic enemy, or a force from history.
+    sit.appendChild(el('h3', null, 'Scenario'));
+    const sp = el('p');
+    const scSel = el('select'); scSel.id = 'missionScenario';
+    for (const k of SCENARIO_KEYS) { const o = el('option', null, SCENARIOS[k].label); o.value = k; if (set.scenario === k) o.selected = true; scSel.appendChild(o); }
+    const sdesc = el('span', 'bdesc');
+    const scText = () => {
+      const sc = scenarioOf(set);
+      if (!sc.opfor) return 'Today\'s Marines against a present-day enemy of regular soldiers, irregulars, reconnaissance troops or aircrew, depending on the mission.';
+      return sc.status + ' · ' + sc.date + ' · ' + sc.place + '. ' + sc.history + ' Enemy: ' + FORCES[sc.opfor].label + ', ' + sc.size[0] + '-' + sc.size[1] + ' men.';
+    };
+    sdesc.textContent = scText();
+    sp.appendChild(scSel); sp.appendChild(sdesc);
+    sit.appendChild(sp);
+    // Your force: the era's own, or another.
+    sit.appendChild(el('h3', null, 'Your force'));
+    const fp = el('p');
+    const frSel = el('select'); frSel.id = 'missionFriendly';
+    const fdesc = el('span', 'bdesc');
+    const fillFriendly = () => {
+      frSel.innerHTML = '';
+      const era = scenarioOf(set).blue || 'usmc';
+      const o0 = el('option', null, 'Of the era: ' + friendlyLabel(era)); o0.value = 'era'; frSel.appendChild(o0);
+      for (const k of FRIENDLY_KEYS) { const o = el('option', null, friendlyLabel(k)); o.value = k; frSel.appendChild(o); }
+      frSel.value = set.friendly || 'era';
+      const k = set.friendly === 'era' || !set.friendly ? era : set.friendly;
+      fdesc.textContent = forceInfo(k).unit + (k === era ? '' : ' Not of the era: historical fiction.');
+    };
+    frSel.addEventListener('change', () => { set.friendly = frSel.value; fillFriendly(); eyebrow(); });
+    // The dialog's subtitle: the force you will command.
+    const eyebrow = () => {
+      const k = set.friendly === 'era' || !set.friendly ? scenarioOf(set).blue || 'usmc' : set.friendly;
+      const F = FORCES[k], n = F ? 1 + (F.hq || []).length + 3 * F.groups[0].length : 13;
+      $('briefEyebrow').textContent = (F ? F.unitName + ' · ' + F.label : '1st Squad · Marine rifle squad') + ', ' + n + ' men';
+    };
+    fp.appendChild(frSel); fp.appendChild(fdesc);
+    sit.appendChild(fp);
     sit.appendChild(el('h3', null, 'Mission'));
     const mp = el('p');
     // The mission: one of many, at random unless one is picked. The description is the
@@ -5954,12 +7071,19 @@ const UI = {
     const blurb = (k) => k === 'random' ? 'Any of ' + MISSION_KEYS.length + ' missions, chosen at random. The order tells you what you face.'
       : MISSIONS[k].activity({ name: 'the objective', kind: 'open' }, 'toward you') + ' Enemy ' + MISSIONS[k].size[0] + (MISSIONS[k].size[1] > MISSIONS[k].size[0] ? '-' + MISSIONS[k].size[1] : '') + ' men.';
     const modeSel = el('select'); modeSel.id = 'missionMode';
-    for (const [k, t] of [['random', 'Random mission'], ...MISSION_KEYS.map(k => [k, MISSIONS[k].label]).sort((a, b) => a[1].localeCompare(b[1]))]) {
-      const o = el('option', null, t); o.value = k; if (set.mode === k) o.selected = true; modeSel.appendChild(o);
-    }
-    if (!MISSIONS[set.mode]) set.mode = 'random';
-    const desc = el('span', 'bdesc', blurb(set.mode));
-    modeSel.addEventListener('change', () => { set.mode = modeSel.value; desc.textContent = blurb(set.mode); });
+    const desc = el('span', 'bdesc');
+    // The missions that fit the scenario.
+    const fillModes = () => {
+      const pool = scenarioOf(set).missions || MISSION_KEYS;
+      if (!pool.includes(set.mode)) set.mode = 'random';
+      modeSel.innerHTML = '';
+      for (const [k, t] of [['random', 'Random mission' + (pool.length < MISSION_KEYS.length ? ' (' + pool.length + ' fit this scenario)' : '')], ...pool.map(k => [k, MISSIONS[k].label]).sort((a, b) => a[1].localeCompare(b[1]))]) {
+        const o = el('option', null, t); o.value = k; if (set.mode === k) o.selected = true; modeSel.appendChild(o);
+      }
+      desc.textContent = set.mode === 'random' ? 'Any of the ' + pool.length + ' missions that fit, chosen at random. The order tells you what you face.' : blurb(set.mode);
+    };
+    fillModes();
+    modeSel.addEventListener('change', () => { set.mode = modeSel.value; desc.textContent = set.mode === 'random' ? 'Any of the missions that fit, chosen at random. The order tells you what you face.' : blurb(set.mode); });
     mp.appendChild(modeSel); mp.appendChild(desc);
     sit.appendChild(mp);
     const rp = el('p');
@@ -5967,8 +7091,21 @@ const UI = {
     for (const [k, t] of [['random', 'Random region'], ...REGION_KEYS.map(k => [k, REGIONS[k].label])]) {
       const o = el('option', null, t); o.value = k; if (set.region === k) o.selected = true; regSel.appendChild(o);
     }
-    const rdesc = el('span', 'bdesc', set.region === 'random' ? 'Any of the regions, drawn from the map number.' : REGIONS[set.region].brief);
-    regSel.addEventListener('change', () => { set.region = regSel.value; rdesc.textContent = set.region === 'random' ? 'Any of the regions, drawn from the map number.' : REGIONS[set.region].brief; });
+    const rdesc = el('span', 'bdesc');
+    const regText = () => {
+      const sc = scenarioOf(set);
+      if (set.region === 'random') return sc.region ? 'The scenario\'s own ground: ' + REGIONS[sc.region].label + '. ' + REGIONS[sc.region].brief : 'Any of the present-day regions, drawn from the map number.';
+      return REGIONS[set.region].brief + (sc.region && sc.region !== set.region ? ' Not the scenario\'s own ground.' : '');
+    };
+    regSel.options[0].textContent = scenarioOf(set).region ? 'Scenario\'s ground' : 'Random region';
+    rdesc.textContent = regText();
+    regSel.addEventListener('change', () => { set.region = regSel.value; rdesc.textContent = regText(); });
+    scSel.addEventListener('change', () => {
+      set.scenario = scSel.value; sdesc.textContent = scText(); fillFriendly(); fillModes();
+      regSel.options[0].textContent = scenarioOf(set).region ? 'Scenario\'s ground' : 'Random region';
+      rdesc.textContent = regText(); eyebrow();
+    });
+    fillFriendly(); eyebrow();
     sit.appendChild(el('h3', null, 'Region'));
     rp.appendChild(regSel); rp.appendChild(rdesc);
     sit.appendChild(rp);
@@ -5987,6 +7124,34 @@ const UI = {
     how.appendChild(el('p', null, 'The clock runs while you plan, at ' + PLAN_RATE + '× speed. Nothing moves while you plan, but the enemy uses the time: it digs in, or marches closer. Use no more than a third of the time available.'));
     box.appendChild(how);
     this.showModal('briefing');
+  },
+
+  // Another era's force carries what it carried: shown, not chosen.
+  renderEraLoadout(box, sq) {
+    const wrap = el('div', 'bload');
+    wrap.appendChild(el('h4', null, 'Arms and equipment'));
+    const tableWrap = el('div', 'tablewrap'), tbl = el('table', 'ltable'), head = el('tr');
+    for (const h of ['', 'Billet', 'Weapon', 'Rounds', 'Other', 'Men']) head.appendChild(el('th', null, h));
+    tbl.appendChild(head);
+    const rows = new Map();
+    for (const s of sq.all) {
+      const key = s.title + '|' + s.weapon.name + '|' + (s.launcher ? s.launcher.name : '');
+      const r = rows.get(key) || { s, n: 0 };
+      r.n++; rows.set(key, r);
+    }
+    for (const { s, n } of rows.values()) {
+      const tr = el('tr'), sc = el('td');
+      sc.appendChild(symbolCanvas(s.billet, 'blue', 22)); tr.appendChild(sc);
+      tr.appendChild(el('td', 'bname', s.title));
+      tr.appendChild(el('td', null, s.weapon.name));
+      tr.appendChild(el('td', null, s.weapon.mag === 1 ? s.ammoLeft + ' charges' : s.mags + 1 + ' × ' + s.weapon.mag));
+      const other = [s.launcher ? s.launcher.name + ' (' + s.lRounds + ')' : '', s.frags ? s.frags + ' ' + s.grenade.name : '', MELEE[s.meleeKey] && s.meleeKey !== 'butt' ? MELEE[s.meleeKey].name : ''].filter(Boolean).join(', ');
+      tr.appendChild(el('td', null, other || '—'));
+      tr.appendChild(el('td', 'kg', String(n)));
+      tbl.appendChild(tr);
+    }
+    tableWrap.appendChild(tbl); wrap.appendChild(tableWrap);
+    box.appendChild(wrap);
   },
 
   // Loadout by billet, editable while planning.
@@ -6057,7 +7222,7 @@ const UI = {
     const c = fighters.length ? centroid(fighters) : { x: (centroid(blue.all).x + G.enemyArea.x) / 2, y: (centroid(blue.all).y + G.enemyArea.y) / 2 };
     // Named for the nearest settlement or hill to where the fighting was.
     let name = null, bd = Infinity;
-    for (const p of m.places) { const d = dist(p.x, p.y, c.x, c.y); if (d < bd) { bd = d; name = p.name.replace(/ (Farm|Ranch)$/, ' $1'); } }
+    for (const p of m.places) { const d = dist(p.x, p.y, c.x, c.y); if (d < bd) { bd = d; name = p.name; } }
     for (const p of m.peaks) { const d = dist(p.x, p.y, c.x, c.y) * 1.3; if (d < bd) { bd = d; name = 'Hill ' + Math.round(m.elevBase + p.e); } }
     const box = el('table', 'wbox');
     const tr = (cls) => { const r = el('tr', cls); box.appendChild(r); return r; };
@@ -6065,6 +7230,8 @@ const UI = {
     const pair = (a, b, cls) => { const r = tr(cls); const x = el('td'), y = el('td'); for (const [cell, v] of [[x, a], [y, b]]) { if (v instanceof Node) cell.appendChild(v); else cell.innerHTML = v; } r.appendChild(x); r.appendChild(y); return r; };
     const lines = (arr) => arr.filter(Boolean).join('<br>');
     th('Battle of ' + (name || gridRef(c.x, c.y)), 'wtitle');
+    const sc = G.mission.scenario || SCENARIOS.modern, bi = forceInfo(blue.kind), ri = forceInfo(red.kind);
+    if (sc.war) th('Part of ' + sc.war + (sc.status ? ' · ' + sc.status : ''), 'wpart');
     th(G.mission.label + ' · Sand Table Exercise ' + String(G.settings.seed).padStart(5, '0') + ', ' + m.R.label, 'wpart');
     // A sketch of the field: the sheet around the fight, each man where he ended.
     const cell = el('td', 'wimg'); cell.colSpan = 2;
@@ -6087,20 +7254,21 @@ const UI = {
       if (!s.active) { ctx.strokeStyle = '#111'; ctx.lineWidth = 1.5; ctx.beginPath(); ctx.moveTo(px - 4, py - 4); ctx.lineTo(px + 4, py + 4); ctx.moveTo(px + 4, py - 4); ctx.lineTo(px - 4, py + 4); ctx.stroke(); }
     }
     cell.appendChild(cv);
-    cell.appendChild(el('div', 'wcap', 'The field at the end, H+' + fmtClock(Plan.stepOff != null ? G.time - Plan.stepOff : G.time) + ': Marines blue, enemy red, casualties crossed.'));
+    cell.appendChild(el('div', 'wcap', 'The field at the end, H+' + fmtClock(Plan.stepOff != null ? G.time - Plan.stepOff : G.time) + ': ' + bi.men + ' blue, enemy red, casualties crossed.'));
     tr().appendChild(cell);
     const kv = (k, v) => { const r = tr('wkv'); r.appendChild(el('th', 'wk', k)); const d = el('td'); d.innerHTML = v; r.appendChild(d); };
     const dur = Plan.stepOff != null ? G.time - Plan.stepOff : G.time;
-    kv('Date', 'H-hour to H+' + fmtClock(dur) + ' (' + Math.max(1, Math.round(dur / 60)) + ' min)');
-    kv('Location', m.R.label + '<br><span class="wlink">◉ Grid ' + gridRef(c.x, c.y) + '</span>');
-    kv('Result', result === 'victory' ? '<span class="wlink">United States</span> victory' : result === 'escaped' ? 'Inconclusive: the <span class="wlink">opposing force</span> escaped' : '<span class="wlink">Opposing force</span> victory');
+    kv('Date', (sc.date ? sc.date + ', ' : '') + 'H-hour to H+' + fmtClock(dur) + ' (' + Math.max(1, Math.round(dur / 60)) + ' min)');
+    kv('Location', (sc.place || m.R.label) + '<br><span class="wlink">◉ Grid ' + gridRef(c.x, c.y) + '</span>');
+    const bn = '<span class="wlink">' + bi.nation + '</span>', rn = '<span class="wlink">' + ri.nation + '</span>';
+    kv('Result', result === 'victory' ? bn + ' victory' : result === 'escaped' ? 'Inconclusive: the ' + rn + ' force escaped' : rn + ' victory');
     th('Belligerents');
-    pair('<span class="wlink">United States</span><br>U.S. Marine Corps', '<span class="wlink">Opposing force</span>');
+    pair(bn + (blue.kind === 'usmc' || /^usmc/.test(blue.kind) ? '<br>U.S. Marine Corps' : ''), rn);
     th('Commanders and leaders');
     const sl = blue.leader, el0 = red.leader || red.all[0];
-    pair('<span class="wlink">' + sl.rank + ' ' + sl.name + '</span>' + (sl.health === 'kia' ? ' †' : ''), '<span class="wlink">' + (el0 ? el0.title : 'Unknown') + '</span>' + (el0 && el0.health === 'kia' ? ' †' : ''));
+    pair('<span class="wlink">' + sl.label + '</span>' + (sl.health === 'kia' ? ' †' : ''), '<span class="wlink">' + (el0 ? el0.title : 'Unknown') + '</span>' + (el0 && el0.health === 'kia' ? ' †' : ''));
     th('Units involved');
-    pair('<span class="wlink">1st Squad</span>, three fire teams', '<span class="wlink">' + red.name + '</span>, ' + OPFOR_KINDS[red.kind || 'regular'].men);
+    pair('<span class="wlink">' + blue.name + '</span>, three ' + (blue.teamName || 'Fire Team').toLowerCase() + 's', '<span class="wlink">' + red.name + '</span>, ' + ri.men);
     th('Strength');
     const arms = (sq) => {
       const n = new Map();
@@ -6108,13 +7276,13 @@ const UI = {
       return [...n].map(([w, k]) => k + ' ' + w);
     };
     const sz = Plan.intel && Plan.intel.sizeReport;
-    pair(lines([blue.all.length + ' Marines', ...arms(blue)]), lines([red.all.length + ' men', ...arms(red), sz ? '<i>Reported: ' + sz.text.replace('OPFOR ', '') + '</i>' : '']));
+    pair(lines([blue.all.length + ' ' + bi.men, ...arms(blue)]), lines([red.all.length + ' men', ...arms(red), sz ? '<i>Reported: ' + sz.text.replace('OPFOR ', '') + '</i>' : '']));
     th('Casualties and losses');
     const loss = (sq, men) => {
       const kia = sq.all.filter(s => s.health === 'kia').length, ser = sq.all.filter(s => s.health === 'serious').length, wia = sq.all.filter(s => s.health === 'light').length, fled = sq.all.filter(s => s.routed || s.routing).length;
       return lines([kia + ' killed', ser + ' seriously wounded', wia + ' wounded', fled ? fled + ' fled' : '', (sq.all.length - kia - ser - fled) + ' of ' + sq.all.length + ' ' + men + ' still fighting']);
     };
-    pair(loss(blue, 'Marines'), loss(red, 'men'));
+    pair(loss(blue, bi.men), loss(red, 'men'));
     th('Ammunition expended');
     const spent = (sq) => {
       const rds = sq.all.reduce((n, s) => n + s.shots, 0), hits = sq.all.reduce((n, s) => n + s.hits, 0);
@@ -6304,7 +7472,7 @@ const Plan = {
       out.push({ kind: 'hill', name: 'HIGH GROUND ' + Math.round(m.elevBase + f.hi.e), x: f.hi.x, y: f.hi.y, note: 'Highest point on the direct line' });
     }
     for (const p of m.places.filter(p => dist(p.x, p.y, mid.x, mid.y) < reach).slice(0, 4)) {
-      out.push({ kind: 'town', name: p.name.toUpperCase(), x: p.x, y: p.y, note: p.kind === 'village' ? 'Village' : G.map.R.farmWord });
+      out.push({ kind: 'town', name: p.name.toUpperCase(), x: p.x, y: p.y, note: p.kind === 'village' ? 'Village' : farmNoun(G.map.R) });
     }
     return out;
   },
@@ -6831,14 +7999,21 @@ const Plan = {
   makeIntel() {
     const red = G.squads.red.all, n = red.length;
     const est = n + randInt(-2, 2);
-    const kinds = new Set(red.map(s => s.billet));
-    const seen = [];
-    if (kinds.has('MG')) seen.push('a PKM machine gun');
-    if (kinds.has('AR')) seen.push('an RPK light machine gun');
-    if (kinds.has('RPG')) seen.push('an RPG-7');
-    if (kinds.has('G')) seen.push('rifle grenades (GP-25)');
-    if (kinds.has('MM')) seen.push('a scoped rifle (SVD)');
-    const shown = shuffle(seen.slice()).slice(0, Math.max(1, Math.min(2, seen.length)));
+    // What was seen: the common shoulder arm, and one or two of the heavier weapons.
+    const count = new Map();
+    for (const s of red) count.set(s.weapon.name, (count.get(s.weapon.name) || 0) + 1);
+    const main = [...count.entries()].sort((a, b) => b[1] - a[1])[0][0];
+    const art = (w) => (/^[aeiouAEFHILMNORSX8]/.test(w) && !/^(Uzi|Lu|one)/.test(w) ? 'an ' : 'a ') + w;
+    const plural = (w) => /\)$/.test(w) ? w.replace(/ \(/, 's (') : /s$/.test(w) ? w : w + 's';
+    const noun = new Map(Object.values(WEAPONS).map(W => [W.name, W.noun || W.name]));
+    const heavy = new Set();
+    for (const s of red) {
+      if (s.launcher) heavy.add(s.launcher.name);
+      if (s.billet === 'MG' || s.billet === 'AR' || s.billet === 'MM') heavy.add(s.weapon.name);
+    }
+    for (const w of count.keys()) if (w !== main && heavy.size < 3) heavy.add(w);
+    heavy.delete(main);
+    const shown = shuffle([...heavy]).slice(0, 2).map(w => art(noun.get(w) || w));
     const near = this.placeNear(G.enemyArea, 450);
     const where = near ? (near.kind === 'village' ? 'in the buildings of ' + near.name : 'around ' + near.name) : 'in the open ground near the grid';
     const dirTo = compassWord(bearing(G.enemyArea.x, G.enemyArea.y, centroid(G.squads.blue.all).x, centroid(G.squads.blue.all).y));
@@ -6848,9 +8023,9 @@ const Plan = {
       sizeReport: sz,
       activity: D.activity(M.site, dirTo),
       location: 'Vicinity grid ' + gridRef(this.reported.x, this.reported.y) + ' (report accurate to about 100 m).',
-      unit: OPFOR_KINDS[M.kind].unit + (M.hvt ? ' A commander is with them.' : ''),
+      unit: forceInfo(M.kind).unit + (M.hvt ? (M.scenario && M.scenario.hvt ? ' ' + M.hvt.title + ' is reported with them.' : ' A commander is with them.') : ''),
       time: 'Observed ' + randInt(15, 40) + ' minutes before this order.',
-      equipment: 'Rifles' + (shown.length ? ', ' + shown.join(' and ') : '') + '. Other weapons are possible.',
+      equipment: plural(noun.get(main) || main).replace(/^./, c => c.toUpperCase()) + (shown.length ? ', ' + shown.join(' and ') : '') + '. Other weapons are possible.',
       near,
     };
   },
@@ -6880,7 +8055,7 @@ const Plan = {
     const purpose = near ? (near.kind === 'village' ? 'secure the village of ' + near.name : near.kind === 'farm' ? 'secure ' + near.name : 'seize ' + near.name)
       : 'clear the area for the company';
     const M = G.mission;
-    return '1st Squad ' + M.def.task(M.site, gr, M) + (M.evacAt || M.leaveAt || G.mode === 'meeting' ? '' : ', NLT H+' + Math.round(this.timeAvail / 60)) + '.';
+    return G.squads.blue.name + ' ' + M.def.task(M.site, gr, M) + (M.evacAt || M.leaveAt || G.mode === 'meeting' ? '' : ', NLT H+' + Math.round(this.timeAvail / 60)) + '.';
   },
 
   // Terrain facts along the line from the squad to the reported enemy, for the orientation.
@@ -7203,7 +8378,10 @@ const OPORD = {
     if (ao.swampPct > 0.1) this.factRow(box, 'Swamp', Math.max(0.1, ao.swampPct).toFixed(1) + '% of the AO, low ground by the water; largest vic grid ' + gridRef(ao.swampAt.x, ao.swampAt.y) +
       '. Very slow going, no cover, good concealment.' + (f.swampM ? ' About ' + Math.round(f.swampM / 10) * 10 + ' m of it on the direct line.' : ''), ao.swampAt, 1.4);
     const pc = (k) => ao.pct(k), pf = (k) => (pc(k) < 1 ? pc(k).toFixed(1) : Math.round(pc(k))) + '% of the AO';
-    if (pc(TER.OCEAN) > 0.5) this.factRow(box, 'Pacific Ocean', 'The west edge of the AO. Impassable. The beach (' + pf(TER.BEACH).replace(' of the AO', '') + ') is soft sand, slow and wide open to the bluffs above it.', { x: G.map.coastAt(0.5) / 2, y: MAP_H / 2 }, 0.5);
+    const sea = (m.R.sea || 'Pacific Ocean').toLowerCase().replace(/(^|\s)\S/g, c => c.toUpperCase());
+    if (pc(TER.OCEAN) > 0.5 && m.R.island) this.factRow(box, sea, 'All round the island. Impassable. The beach (' + pf(TER.BEACH).replace(' of the AO', '') + ') is coral sand, slow and wide open; there is nowhere to go but across the island.', { x: MAP_W / 2, y: MAP_H * 0.08 }, 0.5);
+    else if (pc(TER.OCEAN) > 0.5) this.factRow(box, sea, 'The west edge of the AO. Impassable. The beach (' + pf(TER.BEACH).replace(' of the AO', '') + ') is soft sand, slow and wide open to the bluffs above it.', { x: G.map.coastAt(0.5) / 2, y: MAP_H / 2 }, 0.5);
+    if (pc(TER.PADDY) > 2) this.factRow(box, 'Rice paddies', pf(TER.PADDY) + '. Flooded fields, knee-deep mud: very slow going, no cover in the open paddy. The dikes between them, a meter high, are the only cover and the only fast way across.', null);
     if (pc(TER.CHAPARRAL) > 1) this.factRow(box, 'Chaparral', pf(TER.CHAPARRAL) + '. Dense, head-high brush on the slopes. Very slow going; hides men, stops no rounds.', null);
     if (pc(TER.BRUSH) > 1) this.factRow(box, 'Mesquite brush', pf(TER.BRUSH) + '. Thorn thickets two to three meters high. Slow; good concealment, no cover, short fields of fire inside.', null);
     if (pc(TER.DESERT) > 5) this.factRow(box, 'Desert', pf(TER.DESERT) + '. Open desert floor with scattered creosote. Fast going, long fields of fire, little concealment.', null);
@@ -7220,7 +8398,7 @@ const OPORD = {
       '. Fordable, at about a third of walking speed. The gullies give cover.', null);
     if (ao.woodsPct >= 1) this.factRow(box, 'Woods', ao.woodsPct + '% of the AO' + (pc(TER.ORCHARD) > 0.5 ? ', with orchards' : '') + '. Slow going, short fields of fire, good concealment.', null);
     if (ao.steepPct > 0.5) this.factRow(box, 'Steep ground', 'Slopes over 30% on ' + ao.steepPct.toFixed(1) + '% of the AO; steepest vic grid ' + gridRef(ao.worst.x, ao.worst.y) + '. Slow to climb.', ao.worst, 1.6);
-    if (ao.villages.length) this.factRow(box, 'Built-up', ao.villages.map(v => v.name.toUpperCase() + ' (' + gridRef(v.x, v.y) + ')').join(', ') + (ao.farms ? '; ' + ao.farms + ' ' + m.R.farmWord.toLowerCase() + (ao.farms > 1 ? (m.R.farmWord === 'Ranch' ? 'es' : 's') : '') : '') + '. ' + (pc(TER.WALL) > 0.05 ? 'Stone walls and buildings' : 'Buildings') + ': hard cover for a defender.', ao.villages[0], 1.6);
+    if (ao.villages.length) this.factRow(box, 'Built-up', ao.villages.map(v => v.name.toUpperCase() + ' (' + gridRef(v.x, v.y) + ')').join(', ') + (ao.farms ? '; ' + ao.farms + ' ' + farmNoun(m.R).toLowerCase() + (ao.farms > 1 ? (farmNoun(m.R) === 'Ranch' ? 'es' : 's') : '') : '') + '. ' + (pc(TER.WALL) > 0.05 ? 'Stone walls and buildings' : 'Buildings') + ': hard cover for a defender.', ao.villages[0], 1.6);
 
     box.appendChild(el('h4', null, 'Avenues of approach'));
     if (ao.road) this.factRow(box, 'Paved road', ao.road.text + ' Fastest going, open to observation.', ao.road.at, 1.4);
@@ -7250,7 +8428,8 @@ const OPORD = {
 
   // ------------------------------------------------------------ 2. Situation
   situation(box) {
-    const i = Plan.intel;
+    const i = Plan.intel, sc = G.mission.scenario;
+    if (sc && sc.history) this.para(box, sc.label.replace(/^\d+ · /, '') + ' (' + sc.status.toLowerCase() + ')', sc.date + ', ' + sc.place + '. ' + sc.history);
     this.para(box, 'Enemy forces: SALUTE', G.mission.label + '.');
     for (const [k, v] of [['Size', i.size], ['Activity', i.activity], ['Location', i.location], ['Unit', i.unit], ['Time', i.time], ['Equipment', i.equipment]]) {
       this.factRow(box, k, v, k === 'Location' ? Plan.reported : null, 1.6);
@@ -7262,7 +8441,9 @@ const OPORD = {
       row.appendChild(el('span', null, v));
       box.appendChild(row);
     }
-    this.para(box, 'Friendly forces', 'No higher or adjacent units are near you, and there is no indirect fire support. 1st Squad is on its own.');
+    const bq = G.squads.blue;
+    this.para(box, 'Friendly forces', (bq.kind !== 'usmc' ? forceInfo(bq.kind).unit + ' ' : '') + 'No higher or adjacent units are near you, and there is no indirect fire support. ' + bq.name + ' is on its own.');
+    this.para(box, 'Enemy doctrine', AI.D.label + '.');
     const M = G.mission, why = M.evacAt ? (M.key === 'helo' ? 'the pickup is expected then' : 'the truck should be running by then') : M.leaveAt ? 'the enemy should move on about then'
       : G.mode === 'meeting' ? 'the enemy could reach you by then' : M.digIn ? 'the enemy will have finished digging in by then' : 'the enemy may move by then';
     this.para(box, 'Time available', fmtClock(Plan.timeAvail) + ' (' + why +
@@ -7440,8 +8621,10 @@ const OPORD = {
 
   // ------------------------------------------------------------ 5. Admin & Logistics
   admin(box) {
-    this.para(box, 'Administration and logistics', 'No resupply. Every Marine carries the basic load below. Casualties go to the casualty collection point (CCP); place one in Execution. Redistribute ammunition at the CCP if the fight runs long.');
-    if (Plan.planning) UI.renderLoadout(box, () => applyLoadout(G.squads.blue, G.settings.loadout));
+    const bq = G.squads.blue;
+    this.para(box, 'Administration and logistics', 'No resupply. Every man carries the basic load below. Casualties go to the casualty collection point (CCP); place one in Execution. Redistribute ammunition at the CCP if the fight runs long.');
+    if (bq.kind !== 'usmc') UI.renderEraLoadout(box, bq);
+    else if (Plan.planning) UI.renderLoadout(box, () => applyLoadout(G.squads.blue, G.settings.loadout));
     else box.appendChild(el('p', 'onote', 'The loadout was fixed at step-off.'));
     const ccp = Plan.graphics.find(g => g.kind === 'ccp');
     this.factRow(box, 'CCP', ccp ? ccp.name + ' at grid ' + gridRef(ccp.pts[0].x, ccp.pts[0].y) + '.' : 'Not yet placed.', ccp ? ccp.pts[0] : null, 2);
@@ -7517,7 +8700,7 @@ const Radio = {
   },
 
   callsign(sel) {
-    if (sel.level === 'squad') return '1st Squad';
+    if (sel.level === 'squad') return G.squads.blue.name;
     if (sel.level === 'team') return sel.team.short;
     if (sel.level === 'group') return sel.teams.map(t => t.short).join(' and ');
     return sel.soldier.label;
@@ -8421,7 +9604,8 @@ const G = {
 function loadSettings() {
   let saved = null;
   try { saved = JSON.parse(localStorage.getItem('squad.settings') || 'null'); } catch (e) { saved = null; }
-  const s = { seed: Math.floor(Math.random() * 99999) + 1, mode: 'random', region: 'random', echelon: 'squad', loadout: defaultLoadout() };
+  const s = { seed: Math.floor(Math.random() * 99999) + 1, mode: 'random', region: 'random', echelon: 'squad', loadout: defaultLoadout(),
+    scenario: 'modern', friendly: 'era' };
   if (saved && saved.loadout) {
     for (const k of Object.keys(s.loadout)) {
       const l = saved.loadout[k];
@@ -8429,11 +9613,14 @@ function loadSettings() {
     }
     if (saved.mode && (saved.mode === 'random' || MISSIONS[saved.mode])) s.mode = saved.mode;
     if (saved.region && (saved.region === 'random' || REGIONS[saved.region])) s.region = saved.region;
+    if (saved.scenario && SCENARIOS[saved.scenario]) s.scenario = saved.scenario;
+    if (saved.friendly && (saved.friendly === 'era' || FRIENDLY_KEYS.includes(saved.friendly))) s.friendly = saved.friendly;
   }
   return s;
 }
 function saveSettings() {
-  try { localStorage.setItem('squad.settings', JSON.stringify({ mode: G.settings.mode, region: G.settings.region, loadout: G.settings.loadout })); } catch (e) { /* storage unavailable */ }
+  try { localStorage.setItem('squad.settings', JSON.stringify({ mode: G.settings.mode, region: G.settings.region, loadout: G.settings.loadout,
+    scenario: G.settings.scenario, friendly: G.settings.friendly })); } catch (e) { /* storage unavailable */ }
 }
 
 function newMission() {
@@ -8442,12 +9629,14 @@ function newMission() {
   NEXT_ID = 1;
   G.echelon = ECHELONS[set.echelon] || ECHELONS.squad;
   setMapSize(G.echelon.size); resizeSheet();
-  G.map = new GameMap(set.seed, set.region);
+  // A scenario brings its own ground unless another region was picked.
+  const sc = scenarioOf(set);
+  G.map = new GameMap(set.seed, set.region === 'random' && sc.region ? sc.region : set.region);
   // Grid: a small 100 km digit and two principal digits for each kilometer line.
   G.grid = { e: randInt(10, 85), n: randInt(10, 85), le: randInt(1, 8), ln: randInt(1, 8) };
-  const blue = buildUSMCSquad(set.loadout);
+  const blue = buildBlue(set);
   // The mission: its site, the enemy and what it is doing, the squad's start.
-  const ms = setupMission(set.mode, blue);
+  const ms = setupMission(set.mode, blue, sc);
   const red = ms.red;
   G.squads = { blue, red };
   G.mission = ms.M;
@@ -8467,7 +9656,7 @@ function newMission() {
   $('debrief').hidden = true;
   G.ui.sel = null; G.ui.pending = null; G.ui.tapes = []; G.ui.tapeStart = null;
   for (const t of [blue.hq, ...blue.teams, red.hq, ...red.teams]) { t.routing = false; t.morale = t.squad.morale; }
-  initAI(ms.ai.mode, ms.ai.objective, ms.ai);
+  initAI(ms.ai.mode, ms.ai.objective, Object.assign({ doctrine: forceInfo(red.kind).doctrine }, ms.ai));
 
   buildTerrain(G.map);
   fitCamera(centroid(blue.all), Math.max(R.minZoom, 1.3));
@@ -8475,6 +9664,7 @@ function newMission() {
   UI.logLines = [];
   UI.buildRoster();
   UI.select({ level: 'squad', squad: blue });
+  UI.labelTeams();
   Plan.reset();
   Fog.reset();
   for (let k = 0; k < 4; k++) Fog.update();
@@ -8487,6 +9677,7 @@ function newMission() {
 // A broken team falls back about 400 m away from the enemy and is out of the fight.
 function routePoint(s) {
   // An enemy that means to get away heads for the edge of the sheet.
+  if (s.side === 'red' && s.team.escape) return { x: s.team.escape.x + gauss() * 10, y: s.team.escape.y + gauss() * 10 };
   if (s.side === 'red' && AI.escape) return { x: AI.escape.x + gauss() * 10, y: AI.escape.y + gauss() * 10 };
   const t = threatCentroid(s.side, [s]);
   const a = angleTo(t.x, t.y, s.x, s.y);
@@ -8571,7 +9762,7 @@ function inCover(s) {
   const o = CELL * 0.8;
   for (const [dx, dy] of [[o, 0], [-o, 0], [0, o], [0, -o]]) {
     const n = G.map.terAt(s.x + dx, s.y + dy);
-    if (n === TER.WALL || n === TER.BUILDING) return true;
+    if (n === TER.WALL || n === TER.BUILDING || n === TER.DIKE) return true;
   }
   // Low vegetation (grass, scrub, reeds) hides a man who lies down in it.
   return TERRAIN[k].conceal >= 0.45 && s.posture === 'prone';
@@ -8591,7 +9782,8 @@ function updateSuppression(s, dt) {
 function update(dt) {
   G.time += dt;
   G.spotT -= dt;
-  if (G.spotT <= 0) { G.spotT = 0.25; updateSpotting(); }
+  // A big fight is looked over a little less often.
+  if (G.spotT <= 0) { G.spotT = G.soldiers.length > 120 ? 0.4 : 0.25; updateSpotting(); }
   // While the order is being planned the field is frozen: no one moves or fires. Men still
   // look about and spot, and the clock runs (the enemy's time is accounted at step-off).
   const frozen = Plan.planning;
@@ -8704,7 +9896,8 @@ function boot() {
   // Draw a map behind the briefing so the first view is the ground, not a blank table.
   withLoading('Drawing the map sheet…', () => {
     setMapSize(ECHELONS[G.settings.echelon].size); resizeSheet();
-    G.map = new GameMap(G.settings.seed, G.settings.region);
+    const sc = scenarioOf(G.settings);
+    G.map = new GameMap(G.settings.seed, G.settings.region === 'random' && sc.region ? sc.region : G.settings.region);
     buildTerrain(G.map);
     fitCamera(null, R.minZoom);
     UI.showBriefing();

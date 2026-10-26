@@ -99,15 +99,34 @@ function squadMove(sq, x, y, mode, face) {
   if (!act.length) return;
   const c = centroid(act), heading = face != null ? face : angleTo(c.x, c.y, x, y);
   const teams = sq.teams.filter(t => t.members.some(commandable));
+  // On a long move the whole force follows one route, each man at his station on it.
+  if (face == null && dist(c.x, c.y, x, y) > 120) {
+    const route = G.map.findPath(c.x, c.y, x, y);
+    if (route) {
+      const along = (s, ox, oy) => {
+        s.nudging = false; s.resume = null; s.holdFacing = null;
+        s.path = G.map.offsetPath(s.x, s.y, route, ox, oy); s.moveMode = mode; s.faceAngle = null;
+      };
+      teams.forEach((t, k) => {
+        const q = scaled(squadSlot(sq.formation, k, teams.length), sq.spacing);
+        t.members.filter(commandable).forEach((s, i) => { const o = scaled(teamSlot(t.formation, i), t.spacing); along(s, q.x + o.x, q.y + o.y); });
+      });
+      const so = scaled(squadLeaderSlot(sq.formation), sq.spacing);
+      sq.hq.members.forEach((s, i) => { if (commandable(s)) along(s, so.x + (i ? (i % 2 ? -4 : 4) * Math.ceil(i / 2) : 0), so.y); });
+      return;
+    }
+  }
   teams.forEach((t, k) => {
     const o = scaled(squadSlot(sq.formation, k, teams.length), sq.spacing), w = rotateOffset(o.x, o.y, heading);
     teamMove(t, x + w.x, y + w.y, mode, heading, false);
   });
-  const sl = sq.hq.members[0];
-  if (commandable(sl)) {
-    const o = scaled(squadLeaderSlot(sq.formation), sq.spacing), w = rotateOffset(o.x, o.y, heading);
-    orderMove(sl, x + w.x, y + w.y, mode);
-  }
+  // The leader at his place; anyone else with him (a deputy, a sniper) beside him.
+  const so = scaled(squadLeaderSlot(sq.formation), sq.spacing);
+  sq.hq.members.forEach((s, i) => {
+    if (!commandable(s)) return;
+    const w = rotateOffset(so.x + (i ? (i % 2 ? -4 : 4) * Math.ceil(i / 2) : 0), so.y, heading);
+    orderMove(s, x + w.x, y + w.y, mode);
+  });
 }
 
 // Move along a route: one route is plotted through the waypoints and every man keeps his

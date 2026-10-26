@@ -137,7 +137,7 @@ const Plan = {
       out.push({ kind: 'hill', name: 'HIGH GROUND ' + Math.round(m.elevBase + f.hi.e), x: f.hi.x, y: f.hi.y, note: 'Highest point on the direct line' });
     }
     for (const p of m.places.filter(p => dist(p.x, p.y, mid.x, mid.y) < reach).slice(0, 4)) {
-      out.push({ kind: 'town', name: p.name.toUpperCase(), x: p.x, y: p.y, note: p.kind === 'village' ? 'Village' : G.map.R.farmWord });
+      out.push({ kind: 'town', name: p.name.toUpperCase(), x: p.x, y: p.y, note: p.kind === 'village' ? 'Village' : farmNoun(G.map.R) });
     }
     return out;
   },
@@ -664,14 +664,21 @@ const Plan = {
   makeIntel() {
     const red = G.squads.red.all, n = red.length;
     const est = n + randInt(-2, 2);
-    const kinds = new Set(red.map(s => s.billet));
-    const seen = [];
-    if (kinds.has('MG')) seen.push('a PKM machine gun');
-    if (kinds.has('AR')) seen.push('an RPK light machine gun');
-    if (kinds.has('RPG')) seen.push('an RPG-7');
-    if (kinds.has('G')) seen.push('rifle grenades (GP-25)');
-    if (kinds.has('MM')) seen.push('a scoped rifle (SVD)');
-    const shown = shuffle(seen.slice()).slice(0, Math.max(1, Math.min(2, seen.length)));
+    // What was seen: the common shoulder arm, and one or two of the heavier weapons.
+    const count = new Map();
+    for (const s of red) count.set(s.weapon.name, (count.get(s.weapon.name) || 0) + 1);
+    const main = [...count.entries()].sort((a, b) => b[1] - a[1])[0][0];
+    const art = (w) => (/^[aeiouAEFHILMNORSX8]/.test(w) && !/^(Uzi|Lu|one)/.test(w) ? 'an ' : 'a ') + w;
+    const plural = (w) => /\)$/.test(w) ? w.replace(/ \(/, 's (') : /s$/.test(w) ? w : w + 's';
+    const noun = new Map(Object.values(WEAPONS).map(W => [W.name, W.noun || W.name]));
+    const heavy = new Set();
+    for (const s of red) {
+      if (s.launcher) heavy.add(s.launcher.name);
+      if (s.billet === 'MG' || s.billet === 'AR' || s.billet === 'MM') heavy.add(s.weapon.name);
+    }
+    for (const w of count.keys()) if (w !== main && heavy.size < 3) heavy.add(w);
+    heavy.delete(main);
+    const shown = shuffle([...heavy]).slice(0, 2).map(w => art(noun.get(w) || w));
     const near = this.placeNear(G.enemyArea, 450);
     const where = near ? (near.kind === 'village' ? 'in the buildings of ' + near.name : 'around ' + near.name) : 'in the open ground near the grid';
     const dirTo = compassWord(bearing(G.enemyArea.x, G.enemyArea.y, centroid(G.squads.blue.all).x, centroid(G.squads.blue.all).y));
@@ -681,9 +688,9 @@ const Plan = {
       sizeReport: sz,
       activity: D.activity(M.site, dirTo),
       location: 'Vicinity grid ' + gridRef(this.reported.x, this.reported.y) + ' (report accurate to about 100 m).',
-      unit: OPFOR_KINDS[M.kind].unit + (M.hvt ? ' A commander is with them.' : ''),
+      unit: forceInfo(M.kind).unit + (M.hvt ? (M.scenario && M.scenario.hvt ? ' ' + M.hvt.title + ' is reported with them.' : ' A commander is with them.') : ''),
       time: 'Observed ' + randInt(15, 40) + ' minutes before this order.',
-      equipment: 'Rifles' + (shown.length ? ', ' + shown.join(' and ') : '') + '. Other weapons are possible.',
+      equipment: plural(noun.get(main) || main).replace(/^./, c => c.toUpperCase()) + (shown.length ? ', ' + shown.join(' and ') : '') + '. Other weapons are possible.',
       near,
     };
   },
@@ -713,7 +720,7 @@ const Plan = {
     const purpose = near ? (near.kind === 'village' ? 'secure the village of ' + near.name : near.kind === 'farm' ? 'secure ' + near.name : 'seize ' + near.name)
       : 'clear the area for the company';
     const M = G.mission;
-    return '1st Squad ' + M.def.task(M.site, gr, M) + (M.evacAt || M.leaveAt || G.mode === 'meeting' ? '' : ', NLT H+' + Math.round(this.timeAvail / 60)) + '.';
+    return G.squads.blue.name + ' ' + M.def.task(M.site, gr, M) + (M.evacAt || M.leaveAt || G.mode === 'meeting' ? '' : ', NLT H+' + Math.round(this.timeAvail / 60)) + '.';
   },
 
   // Terrain facts along the line from the squad to the reported enemy, for the orientation.

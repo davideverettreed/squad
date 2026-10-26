@@ -22,7 +22,13 @@ function exposure(s, e) {
 function updateSpotting() {
   for (const side of ['blue', 'red']) {
     const known = G.known[side];
-    const observers = G.soldiers.filter(s => s.side === side && s.active);
+    let observers = G.soldiers.filter(s => s.side === side && s.active);
+    // A large force (a war party, a company) looks with a share of its men each check, in
+    // turn, so a check stays quick; what any one of them sees, all know.
+    if (observers.length > 48) {
+      const k = Math.ceil(observers.length / 48), ph = (G.spotPhase = ((G.spotPhase || 0) + 1) % 997);
+      observers = observers.filter((o, i) => (i + ph) % k === 0 || (o.billet === 'SL' || o.billet === 'TL'));
+    }
     const fresh = [];
     for (const e of G.soldiers) {
       if (e.side === side || e.routed) continue;
@@ -30,22 +36,26 @@ function updateSpotting() {
       for (const o of observers) {
         const d = dist(o.x, o.y, e.x, e.y);
         if (d > SPOT_RANGE) continue;
-        const v = sightLine(o, e);
-        if (v <= 0) continue;
-        if (entry && entry.visible) { seenBy = o; break; }
+        if (entry && entry.visible) { if (sightLine(o, e) > 0) { seenBy = o; break; } continue; }
         let p = 0.55 * Math.pow(clamp(1 - d / 760, 0.03, 1), 1.6);
         p *= POSTURE[e.posture].size + 0.1;
         if (e.moving) p *= e.moveMode === 'rush' ? 2.6 : e.moveMode === 'walk' ? 1.8 : 1.1;
-        if (G.time - e.lastFired < 4) p *= 5;
+        // A shot gives a man away: for a few seconds, longer under a cloud of black-powder
+        // smoke; hardly at all with a bow or a silenced rifle.
+        if (G.time - e.lastFired < (e.weapon.smoke ? 12 : e.weapon.quiet ? 2 : 4)) p *= e.weapon.quiet ? 1.6 : 5;
         if (!e.alive || e.health === 'serious') p *= 0.5;
-        p *= v;
         // Inside the cone a man sees well; at the edge of his vision poorly; behind him hardly at all.
         const off = Math.abs(angleDiff(o.look, angleTo(o.x, o.y, e.x, e.y)));
         p *= off <= o.coneHalf ? 1.25 : off < 1.75 ? 0.45 : 0.12;
         p *= 1 - o.supp / 120;
         if (o.relaxed) p *= 0.3; // at rest, not on watch
-        if (d < 25) p = Math.max(p, 0.5 * v);
-        if (chance(Math.min(0.95, p))) { seenBy = o; break; }
+        // The chance is p times the share of the line of sight that is clear. Rolling first
+        // and tracing the line only when the roll could succeed gives the same odds, cheaply.
+        const r = rand(), close = d < 25 ? 0.5 : 0;
+        if (r >= Math.min(0.95, Math.max(p, close))) continue;
+        const v = sightLine(o, e);
+        if (v <= 0) continue;
+        if (r < Math.min(0.95, Math.max(p * v, close * v))) { seenBy = o; break; }
       }
       if (seenBy) {
         if (!entry) {
@@ -144,9 +154,12 @@ function updateCombat(s, dt) {
   if (s.reloadT > 0) {
     s.reloadT -= dt;
     if (s.reloadT <= 0) s.inMag = s.weapon.mag;
+    // Caught reloading, a man still fights whoever reaches him.
+    if (s.active && !s.routing && s.postureBusy <= 0) updateMelee(s, dt);
     return;
   }
   if (!s.active || s.routing || s.postureBusy > 0) return;
+  if (updateMelee(s, dt)) return;
 
   // An explicit 40mm mission is fired even under hold fire.
   if (s.launchQueue && !s.moving && s.launchCD <= 0) {
@@ -214,8 +227,10 @@ function updateCombat(s, dt) {
 
 function hitChance(s, e, exp, d) {
   const W = s.weapon;
-  let p = W.acc * (d <= 100 ? 1 : Math.pow(100 / d, 1.1));
+  // Close in, the weapon's best; halved at its r50 and falling with the square of the range.
+  let p = W.acc / (1 + (d / W.r50) * (d / W.r50));
   if (d > W.range) p *= 0.4;
+  p *= s.skill || 1;
   p *= POSTURE[e.posture].size;
   p *= 1 - 0.35 * Plan.digIn(e); // dug-in defenders are harder to hit
   if (e.moving && e.moveMode === 'rush') p *= 0.6;
@@ -243,6 +258,7 @@ function fireBurst(s, e, exp) {
   const W = s.weapon, n = Math.min(W.rounds, s.inMag), d = dist(s.x, s.y, e.x, e.y);
   s.inMag -= n; s.shots += n; s.lastFired = G.time;
   s.facing = angleTo(s.x, s.y, e.x, e.y);
+  muzzle(s);
   const p = hitChance(s, e, exp, d);
   let hit = false;
   for (let i = 0; i < n; i++) {
@@ -258,7 +274,20 @@ function fireBurst(s, e, exp) {
   }
   noteFiredUpon(e.team, s);
   s.fireCD = fireDelay(s, d, exp >= 0.6) * randRange(0.8, 1.3) * (s.pinned ? 2.5 : 1) * (s.moving ? 1.6 : 1);
+  stoppage(s);
   if (s.inMag <= 0) startReload(s);
+}
+
+// Black powder leaves a cloud of white smoke at the muzzle.
+function muzzle(s) {
+  if (s.weapon.smoke) G.effects.push({ type: 'smoke', x: s.x + Math.cos(s.facing) * 2, y: s.y + Math.sin(s.facing) * 2, t: 0, life: 9 });
+}
+
+// A weapon prone to stoppages (the Chauchat above all) sometimes has to be cleared.
+function stoppage(s) {
+  if (!s.weapon.jam || !chance(s.weapon.jam)) return;
+  s.fireCD = Math.max(s.fireCD, randRange(5, 10));
+  if (s.side === 'blue' && G.time - (s.jamLogT || -99) > 30) { s.jamLogT = G.time; G.log(s.team.short + ': ' + s.label + '\'s ' + s.weapon.name + ' has jammed.', 'warn'); }
 }
 
 // Fire at a place rather than a man: suppresses anyone near it, seen or not.
@@ -268,6 +297,7 @@ function fireArea(s, x, y, rate) {
   const n = Math.min(W.rounds, s.inMag);
   s.inMag -= n; s.shots += n; s.lastFired = G.time;
   s.facing = angleTo(s.x, s.y, x, y);
+  muzzle(s);
   const spread = 2 + d * 0.015;
   for (let i = 0; i < n; i++) addTracer(s, x + gauss() * spread, y + gauss() * spread, i * 0.07);
   for (const o of G.soldiers) {
@@ -282,6 +312,7 @@ function fireArea(s, x, y, rate) {
     }
   }
   s.fireCD = fireDelay(s, d, false) * randRange(0.9, 1.4) * (s.pinned ? 2.5 : 1) / (rate || 1);
+  stoppage(s);
   if (s.inMag <= 0) startReload(s);
 }
 
@@ -348,7 +379,7 @@ function launchAt(s, x, y) {
   if (d < L.min || d > L.range) return false;
   const sc = L.scatter * d * (1 + s.supp / 100) + 1;
   let tx = x + gauss() * sc, ty = y + gauss() * sc;
-  const kind = s.launcherKey === 'RPG7' ? 'rpg' : '40mm';
+  const kind = L.flat ? 'rpg' : '40mm';
   if (kind === 'rpg') ({ x: tx, y: ty } = flatImpact(s.x, s.y, tx, ty));
   G.projectiles.push({ x0: s.x, y0: s.y, x1: tx, y1: ty, t: 0, flight: dist(s.x, s.y, tx, ty) / L.vel + 0.05, fuse: 0,
     spec: L, side: s.side, shooter: s, kind });
@@ -373,7 +404,7 @@ function throwFrag(s, x, y) {
   }
   const sc = 1 + d * 0.08 + s.supp / 40;
   G.projectiles.push({ x0: s.x, y0: s.y, x1: x + gauss() * sc, y1: y + gauss() * sc, t: 0, flight: d / 14, fuse: R.fuse,
-    spec: R, side: s.side, shooter: s, kind: 'frag' });
+    spec: R, side: s.side, shooter: s, kind: 'frag', dud: R.dud && chance(R.dud) });
   s.frags--; s.fragCD = 8; s.lastFired = G.time;
   s.loadKg = s.computeLoad();
   if (s.side === 'blue') G.log(s.team.short + ': Frag out!', 'fire');
@@ -384,7 +415,7 @@ function updateProjectiles(dt) {
     const p = G.projectiles[i];
     p.t += dt;
     if (p.t >= p.flight + p.fuse) {
-      explode(p.x1, p.y1, p.spec, p.side, p.shooter);
+      if (!p.dud) explode(p.x1, p.y1, p.spec, p.side, p.shooter);
       G.projectiles.splice(i, 1);
     }
   }
@@ -410,12 +441,21 @@ function explode(x, y, spec, side, shooter) {
 }
 
 // ---------------------------------------------------------------- wounds and morale
-function applyHit(t, shooter, blast) {
+// How badly a hit wounds goes with what made it (dmg, against 5.56 mm = 1): a .22 rimfire
+// round mostly wounds lightly, a musket ball or a full-power rifle round seldom does.
+function applyHit(t, shooter, blast, dmg) {
   if (!t.alive || t.health === 'serious') return;
+  const m = blast ? 1.1 : dmg != null ? dmg : shooter && shooter.weapon ? shooter.weapon.dmg || 1 : 1;
   const r = rand();
   let res;
-  if (t.health === 'light') res = r < 0.4 ? 'kia' : 'serious';
-  else res = r < (blast ? 0.3 : 0.25) ? 'kia' : r < 0.62 ? 'serious' : 'light';
+  if (t.health === 'light') {
+    const k = clamp(0.4 * m, 0.1, 0.7), sv = clamp(0.6 * Math.sqrt(m), 0.2, 0.9);
+    res = r < k ? 'kia' : r < k + sv ? 'serious' : 'light';
+    if (res === 'light') { t.supp = Math.min(100, t.supp + 30); t.lastHitAt = G.time; return; }
+  } else {
+    const k = clamp(0.25 * Math.pow(m, 1.3), 0.03, 0.6), sv = clamp(0.37 * Math.pow(m, 0.7), 0.1, 0.55);
+    res = r < k ? 'kia' : r < k + sv ? 'serious' : 'light';
+  }
   t.health = res; t.lastHitAt = G.time;
   G.stats[t.side][res]++;
   if (res === 'light') {
@@ -438,13 +478,51 @@ function casualtyEvent(t, res) {
   for (const o of sq.all) if (o !== t && o.active && dist(o.x, o.y, t.x, t.y) < 30) addSupp(o, 22);
   if (t.side === 'blue') {
     const what = res === 'kia' ? 'killed' : 'down, serious casualty';
-    G.log((leader ? t.title + ' ' : '') + t.label + ' is ' + what + '.', 'loss');
+    G.log((leader ? t.title + ' ' + t.name : t.label) + ' is ' + what + '.', 'loss');
     if (t.billet === 'TL' && team.leader) G.log(team.short + ': ' + team.leader.label + ' takes command of the team.', 'info');
     if (t.billet === 'SL') {
       const next = sq.teams.map(tm => tm.members.find(s => s.billet === 'TL' && s.active)).find(Boolean);
-      if (next) G.log(next.label + ' assumes command of the squad.', 'info');
+      if (next) G.log(next.label + ' assumes command.', 'info');
     }
   } else if (G.known.blue.get(t.id)?.visible) {
     G.log('Enemy ' + t.title.toLowerCase() + ' hit.', 'kill');
   }
+}
+
+// ---------------------------------------------------------------- hand to hand
+// A man with an enemy within arm's reach fights him: a loaded weapon is fired point-blank,
+// otherwise it is the bayonet, the club, the hatchet or the rifle butt.
+function updateMelee(s, dt) {
+  s.meleeCD = (s.meleeCD || 0) - dt;
+  if (s.meleeCD > 0 || !s.active || s.routing) return false;
+  let foe = null, fd = 2.6, near = Infinity;
+  for (const o of G.soldiers) {
+    if (o.side === s.side || !o.active) continue;
+    const dx = Math.abs(o.x - s.x), dy = Math.abs(o.y - s.y), m = Math.max(dx, dy);
+    if (m < near) near = m;
+    if (dx > fd || dy > fd) continue;
+    const d = Math.hypot(dx, dy);
+    if (d < fd) { fd = d; foe = o; }
+  }
+  // No one within reach: look again when the nearest enemy could have closed the distance.
+  if (!foe) { s.meleeCD = Math.max(0.4, (near - 3) / 8); return false; }
+  s.meleeCD = randRange(0.9, 1.5);
+  s.facing = angleTo(s.x, s.y, foe.x, foe.y);
+  s.lastFired = G.time; s.path = [];
+  noteFiredUpon(foe.team, s);
+  addSupp(foe, 15);
+  if (s.inMag > 0 && s.reloadT <= 0 && !s.weapon.quiet && s.weapon.range > 60 && chance(0.5)) {
+    s.inMag--; s.shots++; muzzle(s);
+    if (chance(0.6 * (s.skill || 1))) { applyHit(foe, s); s.hits++; }
+    if (s.inMag <= 0) startReload(s);
+    return true;
+  }
+  const M = MELEE[s.meleeKey] || MELEE.butt, F = MELEE[foe.meleeKey] || MELEE.butt;
+  // The better armed and the less shaken man has the edge.
+  const p = 0.32 * M.skill / Math.sqrt(F.skill) * (1 - s.supp / 200) * (foe.supp > 50 ? 1.3 : 1) * (s.skill || 1);
+  if (chance(clamp(p, 0.05, 0.7))) {
+    applyHit(foe, s, false, M.dmg); s.hits++;
+    if (s.side === 'blue' && G.time - (s.team.meleeLogT || -99) > 20) { s.team.meleeLogT = G.time; G.log(s.team.short + ': Hand to hand!', 'contact'); }
+  }
+  return true;
 }

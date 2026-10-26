@@ -91,4 +91,117 @@ const REGIONS = {
     rivers: ['BIG HOLE RIVER', 'BITTERROOT RIVER', 'MUSSELSHELL RIVER', 'BOULDER RIVER', 'SMITH RIVER', 'RUBY RIVER'],
   },
 };
+
+// Regions for the historical scenarios: the ground of a real place, with its own names.
+// "era" regions are not drawn at random for a present-day mission. paved: false for a
+// time before hard-surfaced roads.
+const eraRegion = (base, o) => Object.assign({}, REGIONS[base], { era: true, nameA: null, nameB: null }, o);
+Object.assign(REGIONS, {
+  newengland: eraRegion('farmland', {
+    label: 'Plymouth Colony, 1670s',
+    brief: 'New England woods with clearings, scattered farms and a small town, cart tracks only.',
+    paved: false, woods: 0.6, hedges: 0.1, walls: 0, villages: [1, 2], farms: [4, 7], farmWord: 'Farm', yardWalls: [0, 0],
+    fields: [[TER.OPEN, 2], [TER.GRASS, 2.4], [TER.PLOWED, 1.4], [TER.ORCHARD, 0.2]],
+    whole: ['Swansea', 'Rehoboth', 'Mattapoisett', 'Kickemuit', 'Mount Hope', 'Wannamoisett', 'Sowams', 'Seekonk', 'Pocasset',
+      'Montaup', 'Miles Garrison', 'Bourne', 'Mattapoiset Neck', 'Toweset', 'Shawomet', 'Mosshassuck', 'Brown', 'Willet'],
+    rivers: ['PALMER RIVER', 'KICKEMUIT RIVER', 'TAUNTON RIVER', 'SOWAMS RIVER', 'RUNNINS RIVER'],
+  }),
+  hudson: eraRegion('farmland', {
+    label: 'Westchester, New York, 1770s',
+    brief: 'Farms and woodlots north of Manhattan, stone walls along the fields, dirt roads.',
+    paved: false, woods: 0.68, hedges: 0.2, walls: 0.4, villages: [1, 2], farms: [6, 9], farmWord: 'Farm',
+    whole: ['Kingsbridge', 'Spuyten Duyvil', 'Yonkers', 'Philipsburg', 'Morrisania', 'Fordham', 'Eastchester', "Valentine's Hill",
+      'Mile Square', 'Tuckahoe', "Dobbs Ferry", 'Van Cortlandt', 'Mosholu', "Tippett's Hill", 'Westchester', 'Delancey', 'Odell'],
+    rivers: ['BRONX RIVER', 'SAW MILL RIVER', 'HUTCHINSON RIVER', 'TIBBETTS BROOK'],
+  }),
+  lorraine: eraRegion('farmland', {
+    label: 'Lorraine, France, 1917',
+    brief: 'Open rolling farmland of the Lunéville sector: villages of stone, woods, a quiet front.',
+    walls: 0.3, hedges: 0.25, villages: [2, 3], farms: [4, 7], farmPrefix: 'Ferme de ', farmNote: 'Farm', yardWalls: [0.5, 0.6],
+    whole: ['Bathelémont', 'Sommerviller', 'Arracourt', 'Einville', 'Xures', 'Parroy', 'Bures', 'Moncel', 'Serres', 'Crion',
+      'Jolivet', 'Valhey', 'Hoéville', 'Courbesseaux', 'Réchicourt', 'Athienville', 'Drouville', 'Bauzemont'],
+    rivers: ['LE SANON', 'LA VEZOUZE', 'LA MEURTHE', 'LE LOEY'],
+  }),
+  hesse: eraRegion('farmland', {
+    label: 'Fulda Gap, West Germany',
+    brief: 'Hessian hill farms, beech woods and villages on the border with East Germany.',
+    walls: 0.05, villages: [2, 4], farmWord: 'Hof', farmNote: 'Farm',
+    whole: ['Hünfeld', 'Rasdorf', 'Tann', 'Hilders', 'Eiterfeld', 'Burghaun', 'Rhina', 'Mackenzell', 'Großenbach', 'Schlitz',
+      'Hofbieber', 'Wenigentaft', 'Buttlar', 'Setzelbach', 'Grüsselbach', 'Soisdorf', 'Steinbach'],
+    rivers: ['FULDA', 'HAUNE', 'ULSTER', 'FELDA'],
+  }),
+  ukraine: eraRegion('farmland', {
+    label: 'Zaporizhzhia steppe, Ukraine',
+    brief: 'Flat open steppe farmland cut into great fields by lines of trees; villages strung along the roads.',
+    relief: [25, 50], fields: [[TER.PLOWED, 3], [TER.OPEN, 2], [TER.GRASS, 1.5]], fieldSize: 320, hedges: 0.75, walls: 0,
+    woods: 0.86, riverChance: 0.3, villages: [2, 3], farms: [2, 4], farmWord: 'farm',
+    whole: ['Robotyne', 'Verbove', 'Novoprokopivka', 'Mala Tokmachka', 'Orikhiv', 'Kopani', 'Novodanylivka', "P'iatykhatky",
+      'Zherebianky', 'Stepove', 'Mala Ternivka', 'Myrne', 'Novofedorivka', 'Levadne', 'Nesteryanka', 'Shcherbaky'],
+    rivers: ['KONKA', 'MOKRA', 'TOKMAK'],
+  }),
+  algeria: eraRegion('arizona', {
+    label: 'Nementcha mountains, Algeria',
+    brief: 'Bare limestone ridges over stony desert flats and dry oueds; mechtas of stone and mud.',
+    farmPrefix: 'Mechta ', farmNote: 'Mechta', villages: [1, 2], farms: [3, 5],
+    whole: ['Bir el Ater', 'Négrine', 'Chéria', 'Oued Hellal', 'Djebel Onk', 'Ferkane', 'El Ma Labiod', 'Babar', 'Khenchela',
+      'Ksar Sbahi', 'Tazbent', 'Aïn Zerga', 'Draa Bou Diab', 'Oum Kif', 'Djellal', 'Tabarka', 'Bou Hamama'],
+    rivers: ['OUED HELLAL', 'OUED DJERCH', 'OUED EL ARAB', 'OUED BADJER'],
+  }),
+  panjshir: eraRegion('arizona', {
+    label: 'Panjshir valley, Afghanistan',
+    brief: 'A green river valley of walled fields and qalas between bare, steep mountains.',
+    base0: TER.DESERT, fields: [[TER.PLOWED, 2], [TER.GRASS, 1], [TER.OPEN, 1.5], [TER.ORCHARD, 0.6]], walls: 0.45, hedges: 0.05,
+    riverChance: 0.95, riverWidth: [14, 22], dryStreams: true, villages: [2, 3], farms: [4, 6], farmPrefix: 'Qala-i ', farmNote: 'Qala', yardWalls: [0.8, 0.9],
+    whole: ['Rokha', 'Bazarak', 'Anaba', 'Dashtak', 'Khenj', 'Astana', 'Paryan', 'Peshghor', 'Shutul', 'Jangalak', 'Malaspa',
+      'Omarz', 'Dalan Sang', 'Safed Chir', 'Abdullah Khel', 'Changaram'],
+    rivers: ['PANJSHIR RIVER', 'DARA RIVER', 'HAZARA RIVER'],
+  }),
+  kandahar: eraRegion('arizona', {
+    label: 'Zabul desert, Afghanistan',
+    brief: 'Desert plain and low barren hills along the Kabul-Kandahar road; walled qalas and karez lines.',
+    relief: [140, 240], farmPrefix: 'Qala-i ', farmNote: 'Qala', villages: [1, 2], farms: [3, 5], yardWalls: [0.9, 1],
+    whole: ['Shahjoy', 'Qalat', 'Tarnak', 'Mizan', 'Daman', 'Maruf', 'Arghistan', 'Shinkay', 'Mukur', 'Jaldak', 'Naubahar',
+      'Atghar', 'Khaki Safed', 'Sur Ghar', 'Tazi'],
+    rivers: ['TARNAK RIVER', 'ARGHANDAB RIVER'],
+  }),
+  norway: eraRegion('montana', {
+    label: 'Finnmark, Norway',
+    brief: 'Snow-covered hills above a fjord: birch scrub, frozen lakes, a fishing village and a coast road.',
+    relief: [180, 300], coast: true, sea: 'PORSANGERFJORD', treeline: 0.55, farmWord: 'gård', farmNote: 'Farm', villages: [1, 2],
+    whole: ['Lakselv', 'Porsanger', 'Banak', 'Skoganvarre', 'Børselv', 'Stabbursnes', 'Olderfjord', 'Russenes', 'Kistrand',
+      'Leirpollen', 'Smørfjord', 'Brennelv', 'Indre Billefjord', 'Ytre Billefjord', 'Kolvik'],
+    rivers: ['LAKSELVA', 'STABBURSELVA', 'BØRSELVA'],
+  }),
+  jungle: eraRegion('carolina', {
+    label: 'Quang Nam lowlands, Vietnam',
+    brief: 'Rice paddies behind dikes, hamlets in bamboo and tree lines, jungle on the hills above.',
+    relief: [60, 140], base: [5, 20], fields: [[TER.PADDY, 5], [TER.GRASS, 1.2], [TER.OPEN, 0.5]], fieldSize: 70,
+    hedges: 0.95, hedgeKind: TER.DIKE, walls: 0, woods: 0.7, highWoods: 0.5, riverChance: 0.8, riverWidth: [18, 30], riparian: 4,
+    swamp: { reach: 6, low: 0.2, noise: 0.5 }, villages: [2, 3], farms: [5, 8], farmWord: ['(1)', '(2)', '(3)', '(4)'], farmNote: 'Hamlet', yardWalls: [0, 0],
+    whole: ['Phu Loc', 'Que Son', 'Hiep Duc', 'Thang Binh', 'Duy Xuyen', 'Dai Loc', 'Dien Ban', 'Go Noi', 'An Hoa', 'Phu Nhuan',
+      'Le Bac', 'Chau Lam', 'Son Thang', 'Ky Lam', 'Phong Ho', 'Xuan Dai', 'Bao An', 'Thu Bon', 'Nong Son', 'Loc Son'],
+    rivers: ['SONG THU BON', 'SONG VU GIA', 'SONG LY LY', 'SONG CHIEN DAN'],
+  }),
+  haiti: eraRegion('socal', {
+    label: 'Sud department, Haiti',
+    brief: 'Coastal plain and bare hills: cane and gardens, scrub, a market town and its dirt roads.',
+    sea: 'CARIBBEAN SEA', fields: [[TER.PLOWED, 2], [TER.GRASS, 2], [TER.BRUSH, 2], [TER.OPEN, 1.5], [TER.ORCHARD, 0.6]],
+    woods: 0.84, riverChance: 0.6, villages: [2, 3], farms: [4, 7], farmPrefix: 'Habitation ', farmNote: 'Habitation',
+    whole: ['Les Cayes', 'Torbeck', 'Camp-Perrin', 'Chantal', 'Maniche', 'Cavaillon', 'Laborde', 'Port-Salut', 'Simon', 'Bergeau',
+      'Ducis', 'Gelée', 'Mercy', 'Fond-des-Blancs', 'Bourdet', 'Charpentier', 'Moreau', 'Dory'],
+    rivers: ["RIVIÈRE DE L'ISLET", 'RAVINE DU SUD', 'RIVIÈRE CAVAILLON', 'RIVIÈRE DE TORBECK'],
+  }),
+  island: eraRegion('socal', {
+    label: 'Spratly Islands, South China Sea',
+    brief: 'A low coral island in open sea: beach all round, scrub and palms, a garrison compound and an airstrip track.',
+    relief: [6, 14], base: [0, 0], coast: false, island: true, sea: 'SOUTH CHINA SEA', paved: false,
+    fields: [[TER.BRUSH, 3], [TER.GRASS, 2], [TER.OPEN, 1.5]], woods: 0.66, riverChance: 0, dryStreams: false, ponds: null,
+    villages: [1, 1], farms: [1, 2], farmWord: 'Post', farmNote: 'Post', yardWalls: [0.3, 0.5],
+    whole: ['Thitu', 'Pag-asa', 'Itu Aba', 'Namyit', 'Sin Cowe', 'Loaita', 'Sand Cay', 'West York', 'Flat Island', 'Nanshan',
+      'Northeast Cay', 'Southwest Cay', 'Spratly', 'Amboyna', 'Swallow'],
+    rivers: ['LAGOON'],
+  }),
+});
 const REGION_KEYS = Object.keys(REGIONS);
+// What a farm is called in a region, for the order: Farm, Ranch, Mechta, Hamlet.
+function farmNoun(R) { return R.farmNote || (typeof R.farmWord === 'string' ? R.farmWord : 'Farm'); }

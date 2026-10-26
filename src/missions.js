@@ -350,9 +350,13 @@ function around(p, r, n) { return shuffle(circle(p, r, n)).map(q => { const c = 
 // ---------------------------------------------------------------- choosing and building a mission
 // Pick a mission (or take the one asked for), a site for it on this sheet and a start for
 // the squad 1.0 to 1.4 km from it, then build and place the enemy.
-function setupMission(key, blue) {
+function setupMission(key, blue, sc) {
   const m = G.map, ech = G.echelon, M0 = ech.margin;
-  const keys = key && MISSIONS[key] ? [key] : shuffle(MISSION_KEYS.slice());
+  sc = sc || SCENARIOS.modern;
+  // A scenario has its own missions; one picked outside them is not used.
+  const pool = sc.missions || MISSION_KEYS;
+  const keys = key && MISSIONS[key] && pool.includes(key) ? [key] : shuffle(pool.slice());
+  const sep = sc.sep || ech.sep;
   for (const k of [...keys, 'attack']) {
     const D = MISSIONS[k];
     let sites = [];
@@ -362,25 +366,48 @@ function setupMission(key, blue) {
     // The squad's start: on passable ground at the echelon's distance from the site.
     let start = null;
     for (let t = 0; t < 600 && !start; t++) {
-      const a = randRange(0, Math.PI * 2), d = randRange(ech.sep[0], ech.sep[1]);
+      const a = randRange(0, Math.PI * 2), d = randRange(sep[0], sep[1]);
       const x = site.x + Math.cos(a) * d, y = site.y + Math.sin(a) * d;
       if (Sites.inside(x, y, M0) && TERRAIN[m.terAt(x, y)].speed > 0) start = { x, y };
     }
     if (!start) continue;
+    let red;
+    if (sc.opfor) {
+      // A historical force at its historical strength.
+      const n = randInt(sc.size[0], sc.size[1]), F = FORCES[sc.opfor];
+      red = buildForce(sc.opfor, 'red', n, { leader: sc.hvt || null, groups: sc.groups || null });
+      if (D.morale) red.morale = Math.min(red.morale, randRange(D.morale[0], D.morale[1]) + 15);
+      if (D.leader === 'CO' && !sc.hvt) { red.leader.billet = 'CO'; red.leader.title = red.leader.name = F.coTitle || 'Commander'; }
+      // A downed helicopter's crew, where the force has aircrew.
+      if (D.kind === 'crew' && F.billets.CR) {
+        const B = F.billets.CR;
+        for (const s of red.all.filter(s => s !== red.leader).slice(0, 3)) {
+          s.billet = 'CR'; s.title = s.name = B.title; s.weaponKey = B.weapon; s.weapon = WEAPONS[B.weapon]; s.inMag = s.weapon.mag; s.mags = s.weapon.mags - 1;
+          s.launcher = null; s.launcherKey = null; s.lRounds = 0; s.ammoStart = s.ammoLeft;
+        }
+      }
+    } else {
     const n = randInt(D.size[0], D.size[1]);
-    const red = buildOpfor(n, D.kind, { leader: D.leader });
+    red = buildOpfor(n, D.kind, { leader: D.leader });
     if (D.morale) red.morale = randRange(D.morale[0], D.morale[1]);
-    if (D.billets) red.teams.forEach((t, i) => t.members.forEach((s, j) => {
+    }
+    if (D.billets && !sc.opfor) red.teams.forEach((t, i) => t.members.forEach((s, j) => {
       const b = D.billets[(i * 4 + j) % D.billets.length], B = OPFOR_BILLETS[b];
       s.billet = b; s.title = B.title; s.name = B.title; s.weaponKey = B.weapon; s.weapon = WEAPONS[B.weapon]; s.inMag = s.weapon.mag; s.mags = s.weapon.mags - 1; s.ammoStart = s.ammoLeft;
     }));
     placeSquad(blue, m, start.x, start.y, angleTo(start.x, start.y, site.x, site.y));
+    // The objective named as history has it (Swansea), where the mission is in a town.
+    if (sc.siteName && site.kind === 'village') {
+      const pl = m.places.find(p => p.kind === 'village' && dist(p.x, p.y, site.x, site.y) < 5);
+      if (pl) pl.name = sc.siteName;
+      site.name = sc.siteName.toUpperCase();
+    }
     const ctx = { key: k, D, site, blue: start, red, objects: [], ai: null, wounded: 0 };
     D.setup(ctx);
     // Some of a beaten force are already hurt.
     for (const s of red.all) if (ctx.wounded && chance(ctx.wounded)) s.health = 'light';
     const M = { key: k, def: D, label: D.label, site, objects: ctx.objects, mode: D.mode || 'attack', digIn: !!D.digIn, reach: D.reach || null,
-      escape: D.escape || 0, hvt: D.hvt ? red.leader : null, kind: D.kind };
+      escape: D.escape || 0, hvt: D.hvt || sc.hvt ? red.leader : null, kind: sc.opfor || D.kind, scenario: sc };
     if (D.evac) M.evacAt = randInt(D.evac[0], D.evac[1]) * 60;
     if (D.leaveAt) M.leaveAt = randInt(D.leaveAt[0], D.leaveAt[1]) * 60;
     return { M, red, start, site, ai: ctx.ai };
@@ -391,18 +418,19 @@ function setupMission(key, blue) {
 // What the intelligence says about the enemy's size. Reports differ in quality, and the
 // order says how far to trust each: some are right, some are wrong, some do not say.
 function intelSize(n, kindKey) {
-  const K = OPFOR_KINDS[kindKey], men = K.men, r = rand();
+  // Counts are rougher for a larger force: to the man for a squad, to the ten for a war party.
+  const men = forceInfo(kindKey).men, r = rand(), k = Math.max(1, Math.round(n / 12));
   if (r < 0.4) {
-    const lo = Math.max(3, n - randInt(0, 2)), hi = Math.max(lo + 1, n + randInt(0, 2));
+    const lo = Math.max(3, n - randInt(0, 2) * k), hi = Math.max(lo + 1, n + randInt(0, 2) * k);
     return { text: 'OPFOR of ' + lo + '-' + hi + ' ' + men + '.', note: 'Confirmed by two sources. Considered reliable.', right: true };
   }
   if (r < 0.65) {
     // A wrong count: off by several men, either way, from a single source.
-    const off = (chance(0.6) ? -1 : 1) * randInt(3, 5), c = Math.max(3, n + off);
-    return { text: 'OPFOR of ' + Math.max(3, c - 1) + '-' + (c + 1) + ' ' + men + '.', note: 'A single report, not confirmed. Treat with caution.', right: false };
+    const off = (chance(0.6) ? -1 : 1) * randInt(3, 5) * k, c = Math.max(3, n + off);
+    return { text: 'OPFOR of ' + Math.max(3, c - k) + '-' + (c + k) + ' ' + men + '.', note: 'A single report, not confirmed. Treat with caution.', right: false };
   }
   if (r < 0.85) {
-    const floor = n <= 5 ? 'fire team' : n <= 9 ? 'section' : 'squad';
+    const floor = n <= 5 ? 'fire team' : n <= 9 ? 'section' : n <= 16 ? 'squad' : n <= 45 ? 'platoon' : 'company';
     return { text: 'OPFOR at least ' + floor + '-sized.', note: 'Only part of the force was seen. It may be larger.', right: true, vague: true };
   }
   return { text: 'OPFOR of unknown size.', note: 'Contact was brief; no count was made.', right: null };
