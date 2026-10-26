@@ -765,7 +765,7 @@ const Plan = {
     const at = by || centroid(sq.all);
     this.signals[color] = true;
     // The squad leader fires it: shown in real time, so it is seen at any game speed.
-    G.flares.push({ x: at.x, y: at.y, color: SIGNALS[color].color, label: SIGNALS[color].label, t: 0, life: 5.5 });
+    G.flares.push({ x: at.x, y: at.y, color: SIGNALS[color].color, label: SIGNALS[color].label, t: 0, life: FLARE.life });
     if (by) by.lastFired = G.time;
     G.log(SIGNALS[color].label + ' fired: ' + SIGNALS[color].meaning.toLowerCase() + '.', 'plan');
     this.update(0, true);

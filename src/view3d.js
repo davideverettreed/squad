@@ -360,30 +360,73 @@ const View3D = {
   // ------------------------------------------------------------ signal flares
   // Five glowing stars above the squad leader, rising, bursting and drifting down.
   updateFlares() {
-    this.flareSprites = this.flareSprites || [];
-    let n = 0;
+    this.flareObjs = this.flareObjs || new Map();
     const glow = this.glowTex || (this.glowTex = (() => {
       const c = document.createElement('canvas'); c.width = c.height = 64;
       const x = c.getContext('2d'), g = x.createRadialGradient(32, 32, 0, 32, 32, 32);
       g.addColorStop(0, 'rgba(255,255,255,1)'); g.addColorStop(0.3, 'rgba(255,255,255,0.8)'); g.addColorStop(1, 'rgba(255,255,255,0)');
       x.fillStyle = g; x.fillRect(0, 0, 64, 64); return new THREE.CanvasTexture(c);
     })());
-    const k = this.pegScale();
-    for (const fl of G.flares || []) {
-      const t = fl.t, up = Math.min(1, t / 1.2), burst = t > 1.2 ? Math.min(1, (t - 1.2) / 0.5) : 0, drift = Math.max(0, t - 1.2) * 6 * k;
-      const fade = clamp((fl.life - t) / 1.5, 0, 1), base = this.height(fl.x, fl.y);
-      for (let s = 0; s < 5; s++) {
-        let sp = this.flareSprites[n];
-        if (!sp) { sp = new THREE.Sprite(new THREE.SpriteMaterial({ map: glow, transparent: true, depthWrite: false, blending: THREE.AdditiveBlending })); this.scene.add(sp); this.flareSprites.push(sp); }
-        n++;
-        const a = (s - 2) * 0.9;
-        sp.visible = burst > 0 || s === 2;
-        sp.material.color.set(fl.color); sp.material.opacity = fade;
-        sp.position.set(fl.x - MAP_W / 2 + Math.sin(a) * 18 * k * burst, base + 60 * k * up - drift, fl.y - MAP_H / 2 + Math.cos(a) * 18 * k * burst * 0.4);
-        sp.scale.setScalar(8 * k);
+    const k = this.pegScale(), live = new Set(G.flares || []);
+    for (const [fl, o] of this.flareObjs) if (!live.has(fl)) { this.scene.remove(o.group); o.trail.geometry.dispose(); this.flareObjs.delete(fl); }
+    for (const fl of live) {
+      let o = this.flareObjs.get(fl);
+      if (!o) {
+        // A flare: its head (then five stars), a smoke trail up from the launcher, and a
+        // smoke streak behind each star.
+        const group = new THREE.Group();
+        const sprite = () => { const sp = new THREE.Sprite(new THREE.SpriteMaterial({ map: glow, transparent: true, depthWrite: false, blending: THREE.AdditiveBlending, color: fl.color })); group.add(sp); return sp; };
+        const line = (n) => { const l = new THREE.Line(new THREE.BufferGeometry().setFromPoints(Array.from({ length: n }, () => new THREE.Vector3())), new THREE.LineBasicMaterial({ color: 0xe8e8e2, transparent: true })); group.add(l); return l; };
+        o = { group, head: sprite(), stars: [0, 1, 2, 3, 4].map(sprite), trail: line(24), streaks: [0, 1, 2, 3, 4].map(() => line(2)), ground: sprite() };
+        this.scene.add(group); this.flareObjs.set(fl, o);
       }
+      const st = flareState(fl.t), base = this.height(fl.x, fl.y) + 1.5;
+      const x0 = fl.x - MAP_W / 2, z0 = fl.y - MAP_H / 2, alt = FLARE.alt * st.climb;
+      // The climb bends a little downwind as it goes.
+      const at = (f) => new THREE.Vector3(x0 + 10 * f * f, base + alt * f, z0 + 4 * f * f);
+      o.trail.geometry.setFromPoints(Array.from({ length: 24 }, (_, i) => at(i / 23)));
+      o.trail.material.opacity = 0.8 * st.fade;
+      const top = at(1);
+      o.head.visible = !st.burst;
+      o.head.position.copy(top); o.head.scale.setScalar(6 * k); o.head.material.opacity = st.fade;
+      o.head.material.color.set(st.burst ? fl.color : '#fff6d0');
+      const drop = st.fall * 45;
+      o.stars.forEach((sp, i) => {
+        const a = (i - 2) * 0.8, r = 22 * st.burst + st.fall * 10;
+        const p = new THREE.Vector3(top.x + Math.sin(a) * r, top.y - drop - Math.abs(i - 2) * 3 * st.burst, top.z + Math.cos(a) * r * 0.5);
+        sp.visible = st.burst > 0; sp.position.copy(p); sp.scale.setScalar(9 * k); sp.material.opacity = st.fade;
+        const ln = o.streaks[i]; ln.visible = st.burst > 0;
+        ln.geometry.setFromPoints([top, p]); ln.material.opacity = 0.45 * st.fade;
+      });
+      // The light on the ground under the burning stars.
+      o.ground.visible = st.burst > 0;
+      o.ground.position.set(top.x, this.height(fl.x, fl.y) + 2, top.z); o.ground.scale.setScalar(120 * st.burst);
+      o.ground.material.opacity = 0.35 * st.fade;
     }
-    for (; n < this.flareSprites.length; n++) this.flareSprites[n].visible = false;
+    this.updateSmoke();
+  },
+
+  // Black-powder smoke: white puffs that swell, rise, drift and thin.
+  updateSmoke() {
+    this.smokeSprites = this.smokeSprites || [];
+    const tex = this.smokeTex || (this.smokeTex = (() => {
+      const c = document.createElement('canvas'); c.width = c.height = 64;
+      const x = c.getContext('2d'), g = x.createRadialGradient(32, 32, 4, 32, 32, 32);
+      g.addColorStop(0, 'rgba(255,255,255,0.95)'); g.addColorStop(0.6, 'rgba(240,240,236,0.6)'); g.addColorStop(1, 'rgba(240,240,236,0)');
+      x.fillStyle = g; x.fillRect(0, 0, 64, 64); return new THREE.CanvasTexture(c);
+    })());
+    let n = 0;
+    for (const e of G.effects) {
+      if (e.type !== 'smoke' || e.t < 0) continue;
+      let sp = this.smokeSprites[n];
+      if (!sp) { sp = new THREE.Sprite(new THREE.SpriteMaterial({ map: tex, transparent: true, depthWrite: false })); this.scene.add(sp); this.smokeSprites.push(sp); }
+      n++;
+      const f = e.t / e.life;
+      sp.visible = true;
+      sp.position.set(e.x - MAP_W / 2 + f * 6, this.height(e.x, e.y) + 1.6 + f * 5, e.y - MAP_H / 2 - f * 4);
+      sp.scale.setScalar(2 + 9 * Math.sqrt(f)); sp.material.opacity = 0.8 * (1 - f);
+    }
+    for (; n < this.smokeSprites.length; n++) this.smokeSprites[n].visible = false;
   },
 
   // ------------------------------------------------------------ mission objects

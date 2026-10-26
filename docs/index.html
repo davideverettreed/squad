@@ -6551,6 +6551,7 @@ function drawEffects(ctx) {
       }
       ctx.globalAlpha = 1;
     } else if (e.type === 'smoke') {
+      if (View3D.drawingDrape) continue; // the sand table has its own puffs
       // Black-powder smoke: a white cloud that swells, drifts and thins.
       const p = toScreen(e.x + f * 6, e.y - f * 4), rr = (1.5 + 5 * Math.sqrt(f)) * z;
       ctx.fillStyle = 'rgba(236,236,230,' + (0.75 * (1 - f)) + ')';
@@ -6661,37 +6662,53 @@ function drawUnitDrag(ctx) {
 
 // A star cluster fired by the squad leader: a flash at his position, the trail as it
 // climbs, the burst into five stars, and the glow as they drift down. Real-time seconds.
+// A star cluster signal's flight, in real seconds: it climbs on a smoke trail for rise
+// seconds, bursts into five stars about 150 m up, and they drift down burning until life.
+const FLARE = { rise: 2.2, life: 9.5, alt: 150 };
+function flareState(t) {
+  const up = Math.min(1, t / FLARE.rise), climb = 1 - (1 - up) * (1 - up); // fast off the launcher, slowing near the top
+  const burst = t > FLARE.rise ? Math.min(1, (t - FLARE.rise) / 0.6) : 0;
+  const fall = Math.max(0, t - FLARE.rise) / (FLARE.life - FLARE.rise);
+  return { climb, burst, fall, fade: clamp((FLARE.life - t) / 1.5, 0, 1) };
+}
 function drawFlares(ctx) {
   if (!G.flares || View3D.drawingDrape) return;
   for (const fl of G.flares) {
-    const p = toScreen(fl.x, fl.y), t = fl.t, up = Math.min(1, t / 1.2), top = 150 * up;
-    const fade = clamp((fl.life - t) / 1.5, 0, 1);
+    const p = toScreen(fl.x, fl.y), t = fl.t, st = flareState(t);
+    // On the flat map height is shown as a rise up the screen.
+    const top = 150 * st.climb, hx = p.x + 6 * st.climb, hy = p.y - top;
     ctx.save();
-    // The flash at the leader as it leaves the launcher.
-    if (t < 0.5) {
-      ctx.fillStyle = 'rgba(255,240,200,' + (1 - t * 2) + ')';
-      ctx.beginPath(); ctx.arc(p.x, p.y, 8 + 20 * t, 0, Math.PI * 2); ctx.fill();
+    // The flash and puff at the leader as it leaves the launcher.
+    if (t < 0.6) {
+      ctx.fillStyle = 'rgba(255,240,200,' + (1 - t / 0.6) + ')';
+      ctx.beginPath(); ctx.arc(p.x, p.y, 6 + 24 * t, 0, Math.PI * 2); ctx.fill();
     }
-    // The trail of smoke up to the flare.
-    ctx.strokeStyle = 'rgba(220,220,215,' + (0.8 * fade) + ')'; ctx.lineWidth = 2.5;
-    ctx.beginPath(); ctx.moveTo(p.x, p.y); ctx.quadraticCurveTo(p.x + 10, p.y - top * 0.6, p.x + 4, p.y - top); ctx.stroke();
-    const burst = t > 1.2 ? Math.min(1, (t - 1.2) / 0.5) : 0, drift = Math.max(0, t - 1.2) * 12;
-    ctx.globalAlpha = fade;
-    if (!burst) {
-      ctx.fillStyle = fl.color; ctx.shadowColor = fl.color; ctx.shadowBlur = 16;
-      ctx.beginPath(); ctx.arc(p.x + 4, p.y - top, 5, 0, Math.PI * 2); ctx.fill();
+    // The smoke trail up to the flare, widening and thinning as it hangs.
+    ctx.strokeStyle = 'rgba(225,225,220,' + (0.85 * st.fade) + ')'; ctx.lineWidth = 2 + 3 * Math.min(1, t / 4); ctx.lineCap = 'round';
+    ctx.beginPath(); ctx.moveTo(p.x, p.y); ctx.quadraticCurveTo(p.x + 12, p.y - top * 0.55, hx, hy); ctx.stroke();
+    ctx.globalAlpha = st.fade;
+    if (!st.burst) {
+      // The rising star with a short sparking tail.
+      ctx.fillStyle = '#fff6d0'; ctx.shadowColor = fl.color; ctx.shadowBlur = 18;
+      ctx.beginPath(); ctx.arc(hx, hy, 4.5, 0, Math.PI * 2); ctx.fill();
+      ctx.fillStyle = fl.color;
+      for (let k = 1; k <= 4; k++) { ctx.beginPath(); ctx.arc(hx - k * 1.5, hy + k * 6, 3 - k * 0.6, 0, Math.PI * 2); ctx.fill(); }
     } else {
-      // A soft glow on the ground and five stars falling apart.
-      const g = ctx.createRadialGradient(p.x, p.y - top + drift, 0, p.x, p.y - top + drift, 90);
-      g.addColorStop(0, fl.color + '66'); g.addColorStop(1, fl.color + '00');
-      ctx.fillStyle = g; ctx.beginPath(); ctx.arc(p.x, p.y - top + drift, 90, 0, Math.PI * 2); ctx.fill();
-      ctx.fillStyle = fl.color; ctx.shadowColor = fl.color; ctx.shadowBlur = 18;
+      // A wide glow and five stars falling apart, each with its own smoke.
+      const drift = st.fall * 70;
+      const g = ctx.createRadialGradient(hx, hy + drift, 0, hx, hy + drift, 110);
+      g.addColorStop(0, fl.color + '70'); g.addColorStop(1, fl.color + '00');
+      ctx.fillStyle = g; ctx.beginPath(); ctx.arc(hx, hy + drift, 110, 0, Math.PI * 2); ctx.fill();
       for (let k = 0; k < 5; k++) {
-        const a = -Math.PI / 2 + (k - 2) * 0.55;
-        ctx.beginPath(); ctx.arc(p.x + Math.cos(a) * 34 * burst, p.y - top + drift + Math.sin(a) * 20 * burst + k % 2 * drift * 0.3, 6, 0, Math.PI * 2); ctx.fill();
+        const a = -Math.PI / 2 + (k - 2) * 0.55, sx = hx + Math.cos(a) * 40 * st.burst + (k - 2) * st.fall * 8, sy = hy + drift + Math.sin(a) * 24 * st.burst + (k % 2) * drift * 0.3;
+        ctx.strokeStyle = 'rgba(225,225,220,' + 0.5 * st.fade + ')'; ctx.lineWidth = 1.5;
+        ctx.beginPath(); ctx.moveTo(hx, hy); ctx.lineTo(sx, sy); ctx.stroke();
+        ctx.fillStyle = fl.color; ctx.shadowColor = fl.color; ctx.shadowBlur = 18;
+        ctx.beginPath(); ctx.arc(sx, sy, 5.5, 0, Math.PI * 2); ctx.fill();
+        ctx.shadowBlur = 0;
       }
     }
-    ctx.shadowBlur = 0; ctx.globalAlpha = Math.min(1, fade * 1.5);
+    ctx.shadowBlur = 0; ctx.globalAlpha = Math.min(1, st.fade * 1.5);
     ctx.font = '700 14px "Saira Condensed", "Arial Narrow", sans-serif'; ctx.textAlign = 'left'; ctx.textBaseline = 'middle';
     ctx.lineWidth = 3; ctx.strokeStyle = 'rgba(20,20,20,0.85)'; ctx.strokeText(fl.label.toUpperCase(), p.x + 16, p.y - 8);
     ctx.fillStyle = '#fff'; ctx.fillText(fl.label.toUpperCase(), p.x + 16, p.y - 8);
@@ -8519,7 +8536,7 @@ const Plan = {
     const at = by || centroid(sq.all);
     this.signals[color] = true;
     // The squad leader fires it: shown in real time, so it is seen at any game speed.
-    G.flares.push({ x: at.x, y: at.y, color: SIGNALS[color].color, label: SIGNALS[color].label, t: 0, life: 5.5 });
+    G.flares.push({ x: at.x, y: at.y, color: SIGNALS[color].color, label: SIGNALS[color].label, t: 0, life: FLARE.life });
     if (by) by.lastFired = G.time;
     G.log(SIGNALS[color].label + ' fired: ' + SIGNALS[color].meaning.toLowerCase() + '.', 'plan');
     this.update(0, true);
@@ -9738,30 +9755,73 @@ const View3D = {
   // ------------------------------------------------------------ signal flares
   // Five glowing stars above the squad leader, rising, bursting and drifting down.
   updateFlares() {
-    this.flareSprites = this.flareSprites || [];
-    let n = 0;
+    this.flareObjs = this.flareObjs || new Map();
     const glow = this.glowTex || (this.glowTex = (() => {
       const c = document.createElement('canvas'); c.width = c.height = 64;
       const x = c.getContext('2d'), g = x.createRadialGradient(32, 32, 0, 32, 32, 32);
       g.addColorStop(0, 'rgba(255,255,255,1)'); g.addColorStop(0.3, 'rgba(255,255,255,0.8)'); g.addColorStop(1, 'rgba(255,255,255,0)');
       x.fillStyle = g; x.fillRect(0, 0, 64, 64); return new THREE.CanvasTexture(c);
     })());
-    const k = this.pegScale();
-    for (const fl of G.flares || []) {
-      const t = fl.t, up = Math.min(1, t / 1.2), burst = t > 1.2 ? Math.min(1, (t - 1.2) / 0.5) : 0, drift = Math.max(0, t - 1.2) * 6 * k;
-      const fade = clamp((fl.life - t) / 1.5, 0, 1), base = this.height(fl.x, fl.y);
-      for (let s = 0; s < 5; s++) {
-        let sp = this.flareSprites[n];
-        if (!sp) { sp = new THREE.Sprite(new THREE.SpriteMaterial({ map: glow, transparent: true, depthWrite: false, blending: THREE.AdditiveBlending })); this.scene.add(sp); this.flareSprites.push(sp); }
-        n++;
-        const a = (s - 2) * 0.9;
-        sp.visible = burst > 0 || s === 2;
-        sp.material.color.set(fl.color); sp.material.opacity = fade;
-        sp.position.set(fl.x - MAP_W / 2 + Math.sin(a) * 18 * k * burst, base + 60 * k * up - drift, fl.y - MAP_H / 2 + Math.cos(a) * 18 * k * burst * 0.4);
-        sp.scale.setScalar(8 * k);
+    const k = this.pegScale(), live = new Set(G.flares || []);
+    for (const [fl, o] of this.flareObjs) if (!live.has(fl)) { this.scene.remove(o.group); o.trail.geometry.dispose(); this.flareObjs.delete(fl); }
+    for (const fl of live) {
+      let o = this.flareObjs.get(fl);
+      if (!o) {
+        // A flare: its head (then five stars), a smoke trail up from the launcher, and a
+        // smoke streak behind each star.
+        const group = new THREE.Group();
+        const sprite = () => { const sp = new THREE.Sprite(new THREE.SpriteMaterial({ map: glow, transparent: true, depthWrite: false, blending: THREE.AdditiveBlending, color: fl.color })); group.add(sp); return sp; };
+        const line = (n) => { const l = new THREE.Line(new THREE.BufferGeometry().setFromPoints(Array.from({ length: n }, () => new THREE.Vector3())), new THREE.LineBasicMaterial({ color: 0xe8e8e2, transparent: true })); group.add(l); return l; };
+        o = { group, head: sprite(), stars: [0, 1, 2, 3, 4].map(sprite), trail: line(24), streaks: [0, 1, 2, 3, 4].map(() => line(2)), ground: sprite() };
+        this.scene.add(group); this.flareObjs.set(fl, o);
       }
+      const st = flareState(fl.t), base = this.height(fl.x, fl.y) + 1.5;
+      const x0 = fl.x - MAP_W / 2, z0 = fl.y - MAP_H / 2, alt = FLARE.alt * st.climb;
+      // The climb bends a little downwind as it goes.
+      const at = (f) => new THREE.Vector3(x0 + 10 * f * f, base + alt * f, z0 + 4 * f * f);
+      o.trail.geometry.setFromPoints(Array.from({ length: 24 }, (_, i) => at(i / 23)));
+      o.trail.material.opacity = 0.8 * st.fade;
+      const top = at(1);
+      o.head.visible = !st.burst;
+      o.head.position.copy(top); o.head.scale.setScalar(6 * k); o.head.material.opacity = st.fade;
+      o.head.material.color.set(st.burst ? fl.color : '#fff6d0');
+      const drop = st.fall * 45;
+      o.stars.forEach((sp, i) => {
+        const a = (i - 2) * 0.8, r = 22 * st.burst + st.fall * 10;
+        const p = new THREE.Vector3(top.x + Math.sin(a) * r, top.y - drop - Math.abs(i - 2) * 3 * st.burst, top.z + Math.cos(a) * r * 0.5);
+        sp.visible = st.burst > 0; sp.position.copy(p); sp.scale.setScalar(9 * k); sp.material.opacity = st.fade;
+        const ln = o.streaks[i]; ln.visible = st.burst > 0;
+        ln.geometry.setFromPoints([top, p]); ln.material.opacity = 0.45 * st.fade;
+      });
+      // The light on the ground under the burning stars.
+      o.ground.visible = st.burst > 0;
+      o.ground.position.set(top.x, this.height(fl.x, fl.y) + 2, top.z); o.ground.scale.setScalar(120 * st.burst);
+      o.ground.material.opacity = 0.35 * st.fade;
     }
-    for (; n < this.flareSprites.length; n++) this.flareSprites[n].visible = false;
+    this.updateSmoke();
+  },
+
+  // Black-powder smoke: white puffs that swell, rise, drift and thin.
+  updateSmoke() {
+    this.smokeSprites = this.smokeSprites || [];
+    const tex = this.smokeTex || (this.smokeTex = (() => {
+      const c = document.createElement('canvas'); c.width = c.height = 64;
+      const x = c.getContext('2d'), g = x.createRadialGradient(32, 32, 4, 32, 32, 32);
+      g.addColorStop(0, 'rgba(255,255,255,0.95)'); g.addColorStop(0.6, 'rgba(240,240,236,0.6)'); g.addColorStop(1, 'rgba(240,240,236,0)');
+      x.fillStyle = g; x.fillRect(0, 0, 64, 64); return new THREE.CanvasTexture(c);
+    })());
+    let n = 0;
+    for (const e of G.effects) {
+      if (e.type !== 'smoke' || e.t < 0) continue;
+      let sp = this.smokeSprites[n];
+      if (!sp) { sp = new THREE.Sprite(new THREE.SpriteMaterial({ map: tex, transparent: true, depthWrite: false })); this.scene.add(sp); this.smokeSprites.push(sp); }
+      n++;
+      const f = e.t / e.life;
+      sp.visible = true;
+      sp.position.set(e.x - MAP_W / 2 + f * 6, this.height(e.x, e.y) + 1.6 + f * 5, e.y - MAP_H / 2 - f * 4);
+      sp.scale.setScalar(2 + 9 * Math.sqrt(f)); sp.material.opacity = 0.8 * (1 - f);
+    }
+    for (; n < this.smokeSprites.length; n++) this.smokeSprites[n].visible = false;
   },
 
   // ------------------------------------------------------------ mission objects

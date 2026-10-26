@@ -1607,6 +1607,7 @@ function drawEffects(ctx) {
       }
       ctx.globalAlpha = 1;
     } else if (e.type === 'smoke') {
+      if (View3D.drawingDrape) continue; // the sand table has its own puffs
       // Black-powder smoke: a white cloud that swells, drifts and thins.
       const p = toScreen(e.x + f * 6, e.y - f * 4), rr = (1.5 + 5 * Math.sqrt(f)) * z;
       ctx.fillStyle = 'rgba(236,236,230,' + (0.75 * (1 - f)) + ')';
@@ -1717,37 +1718,53 @@ function drawUnitDrag(ctx) {
 
 // A star cluster fired by the squad leader: a flash at his position, the trail as it
 // climbs, the burst into five stars, and the glow as they drift down. Real-time seconds.
+// A star cluster signal's flight, in real seconds: it climbs on a smoke trail for rise
+// seconds, bursts into five stars about 150 m up, and they drift down burning until life.
+const FLARE = { rise: 2.2, life: 9.5, alt: 150 };
+function flareState(t) {
+  const up = Math.min(1, t / FLARE.rise), climb = 1 - (1 - up) * (1 - up); // fast off the launcher, slowing near the top
+  const burst = t > FLARE.rise ? Math.min(1, (t - FLARE.rise) / 0.6) : 0;
+  const fall = Math.max(0, t - FLARE.rise) / (FLARE.life - FLARE.rise);
+  return { climb, burst, fall, fade: clamp((FLARE.life - t) / 1.5, 0, 1) };
+}
 function drawFlares(ctx) {
   if (!G.flares || View3D.drawingDrape) return;
   for (const fl of G.flares) {
-    const p = toScreen(fl.x, fl.y), t = fl.t, up = Math.min(1, t / 1.2), top = 150 * up;
-    const fade = clamp((fl.life - t) / 1.5, 0, 1);
+    const p = toScreen(fl.x, fl.y), t = fl.t, st = flareState(t);
+    // On the flat map height is shown as a rise up the screen.
+    const top = 150 * st.climb, hx = p.x + 6 * st.climb, hy = p.y - top;
     ctx.save();
-    // The flash at the leader as it leaves the launcher.
-    if (t < 0.5) {
-      ctx.fillStyle = 'rgba(255,240,200,' + (1 - t * 2) + ')';
-      ctx.beginPath(); ctx.arc(p.x, p.y, 8 + 20 * t, 0, Math.PI * 2); ctx.fill();
+    // The flash and puff at the leader as it leaves the launcher.
+    if (t < 0.6) {
+      ctx.fillStyle = 'rgba(255,240,200,' + (1 - t / 0.6) + ')';
+      ctx.beginPath(); ctx.arc(p.x, p.y, 6 + 24 * t, 0, Math.PI * 2); ctx.fill();
     }
-    // The trail of smoke up to the flare.
-    ctx.strokeStyle = 'rgba(220,220,215,' + (0.8 * fade) + ')'; ctx.lineWidth = 2.5;
-    ctx.beginPath(); ctx.moveTo(p.x, p.y); ctx.quadraticCurveTo(p.x + 10, p.y - top * 0.6, p.x + 4, p.y - top); ctx.stroke();
-    const burst = t > 1.2 ? Math.min(1, (t - 1.2) / 0.5) : 0, drift = Math.max(0, t - 1.2) * 12;
-    ctx.globalAlpha = fade;
-    if (!burst) {
-      ctx.fillStyle = fl.color; ctx.shadowColor = fl.color; ctx.shadowBlur = 16;
-      ctx.beginPath(); ctx.arc(p.x + 4, p.y - top, 5, 0, Math.PI * 2); ctx.fill();
+    // The smoke trail up to the flare, widening and thinning as it hangs.
+    ctx.strokeStyle = 'rgba(225,225,220,' + (0.85 * st.fade) + ')'; ctx.lineWidth = 2 + 3 * Math.min(1, t / 4); ctx.lineCap = 'round';
+    ctx.beginPath(); ctx.moveTo(p.x, p.y); ctx.quadraticCurveTo(p.x + 12, p.y - top * 0.55, hx, hy); ctx.stroke();
+    ctx.globalAlpha = st.fade;
+    if (!st.burst) {
+      // The rising star with a short sparking tail.
+      ctx.fillStyle = '#fff6d0'; ctx.shadowColor = fl.color; ctx.shadowBlur = 18;
+      ctx.beginPath(); ctx.arc(hx, hy, 4.5, 0, Math.PI * 2); ctx.fill();
+      ctx.fillStyle = fl.color;
+      for (let k = 1; k <= 4; k++) { ctx.beginPath(); ctx.arc(hx - k * 1.5, hy + k * 6, 3 - k * 0.6, 0, Math.PI * 2); ctx.fill(); }
     } else {
-      // A soft glow on the ground and five stars falling apart.
-      const g = ctx.createRadialGradient(p.x, p.y - top + drift, 0, p.x, p.y - top + drift, 90);
-      g.addColorStop(0, fl.color + '66'); g.addColorStop(1, fl.color + '00');
-      ctx.fillStyle = g; ctx.beginPath(); ctx.arc(p.x, p.y - top + drift, 90, 0, Math.PI * 2); ctx.fill();
-      ctx.fillStyle = fl.color; ctx.shadowColor = fl.color; ctx.shadowBlur = 18;
+      // A wide glow and five stars falling apart, each with its own smoke.
+      const drift = st.fall * 70;
+      const g = ctx.createRadialGradient(hx, hy + drift, 0, hx, hy + drift, 110);
+      g.addColorStop(0, fl.color + '70'); g.addColorStop(1, fl.color + '00');
+      ctx.fillStyle = g; ctx.beginPath(); ctx.arc(hx, hy + drift, 110, 0, Math.PI * 2); ctx.fill();
       for (let k = 0; k < 5; k++) {
-        const a = -Math.PI / 2 + (k - 2) * 0.55;
-        ctx.beginPath(); ctx.arc(p.x + Math.cos(a) * 34 * burst, p.y - top + drift + Math.sin(a) * 20 * burst + k % 2 * drift * 0.3, 6, 0, Math.PI * 2); ctx.fill();
+        const a = -Math.PI / 2 + (k - 2) * 0.55, sx = hx + Math.cos(a) * 40 * st.burst + (k - 2) * st.fall * 8, sy = hy + drift + Math.sin(a) * 24 * st.burst + (k % 2) * drift * 0.3;
+        ctx.strokeStyle = 'rgba(225,225,220,' + 0.5 * st.fade + ')'; ctx.lineWidth = 1.5;
+        ctx.beginPath(); ctx.moveTo(hx, hy); ctx.lineTo(sx, sy); ctx.stroke();
+        ctx.fillStyle = fl.color; ctx.shadowColor = fl.color; ctx.shadowBlur = 18;
+        ctx.beginPath(); ctx.arc(sx, sy, 5.5, 0, Math.PI * 2); ctx.fill();
+        ctx.shadowBlur = 0;
       }
     }
-    ctx.shadowBlur = 0; ctx.globalAlpha = Math.min(1, fade * 1.5);
+    ctx.shadowBlur = 0; ctx.globalAlpha = Math.min(1, st.fade * 1.5);
     ctx.font = '700 14px "Saira Condensed", "Arial Narrow", sans-serif'; ctx.textAlign = 'left'; ctx.textBaseline = 'middle';
     ctx.lineWidth = 3; ctx.strokeStyle = 'rgba(20,20,20,0.85)'; ctx.strokeText(fl.label.toUpperCase(), p.x + 16, p.y - 8);
     ctx.fillStyle = '#fff'; ctx.fillText(fl.label.toUpperCase(), p.x + 16, p.y - 8);
