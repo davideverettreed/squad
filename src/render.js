@@ -1201,10 +1201,24 @@ function drawPlanGhosts(ctx) {
     }
   }
   ctx.setLineDash([]);
+  // Each man's spot in his team's formation at the ghost, facing the way the team came.
+  const sq = G.squads.blue;
+  for (const gh of pr.ghosts) {
+    const t = sq.teams[Number(gh.unit[1]) - 1];
+    if (!t) continue;
+    ctx.fillStyle = gh.final ? 'rgba(31,79,191,0.55)' : 'rgba(31,79,191,0.3)';
+    t.members.filter(s => s.active).forEach((s, i) => {
+      const o = scaled(teamSlot(t.formation, i), t.spacing), w = rotateOffset(o.x, o.y, gh.h), p = toScreen(gh.x + w.x, gh.y + w.y);
+      ctx.beginPath(); ctx.arc(p.x, p.y, View3D.drawingDrape ? Math.max(3, 0.9 * R.cam.zoom) : 3, 0, Math.PI * 2); ctx.fill();
+    });
+  }
   if (!View3D.drawingDrape) for (const gh of pr.ghosts) {
-    const q = ghostScreen(gh);
-    ctx.globalAlpha = 0.85;
-    const picked = G.ui.sel && ((G.ui.sel.level === 'team' && 't' + G.ui.sel.team.num === gh.unit) || (G.ui.sel.level === 'group' && G.ui.sel.teams.some(t => 't' + t.num === gh.unit)));
+    const q = ghostScreen(gh), at = toScreen(gh.x, gh.y);
+    // An earlier step is fainter than where the plan leaves the team.
+    ctx.globalAlpha = gh.final ? 0.85 : 0.45;
+    if (q.x !== at.x) { ctx.strokeStyle = 'rgba(31,79,191,0.5)'; ctx.lineWidth = 1; ctx.beginPath(); ctx.moveTo(at.x, at.y); ctx.lineTo(q.x, q.y); ctx.stroke(); }
+    const sl = G.ui.sel;
+    const picked = sl && (sl.level === 'squad' || (sl.level === 'team' && 't' + sl.team.num === gh.unit) || (sl.level === 'group' && sl.teams.some(t => 't' + t.num === gh.unit)));
     if (picked) { ctx.fillStyle = 'rgba(255,214,10,0.35)'; ctx.beginPath(); ctx.arc(q.x, q.y, 22, 0, Math.PI * 2); ctx.fill(); }
     drawUnitSymbol(ctx, q.x, q.y, 15, 'blue', gh.unit === 'squad' ? 'squad' : 'team', { fill: 'rgba(128,224,255,0.3)', ink: OVL.blue, dashed: true });
     ctx.globalAlpha = 1;

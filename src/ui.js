@@ -69,7 +69,7 @@ const UI = {
     }
     const chips = $('selChips');
     const mk = (text, fn) => { const b = el('button', 'chip', text); b.addEventListener('click', fn); chips.appendChild(b); return b; };
-    this.chipSquad = mk('Squad', () => this.select({ level: 'squad', squad: G.squads.blue }));
+    this.chipSquad = mk('Whole squad', () => this.select({ level: 'squad', squad: G.squads.blue }));
     this.chipTeams = [1, 2, 3].map(n => mk(ORDINAL[n - 1] + ' FT', () => this.selectTeam(n)));
     // Double-click a team: every other team instead (after step-off).
     this.chipTeams.forEach((c, i) => c.addEventListener('dblclick', () => this.selectAllBut(i + 1)));
@@ -566,6 +566,7 @@ const UI = {
   labelTeams() {
     const sq = G.squads.blue;
     this.chipTeams.forEach((c, i) => { c.textContent = ORDINAL[i] + ' ' + (sq.teamWord || 'FT'); });
+    this.chipSquad.textContent = sq.kind === 'usmc' || /^usmc19[789]/.test(sq.kind) ? 'Whole squad' : 'Whole unit';
   },
 
   showBriefing() {

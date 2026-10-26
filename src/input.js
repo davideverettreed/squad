@@ -42,7 +42,12 @@ const Input = {
         if (Math.hypot(p.x - p.sx, p.y - p.sy) > 8) this.moved = true;
         if (this.moved && this.dragGh) {
           const g = this.dragGh, l = g.line;
-          if (l.task === 'move') { l.spots = l.spots || {}; l.spots[g.unit] = toWorld(p.x - g.off.x, p.y - g.off.y); }
+          if (l.task === 'move') {
+            // Kept as an offset from the checkpoint, so the spot moves with it.
+            const w = toWorld(p.x - g.off.x, p.y - g.off.y), a = Plan.anchor(Plan.graphic(l.where));
+            l.spots = l.spots || {}; l.spots[g.unit] = { dx: w.x - a.x, dy: w.y - a.y };
+            g.x = w.x; g.y = w.y;
+          }
         } else if (this.moved && this.faceDrag) {
           this.faceDrag.to = toWorld(p.x, p.y);
         } else if (this.moved && this.dragU) {

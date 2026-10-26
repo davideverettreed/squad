@@ -554,8 +554,10 @@ const View3D = {
       this.pointers.set(e.pointerId, { x: e.offsetX, y: e.offsetY, sx: e.offsetX, sy: e.offsetY, button: e.button });
       this.moved = this.pointers.size > 1;
       this.drag = { turn: e.button === 2 || e.shiftKey };
+      // While planning, a team's ghost under the pointer is dragged to give the team its spot.
+      this.dragGh = this.pointers.size === 1 && e.button === 0 && !e.shiftKey && G.running && Plan.planning && !Plan.tool ? this.ghostAt(e.offsetX, e.offsetY) : null;
       // A finger (or the left button) pressed on one of our pieces drags the unit to a new place.
-      this.dragU = this.pointers.size === 1 && e.button === 0 && !e.shiftKey && G.running && !G.over && !Plan.tool && !G.ui.measuring ? UI.unitDragStart(this.pieceAt(e.offsetX, e.offsetY)) : null;
+      this.dragU = !this.dragGh && this.pointers.size === 1 && e.button === 0 && !e.shiftKey && G.running && !G.over && !Plan.tool && !G.ui.measuring ? UI.unitDragStart(this.pieceAt(e.offsetX, e.offsetY)) : null;
       if (this.pointers.size > 1 && this.dragU) { this.dragU = null; G.ui.unitDrag = null; }
       // While planning, a control measure under the finger is dragged instead of the view.
       this.dragG = !this.dragU && this.pointers.size === 1 && G.running && Plan.planning && !Plan.tool && e.button !== 2 ? this.hitGraphic(e.offsetX, e.offsetY) : null;
@@ -578,6 +580,13 @@ const View3D = {
         c.yaw += (now.a - this.pinch.a);
         c.pitch += (now.my - this.pinch.my) * 0.006;
         this.pinch = now;
+      } else if (this.pointers.size === 1 && this.moved && this.dragGh) {
+        const w = this.groundAt(p.x, p.y), l = this.dragGh.line;
+        if (w && l.task === 'move') {
+          const a = Plan.anchor(Plan.graphic(l.where));
+          l.spots = l.spots || {}; l.spots[this.dragGh.unit] = { dx: w.x - a.x, dy: w.y - a.y };
+          this.markDirty();
+        }
       } else if (this.pointers.size === 1 && this.moved && this.dragU) {
         const w = this.groundAt(p.x, p.y);
         if (w) { G.ui.unitDrag.to = w; this.drapeDirty = true; }
@@ -604,6 +613,13 @@ const View3D = {
       const p = this.pointers.get(e.pointerId);
       if (!p) return;
       this.pointers.delete(e.pointerId);
+      if (e.type === 'pointerup' && this.dragGh && this.pointers.size === 0) {
+        const g = this.dragGh; this.dragGh = null;
+        if (!this.moved) UI.ghostTap(g, e.shiftKey || e.ctrlKey || e.metaKey);
+        else if (g.line.task !== 'move') UI.toast('Only a move to a checkpoint can be given team spots.');
+        else OPORD.refresh();
+        return;
+      }
       if (e.type === 'pointerup' && this.dragU && this.pointers.size === 0) {
         const d = this.dragU; this.dragU = null;
         const w = this.moved ? this.groundAt(p.x, p.y) : null;

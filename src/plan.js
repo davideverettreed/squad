@@ -273,7 +273,7 @@ const Plan = {
         const c = centroid(selMembers(sel).filter(s => s.active)), h = angleTo(c.x, c.y, w.x, w.y);
         units.forEach((u, k) => {
           const o = rotateOffset((k - (units.length - 1) / 2) * 30, 0, h), l = this.lines[n0 + k];
-          l.spots = { [u]: { x: w.x + o.x, y: w.y + o.y } };
+          l.spots = { [u]: { dx: o.x, dy: o.y } };
         });
       }
       G.toast(units.length + ' lines: ' + units.map(u => PLAN_UNITS[u]).join(' and ') + ' together.');
@@ -489,9 +489,16 @@ const Plan = {
       const from = centroid(starts);
       legs.push({ from, to: dest, via, unit: l.unit, task: l.task });
       const spots = this.spotsFor(l, dest, from, units);
-      for (const u of units) { pos[u] = spots[u]; mark[u] = { line: l, name: g.name }; }
+      // A ghost of each team at every step, facing the way it came: where it will be, about,
+      // when it gets there. The last step of each team is its final ghost.
+      const last = via && via.length > 1 ? via[via.length - 2] : from, h = angleTo(last.x, last.y, dest.x, dest.y);
+      for (const u of units) {
+        pos[u] = spots[u];
+        if (mark[u]) mark[u].final = false;
+        mark[u] = { unit: u, x: spots[u].x, y: spots[u].y, name: g.name, line: l, h, final: true };
+        ghosts.push(mark[u]);
+      }
     }
-    for (const u of ['t1', 't2', 't3']) if (mark[u]) ghosts.push({ unit: u, x: pos[u].x, y: pos[u].y, name: mark[u].name, line: mark[u].line });
     return { legs, ghosts };
   },
   // Where each team of a line ends up: its dragged spot, or its place in the squad's
@@ -499,7 +506,9 @@ const Plan = {
   spotsFor(l, dest, from, units) {
     const sq = G.squads.blue, out = {}, h = angleTo(from.x, from.y, dest.x, dest.y);
     units.forEach((u, k) => {
-      if (l.spots && l.spots[u]) { out[u] = l.spots[u]; return; }
+      // A dragged spot is kept as an offset from the point, so it moves with the point.
+      const sp = l.spots && l.spots[u];
+      if (sp) { out[u] = sp.dx != null ? { x: dest.x + sp.dx, y: dest.y + sp.dy } : { x: sp.x, y: sp.y }; return; }
       if (l.unit === 'squad' && units.length > 1) {
         const o = scaled(squadSlot(sq.formation, k, units.length), sq.spacing), w = rotateOffset(o.x, o.y, h);
         out[u] = { x: dest.x + w.x, y: dest.y + w.y };
