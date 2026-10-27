@@ -538,7 +538,7 @@ body:not(.roster-min) #btn3d, body:not(.roster-min) #ctl3d { margin-left: 0; }
         <h3>Selecting</h3>
         <p>Tap a Marine to select that Marine. Tap again to select the fire team, and again for the whole squad. The Squad and fire team buttons above the orders do the same. Keys: <kbd>1</kbd> <kbd>2</kbd> <kbd>3</kbd> fire teams, <kbd>0</kbd> squad, <kbd>Esc</kbd> cancel.</p>
         <h3>Moving</h3>
-        <p>While planning, each planned move shows as a dashed blue arrow, and a dashed ghost of the unit stands where its last move ends. Each fire team gets its own ghost. Tap a ghost to pick that team there, Shift-click to add more, or double-click to pick every team at that spot; then tap the map to plan the next step. Drag a ghost to give its team its own spot at a checkpoint. Tap a control measure to change it into another kind (a checkpoint into an assault position, say), rename it, open it in the order or delete it; drag it to move it. While planning, nothing moves: select a unit and tap the map to open a menu that sets a checkpoint, a bound, a route, a fighting position, a support-by-fire position, an assault position, an objective or a target reference point at that spot and adds the line to the plan. Press on one of your pieces (finger or left button) and drag it: let go to open the plan menu at that spot while planning, or to send it there after step-off. After step-off, orders go by radio: tap the ground to move in the chosen mode (Walk unless you pick Rush or Crawl); tap twice quickly to rush. Hold the right button where the unit should go and drag toward the front it should face: let go and it moves there and turns to face that way. Double-click a fire team's button to select every other team instead. The squad leader moves with 1st Fire Team, but can still be selected alone, and the other teams move without him. Closer and Wider (keys <kbd>Z</kbd> and <kbd>X</kbd>) set the interval between the men of the selected team or squad, from half to three times the standard 7 m; in the fight they spread out or close up where they are. W, A, S and D shift the selected unit forward, left, back and right while it keeps its front; Q and E turn it. A ghost shows where it will end up, the order goes out when you stop pressing, and once there the men take up whatever move they were on. Right-click also moves. Teams and the squad move in their formation. A walking team that takes fire, or sees a new enemy within 250 m, halts on its own, gets down and returns fire; rush, assault or bound to keep moving under fire. Rushing is fast but tiring and easy to spot. Crawling is slow but men can crawl while pinned.</p>
+        <p>While planning, each planned move shows as a dashed blue arrow, and a dashed ghost of the unit stands where its last move ends. Each fire team gets its own ghost. Tap a ghost to pick that team there, Shift-click to add more, or double-click to pick every team at that spot; then tap the map to plan the next step. Drag a ghost to give its team its own spot at a checkpoint. Tap a control measure to change it into another kind (a checkpoint into an assault position, say), rename it, open it in the order or delete it; drag it to move it. <kbd>Delete</kbd> removes what you last picked: a ghost takes that team's step out of the plan (the squad ghost, every team's step there), and a control measure goes with the steps to it. While planning, nothing moves: select a unit and tap the map to open a menu that sets a checkpoint, a bound, a route, a fighting position, a support-by-fire position, an assault position, an objective or a target reference point at that spot and adds the line to the plan. Press on one of your pieces (finger or left button) and drag it: let go to open the plan menu at that spot while planning, or to send it there after step-off. After step-off, orders go by radio: tap the ground to move in the chosen mode (Walk unless you pick Rush or Crawl); tap twice quickly to rush. Hold the right button where the unit should go and drag toward the front it should face: let go and it moves there and turns to face that way. Double-click a fire team's button to select every other team instead. The squad leader moves with 1st Fire Team, but can still be selected alone, and the other teams move without him. Closer and Wider (keys <kbd>Z</kbd> and <kbd>X</kbd>) set the interval between the men of the selected team or squad, from half to three times the standard 7 m; in the fight they spread out or close up where they are. W, A, S and D shift the selected unit forward, left, back and right while it keeps its front; Q and E turn it. A ghost shows where it will end up, the order goes out when you stop pressing, and once there the men take up whatever move they were on. Right-click also moves. Teams and the squad move in their formation. A walking team that takes fire, or sees a new enemy within 250 m, halts on its own, gets down and returns fire; rush, assault or bound to keep moving under fire. Rushing is fast but tiring and easy to spot. Crawling is slow but men can crawl while pinned.</p>
         <h3>Fire and maneuver</h3>
         <p><b>Suppress</b> puts fire on an area, seen enemy or not. <b>Bound</b> sends the squad forward one fire team at a time while the others cover it (a fire team bounds in buddy pairs). <b>Assault</b> walks forward firing and throwing grenades. Tap a visible enemy to make the selection engage that target.</p>
         <h3>Reading the pieces</h3>
@@ -7108,7 +7108,7 @@ const UI = {
       const sq = G.squads.blue, teams = gh.members.map(m => sq.teams[Number(m.unit[1]) - 1]).sort((a, b) => a.num - b.num);
       const live = sq.teams.filter(t => t.members.some(s => s.active));
       this.select(teams.length >= live.length ? { level: 'squad', squad: sq } : { level: 'group', squad: sq, teams, except: null });
-      G.ui.ghostSel = gh;
+      G.ui.ghostSel = gh; Plan.selected = null;
       this.toast(selName(G.ui.sel) + ' at ' + gh.name + (Plan.planning ? ': tap the map for the next step, or drag the squad ghost to move them all.' : ' selected. Drag the squad ghost to move them all.'));
       return;
     }
@@ -7123,7 +7123,7 @@ const UI = {
     teams.sort((a, b) => a.num - b.num);
     if (!teams.length) { this.select(null); return; }
     this.select(teams.length === 1 ? { level: 'team', team: teams[0], squad: sq } : { level: 'group', squad: sq, teams, except: null });
-    G.ui.ghostSel = gh;
+    G.ui.ghostSel = gh; Plan.selected = null;
     this.toast(Plan.planning ? selName(G.ui.sel) + ' at ' + gh.name + ': tap the map for the next step. Shift-click or double-click a ghost to pick more; drag one to set its spot.'
       : selName(G.ui.sel) + ' selected. Drag its ghost to send it somewhere else.');
   },
@@ -8217,7 +8217,7 @@ const Plan = {
     if (K.line) {
       if (!this.plStart) { this.plStart = { x: w.x, y: w.y }; G.toast('Tap the other end of the ' + K.label.toLowerCase() + '.'); return true; }
       const g = this.addGraphic(kind, [this.plStart, w]);
-      this.plStart = null; this.selected = g.id;
+      this.plStart = null; this.selected = g.id; G.ui.ghostSel = null;
       if (K.single) this.tool = null;
     } else {
       // The tool stays on, so each tap places another; tap its button again (or Esc) to stop.
@@ -8230,7 +8230,7 @@ const Plan = {
         return true;
       }
       const g = this.addGraphic(kind, [w]);
-      this.selected = g.id;
+      this.selected = g.id; G.ui.ghostSel = null;
       G.toast(g.name + ' placed. Tap again for another, or tap ' + K.short + ' to stop.' + (step ? ' Select a unit first to plan its move to each one.' : ''));
     }
     OPORD.refresh();
@@ -8239,7 +8239,7 @@ const Plan = {
   finishRoute() {
     const pts = this.routeDraft || [];
     if (pts.length >= 2) {
-      const g = this.addGraphic('rte', pts); this.selected = g.id;
+      const g = this.addGraphic('rte', pts); this.selected = g.id; G.ui.ghostSel = null;
       // A route begun from the map menu also becomes a line of the plan for that unit.
       if (this.routeUnit) {
         // Several teams: a line for each, the others with the first, each to its own spot at the end.
@@ -8348,7 +8348,7 @@ const Plan = {
         OPORD.refresh();
         return;
     }
-    if (g) this.selected = g.id;
+    if (g) this.selected = g.id; G.ui.ghostSel = null;
     if (l) G.toast('Line ' + this.lines.length + ': ' + this.lineText(l));
     OPORD.refresh();
   },
@@ -8402,6 +8402,32 @@ const Plan = {
     return l;
   },
   removeLine(id) { this.lines = this.lines.filter(l => l.id !== id); },
+  // The Delete key on a ghost: that team's step comes out of the plan (the squad ghost: every
+  // team's step there). A team taken out of a squad step leaves the others a line each.
+  // A point dropped for the step goes with it, once nothing else uses it.
+  removeStep(gh) {
+    if (!gh || gh.live) return 'That is a move under way. Give the team a new order instead.';
+    const parts = gh.group ? [...new Set(gh.members.map(m => m.line))].map(l => ({ unit: l.unit, line: l })) : [{ unit: gh.unit, line: gh.line }];
+    if (parts.some(p => !this.planning && p.line.status !== 'pending')) return 'That step is already under way.';
+    const ids = new Set();
+    for (const { unit, line: l } of parts) {
+      for (const k of ['where', 'target']) if (l[k] != null) ids.add(l[k]);
+      const at = this.lines.indexOf(l);
+      if (at < 0) continue;
+      if (l.unit === 'squad' && unit !== 'squad') {
+        // The rest of the squad keeps the step, each team on a line of its own.
+        const rest = ['t1', 't2', 't3'].filter(u => u !== unit && G.squads.blue.teams[Number(u[1]) - 1].members.some(s => s.active));
+        const { id, spots, ...o } = l;
+        const repl = rest.map((u, k) => Object.assign({}, o, { id: this.nextId++, unit: u, trigger: k ? 'with' : l.trigger, spots: spots && spots[u] ? { [u]: spots[u] } : undefined }));
+        this.lines.splice(at, 1, ...repl);
+      } else this.lines.splice(at, 1);
+    }
+    for (const id of ids) {
+      const g = this.graphic(id);
+      if (g && ['cp', 'fp', 'sbf', 'aslt', 'rel', 'trp', 'rte'].includes(g.kind) && !this.lines.some(l => l.where === id || l.target === id)) this.removeGraphic(id);
+    }
+    return null;
+  },
   moveLine(id, d) {
     const i = this.lines.findIndex(l => l.id === id), j = i + d;
     if (i < 0 || j < 0 || j >= this.lines.length) return;
@@ -10522,7 +10548,7 @@ const View3D = {
       if (e.type === 'pointerup' && this.dragG && this.pointers.size === 0) {
         // A drag moves the control measure; a tap opens its menu (change, rename, delete).
         const g = this.dragG.g;
-        Plan.selected = g.id; this.dragG = null;
+        Plan.selected = g.id; G.ui.ghostSel = null; this.dragG = null;
         if (this.moved) OPORD.refresh(); else UI.graphicMenu(p.x, p.y, g);
         return;
       }
@@ -10682,7 +10708,7 @@ const Input = {
       if (e.type === 'pointerup' && this.dragG && this.pointers.size === 0) {
         // A drag moves the control measure; a tap opens its menu (change, rename, delete).
         const g = this.dragG.g;
-        Plan.selected = g.id; this.dragG = null;
+        Plan.selected = g.id; G.ui.ghostSel = null; this.dragG = null;
         if (this.moved) OPORD.refresh(); else UI.graphicMenu(p.x, p.y, g);
         return;
       }
@@ -10736,6 +10762,24 @@ const Input = {
       else if (k === 'f' || k === 'F') { Fog.on = !Fog.on; UI.toast(Fog.on ? 'Fog of war shown.' : 'Fog of war hidden.'); }
       else if (k === '1' || k === '2' || k === '3') UI.selectTeam(+k);
       else if (k === '0' || k === '`') UI.select({ level: 'squad', squad: G.squads.blue });
+      else if ((k === 'Delete' || k === 'Backspace') && !e.ctrlKey && !e.metaKey) {
+        // Delete: the ghost picked out (its step), else the control measure picked out.
+        const gh = G.ui.ghostSel, g = Plan.planning && Plan.graphic(Plan.selected);
+        if (gh && !gh.aim) {
+          e.preventDefault();
+          const why = Plan.removeStep(gh);
+          if (why) { UI.toast(why); return; }
+          UI.toast((gh.group ? 'The squad step at ' : PLAN_UNITS[gh.unit] + ' step at ') + gh.name + ' deleted.');
+          UI.select(null);
+        } else if (g) {
+          e.preventDefault();
+          UI.closePlanMenu();
+          // The steps to it go too (a phase line only marks the way; lines keep their place).
+          if (!GRAPHIC_KINDS[g.kind].line) Plan.lines = Plan.lines.filter(l => l.where !== g.id && l.target !== g.id);
+          Plan.removeGraphic(g.id); UI.toast(g.name + ' deleted.');
+        } else return;
+        OPORD.refresh(); View3D.markDirty();
+      }
       else if (k === 'Escape') {
         if (G.ui.zoneSel) G.ui.zoneSel = null;
         else if ($('planMenu')) UI.closePlanMenu();

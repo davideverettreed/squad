@@ -154,7 +154,7 @@ const UI = {
       const sq = G.squads.blue, teams = gh.members.map(m => sq.teams[Number(m.unit[1]) - 1]).sort((a, b) => a.num - b.num);
       const live = sq.teams.filter(t => t.members.some(s => s.active));
       this.select(teams.length >= live.length ? { level: 'squad', squad: sq } : { level: 'group', squad: sq, teams, except: null });
-      G.ui.ghostSel = gh;
+      G.ui.ghostSel = gh; Plan.selected = null;
       this.toast(selName(G.ui.sel) + ' at ' + gh.name + (Plan.planning ? ': tap the map for the next step, or drag the squad ghost to move them all.' : ' selected. Drag the squad ghost to move them all.'));
       return;
     }
@@ -169,7 +169,7 @@ const UI = {
     teams.sort((a, b) => a.num - b.num);
     if (!teams.length) { this.select(null); return; }
     this.select(teams.length === 1 ? { level: 'team', team: teams[0], squad: sq } : { level: 'group', squad: sq, teams, except: null });
-    G.ui.ghostSel = gh;
+    G.ui.ghostSel = gh; Plan.selected = null;
     this.toast(Plan.planning ? selName(G.ui.sel) + ' at ' + gh.name + ': tap the map for the next step. Shift-click or double-click a ghost to pick more; drag one to set its spot.'
       : selName(G.ui.sel) + ' selected. Drag its ghost to send it somewhere else.');
   },

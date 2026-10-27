@@ -699,7 +699,7 @@ const View3D = {
       if (e.type === 'pointerup' && this.dragG && this.pointers.size === 0) {
         // A drag moves the control measure; a tap opens its menu (change, rename, delete).
         const g = this.dragG.g;
-        Plan.selected = g.id; this.dragG = null;
+        Plan.selected = g.id; G.ui.ghostSel = null; this.dragG = null;
         if (this.moved) OPORD.refresh(); else UI.graphicMenu(p.x, p.y, g);
         return;
       }

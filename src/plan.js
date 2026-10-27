@@ -210,7 +210,7 @@ const Plan = {
     if (K.line) {
       if (!this.plStart) { this.plStart = { x: w.x, y: w.y }; G.toast('Tap the other end of the ' + K.label.toLowerCase() + '.'); return true; }
       const g = this.addGraphic(kind, [this.plStart, w]);
-      this.plStart = null; this.selected = g.id;
+      this.plStart = null; this.selected = g.id; G.ui.ghostSel = null;
       if (K.single) this.tool = null;
     } else {
       // The tool stays on, so each tap places another; tap its button again (or Esc) to stop.
@@ -223,7 +223,7 @@ const Plan = {
         return true;
       }
       const g = this.addGraphic(kind, [w]);
-      this.selected = g.id;
+      this.selected = g.id; G.ui.ghostSel = null;
       G.toast(g.name + ' placed. Tap again for another, or tap ' + K.short + ' to stop.' + (step ? ' Select a unit first to plan its move to each one.' : ''));
     }
     OPORD.refresh();
@@ -232,7 +232,7 @@ const Plan = {
   finishRoute() {
     const pts = this.routeDraft || [];
     if (pts.length >= 2) {
-      const g = this.addGraphic('rte', pts); this.selected = g.id;
+      const g = this.addGraphic('rte', pts); this.selected = g.id; G.ui.ghostSel = null;
       // A route begun from the map menu also becomes a line of the plan for that unit.
       if (this.routeUnit) {
         // Several teams: a line for each, the others with the first, each to its own spot at the end.
@@ -341,7 +341,7 @@ const Plan = {
         OPORD.refresh();
         return;
     }
-    if (g) this.selected = g.id;
+    if (g) this.selected = g.id; G.ui.ghostSel = null;
     if (l) G.toast('Line ' + this.lines.length + ': ' + this.lineText(l));
     OPORD.refresh();
   },
@@ -395,6 +395,32 @@ const Plan = {
     return l;
   },
   removeLine(id) { this.lines = this.lines.filter(l => l.id !== id); },
+  // The Delete key on a ghost: that team's step comes out of the plan (the squad ghost: every
+  // team's step there). A team taken out of a squad step leaves the others a line each.
+  // A point dropped for the step goes with it, once nothing else uses it.
+  removeStep(gh) {
+    if (!gh || gh.live) return 'That is a move under way. Give the team a new order instead.';
+    const parts = gh.group ? [...new Set(gh.members.map(m => m.line))].map(l => ({ unit: l.unit, line: l })) : [{ unit: gh.unit, line: gh.line }];
+    if (parts.some(p => !this.planning && p.line.status !== 'pending')) return 'That step is already under way.';
+    const ids = new Set();
+    for (const { unit, line: l } of parts) {
+      for (const k of ['where', 'target']) if (l[k] != null) ids.add(l[k]);
+      const at = this.lines.indexOf(l);
+      if (at < 0) continue;
+      if (l.unit === 'squad' && unit !== 'squad') {
+        // The rest of the squad keeps the step, each team on a line of its own.
+        const rest = ['t1', 't2', 't3'].filter(u => u !== unit && G.squads.blue.teams[Number(u[1]) - 1].members.some(s => s.active));
+        const { id, spots, ...o } = l;
+        const repl = rest.map((u, k) => Object.assign({}, o, { id: this.nextId++, unit: u, trigger: k ? 'with' : l.trigger, spots: spots && spots[u] ? { [u]: spots[u] } : undefined }));
+        this.lines.splice(at, 1, ...repl);
+      } else this.lines.splice(at, 1);
+    }
+    for (const id of ids) {
+      const g = this.graphic(id);
+      if (g && ['cp', 'fp', 'sbf', 'aslt', 'rel', 'trp', 'rte'].includes(g.kind) && !this.lines.some(l => l.where === id || l.target === id)) this.removeGraphic(id);
+    }
+    return null;
+  },
   moveLine(id, d) {
     const i = this.lines.findIndex(l => l.id === id), j = i + d;
     if (i < 0 || j < 0 || j >= this.lines.length) return;

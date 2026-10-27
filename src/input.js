@@ -122,7 +122,7 @@ const Input = {
       if (e.type === 'pointerup' && this.dragG && this.pointers.size === 0) {
         // A drag moves the control measure; a tap opens its menu (change, rename, delete).
         const g = this.dragG.g;
-        Plan.selected = g.id; this.dragG = null;
+        Plan.selected = g.id; G.ui.ghostSel = null; this.dragG = null;
         if (this.moved) OPORD.refresh(); else UI.graphicMenu(p.x, p.y, g);
         return;
       }
@@ -176,6 +176,24 @@ const Input = {
       else if (k === 'f' || k === 'F') { Fog.on = !Fog.on; UI.toast(Fog.on ? 'Fog of war shown.' : 'Fog of war hidden.'); }
       else if (k === '1' || k === '2' || k === '3') UI.selectTeam(+k);
       else if (k === '0' || k === '`') UI.select({ level: 'squad', squad: G.squads.blue });
+      else if ((k === 'Delete' || k === 'Backspace') && !e.ctrlKey && !e.metaKey) {
+        // Delete: the ghost picked out (its step), else the control measure picked out.
+        const gh = G.ui.ghostSel, g = Plan.planning && Plan.graphic(Plan.selected);
+        if (gh && !gh.aim) {
+          e.preventDefault();
+          const why = Plan.removeStep(gh);
+          if (why) { UI.toast(why); return; }
+          UI.toast((gh.group ? 'The squad step at ' : PLAN_UNITS[gh.unit] + ' step at ') + gh.name + ' deleted.');
+          UI.select(null);
+        } else if (g) {
+          e.preventDefault();
+          UI.closePlanMenu();
+          // The steps to it go too (a phase line only marks the way; lines keep their place).
+          if (!GRAPHIC_KINDS[g.kind].line) Plan.lines = Plan.lines.filter(l => l.where !== g.id && l.target !== g.id);
+          Plan.removeGraphic(g.id); UI.toast(g.name + ' deleted.');
+        } else return;
+        OPORD.refresh(); View3D.markDirty();
+      }
       else if (k === 'Escape') {
         if (G.ui.zoneSel) G.ui.zoneSel = null;
         else if ($('planMenu')) UI.closePlanMenu();
