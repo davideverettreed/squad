@@ -529,7 +529,9 @@ const Nudge = {
 
   key(k) {
     const sel = G.ui.sel;
-    if (!sel || !G.running || G.over || Plan.planning) return false;
+    if (!sel || !G.running || G.over) return false;
+    // Planning: Q and E turn the selected unit's ghost (its own, about its own middle).
+    if (Plan.planning) { if (k === 'q' || k === 'e') return Plan.turnSel(sel, k === 'q' ? -NUDGE_TURN : NUDGE_TURN); return false; }
     const men = selMembers(sel).filter(commandable);
     if (!men.length) return false;
     const n = this.cur && this.cur.sel === sel ? this.cur : this.start(sel, men);
@@ -544,15 +546,25 @@ const Nudge = {
     const lead = (sel.level === 'soldier' ? sel.soldier : sel.level === 'team' ? sel.team.leader : sel.level === 'group' ? sel.teams[0].leader : sel.squad.leader) || men[0];
     return { sel, men, c: centroid(men), heading: lead.facing, f: 0, r: 0, rot: 0, t: 0 };
   },
-  // Where each man ends up: his place in the unit turned by the rotation, then shifted.
+  // The bodies that turn on their own centers: a fire team (or each of several) turns about
+  // its own middle, the squad leader staying where he is; the whole squad turns as one.
+  pivots(sel, men) {
+    if (sel.level === 'team' && sel.team.num) { const t = men.filter(s => s.team === sel.team); return t.length ? [t] : [men]; }
+    if (sel.level === 'group') return sel.teams.map(t => men.filter(s => s.team === t)).filter(g => g.length);
+    return [men];
+  },
+  // Where each man ends up: his place in his body turned by the rotation, then shifted.
   targets(n) {
     const h = n.heading, fx = Math.cos(h), fy = Math.sin(h), rx = -fy, ry = fx;
-    const cx = n.c.x + fx * n.f + rx * n.r, cy = n.c.y + fy * n.f + ry * n.r;
-    const ca = Math.cos(n.rot), sa = Math.sin(n.rot), k = n.scale || 1;
-    return n.men.map(s => {
-      const ox = (s.x - n.c.x) * k, oy = (s.y - n.c.y) * k;
-      return { s, x: clamp(cx + ox * ca - oy * sa, 2, MAP_W - 2), y: clamp(cy + ox * sa + oy * ca, 2, MAP_H - 2) };
-    });
+    const ca = Math.cos(n.rot), sa = Math.sin(n.rot), k = n.scale || 1, out = [];
+    for (const body of n.sel ? this.pivots(n.sel, n.men) : [n.men]) {
+      const c = centroid(body), cx = c.x + fx * n.f + rx * n.r, cy = c.y + fy * n.f + ry * n.r;
+      for (const s of body) {
+        const ox = (s.x - c.x) * k, oy = (s.y - c.y) * k;
+        out.push({ s, x: clamp(cx + ox * ca - oy * sa, 2, MAP_W - 2), y: clamp(cy + ox * sa + oy * ca, 2, MAP_H - 2) });
+      }
+    }
+    return out;
   },
   text(n) {
     const parts = [];
@@ -574,7 +586,7 @@ const Nudge = {
   apply(sel, arg) {
     const men = selMembers(sel).filter(commandable);
     if (!men.length) return;
-    const n = { men, c: centroid(men), heading: arg.heading, f: arg.f || 0, r: arg.r || 0, rot: arg.rot || 0, scale: arg.scale || 1 };
+    const n = { sel, men, c: centroid(men), heading: arg.heading, f: arg.f || 0, r: arg.r || 0, rot: arg.rot || 0, scale: arg.scale || 1 };
     for (const t of this.targets(n)) {
       const s = t.s;
       if (!s.resume) s.resume = s.path.length ? { path: s.path.slice(), mode: s.moveMode, faceAngle: s.faceAngle } : null;

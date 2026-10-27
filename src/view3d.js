@@ -717,7 +717,7 @@ const View3D = {
   tap(sx, sy, secondary) {
     const w = this.groundAt(sx, sy);
     if (!w) return;
-    UI.handleTap(sx, sy, secondary, { w, piece: this.pieceAt(sx, sy), ghost: Plan.planning ? this.ghostAt(sx, sy) : null });
+    UI.handleTap(sx, sy, secondary, { w, piece: this.pieceAt(sx, sy), ghost: this.ghostAt(sx, sy) });
   },
 
   // On-screen buttons for phones: turn, tilt, zoom.

@@ -226,6 +226,8 @@ function ghostDropped(g) {
 function pivotHeld(delta) {
   const in3d = !!View3D.dragGh, g = in3d ? View3D.dragGh : Input.dragGh;
   if (!g) return;
+  // A team's ghost turns on its own middle; the squad ghost turns the teams about theirs.
+  if (!g.group && !g.live) { Plan.faceGhost(g, (g.h != null ? g.h : 0) + delta); g.h = (g.h || 0) + delta; View3D.markDirty(); OPORD.refresh(); return; }
   const at = Plan.pivotGhosts(g, delta);
   if (at && !g.group) {
     if (in3d) {

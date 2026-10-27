@@ -640,6 +640,55 @@ const Plan = {
     return held;
   },
 
+  // The ghost Q/E or a facing applies to for a team: the one picked on the map if it is
+  // this team's, else the team's last.
+  ghostFor(u) {
+    const gs = this.ghosts().filter(g => !g.aim && !g.group && !g.live && g.unit === u), pick = G.ui.ghostSel;
+    return gs.find(g => pick && !pick.group && pick.unit === u && pick.line === g.line) || gs.filter(g => g.final)[0] || gs[gs.length - 1] || null;
+  },
+  // Set a team ghost's facing (kept in its spot).
+  faceGhost(g, h) {
+    const l = g.line, id = l.task === 'assault' || l.task === 'suppress' ? l.target : l.where, a = this.anchor(this.graphic(id));
+    l.spots = l.spots || {};
+    l.spots[g.unit] = Object.assign({ dx: g.x - a.x, dy: g.y - a.y }, l.spots[g.unit], { h });
+  },
+  // Q/E while planning, with no ghost held: each selected team turns on its own middle (its
+  // ghost's facing; or, with no plan yet, the men where they stand); the whole squad turns
+  // its squad ghost's group about its middle.
+  turnSel(sel, delta) {
+    const sq = G.squads.blue;
+    if (sel.level === 'squad') {
+      const pick = G.ui.ghostSel && G.ui.ghostSel.group ? G.ui.ghostSel : this.ghosts().filter(g => g.group && g.final).pop();
+      if (pick) { this.pivotGhosts(pick, delta); OPORD.refresh(); return true; }
+    }
+    const teams = sel.level === 'team' ? [sel.team] : sel.level === 'group' ? sel.teams : sel.level === 'squad' ? sq.teams : [sel.soldier.team];
+    for (const t of teams) {
+      if (!t.num) continue;
+      const g = this.ghostFor('t' + t.num);
+      if (g) this.faceGhost(g, (g.h || 0) + delta);
+      else for (const s of t.members.filter(commandable)) { s.faceAngle = (s.faceAngle != null ? s.faceAngle : s.facing) + delta; s.facing = s.look = s.faceAngle; }
+    }
+    View3D.markDirty();
+    OPORD.refresh();
+    return true;
+  },
+  // Face a point while planning: the unit's ghosts (or its men) turn toward it.
+  faceSelAt(sel, w) {
+    const sq = G.squads.blue;
+    const teams = sel.level === 'team' ? [sel.team] : sel.level === 'group' ? sel.teams : sel.level === 'squad' ? sq.teams : [sel.soldier.team];
+    const gs = teams.filter(t => t.num).map(t => this.ghostFor('t' + t.num)).filter(Boolean);
+    if (gs.length) {
+      const c = centroid(gs), h = angleTo(c.x, c.y, w.x, w.y);
+      for (const g of gs) this.faceGhost(g, h);
+      G.toast(selName(sel) + ' will face ' + pad3(bearing(c.x, c.y, w.x, w.y)) + ' at ' + gs[0].name + '.');
+    } else {
+      const men = selMembers(sel).filter(commandable), c = centroid(men), h = angleTo(c.x, c.y, w.x, w.y);
+      for (const s of men) { s.faceAngle = s.facing = s.look = h; }
+      G.toast(selName(sel) + ' faces ' + pad3(bearing(c.x, c.y, w.x, w.y)) + '.');
+    }
+    View3D.markDirty(); OPORD.refresh();
+  },
+
   // A squad ghost dragged: every team at that step shifts by the same amount.
   shiftGroup(g, dx, dy) {
     for (const m of g.members) {

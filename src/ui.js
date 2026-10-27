@@ -138,7 +138,7 @@ const UI = {
 
   // ------------------------------------------------------------ selection
   select(sel) {
-    G.ui.sel = sel; G.ui.pending = null;
+    G.ui.sel = sel; G.ui.pending = null; G.ui.ghostSel = null;
     this.refreshOrders(); this.refreshRosterSel();
   },
   selectTeam(n) {
@@ -153,6 +153,7 @@ const UI = {
       const sq = G.squads.blue, teams = gh.members.map(m => sq.teams[Number(m.unit[1]) - 1]).sort((a, b) => a.num - b.num);
       const live = sq.teams.filter(t => t.members.some(s => s.active));
       this.select(teams.length >= live.length ? { level: 'squad', squad: sq } : { level: 'group', squad: sq, teams, except: null });
+      G.ui.ghostSel = gh;
       this.toast(selName(G.ui.sel) + ' at ' + gh.name + (Plan.planning ? ': tap the map for the next step, or drag the squad ghost to move them all.' : ' selected. Drag the squad ghost to move them all.'));
       return;
     }
@@ -167,6 +168,7 @@ const UI = {
     teams.sort((a, b) => a.num - b.num);
     if (!teams.length) { this.select(null); return; }
     this.select(teams.length === 1 ? { level: 'team', team: teams[0], squad: sq } : { level: 'group', squad: sq, teams, except: null });
+    G.ui.ghostSel = gh;
     this.toast(Plan.planning ? selName(G.ui.sel) + ' at ' + gh.name + ': tap the map for the next step. Shift-click or double-click a ghost to pick more; drag one to set its spot.'
       : selName(G.ui.sel) + ' selected. Drag its ghost to send it somewhere else.');
   },
@@ -206,14 +208,15 @@ const UI = {
     // An enemy piece stands for its nearest visible, effective man.
     const enemy = piece && piece.side === 'red' ? (piece.kind === 'man' ? (piece.soldier.active ? piece.soldier : null)
       : piece.live.filter(s => enemyVisible(s)).sort((a, b) => dist(a.x, a.y, w.x, w.y) - dist(b.x, b.y, w.x, w.y))[0] || null) : null;
-    if (G.ui.mouse) { this.mouseClick(sx, sy, w, secondary, piece, enemy); return; }
+    if (G.ui.mouse) { this.mouseClick(sx, sy, w, secondary, piece, enemy, at ? at.ghost : undefined); return; }
     // While planning, nothing moves: a tap on the map with a unit selected offers the
     // control measures and plan lines that can be set at that spot.
     if (Plan.planning && !(piece && piece.side === 'blue' && !secondary)) {
       if (sel && G.ui.pending) {
         const p = G.ui.pending, step = { bound: 'bound', assault: 'obj', suppress: 'trp' }[p];
         G.ui.pending = null; this.refreshOrders();
-        if (step) Plan.addStep(sel, w, step);
+        if (p === 'face') Plan.faceSelAt(sel, w);
+        else if (step) Plan.addStep(sel, w, step);
         else this.toast('That order is given by radio after step-off.');
         return;
       }
@@ -259,7 +262,7 @@ const UI = {
   // Left button: select a unit; on empty ground, clear the selection; with an order armed
   // by its button, give it there. Right button: the action menu for the selected unit at
   // that spot (Shift: move there at once). Planning, the right button opens the plan menu.
-  mouseClick(sx, sy, w, secondary, piece, enemy) {
+  mouseClick(sx, sy, w, secondary, piece, enemy, ghost3d) {
     const sel = G.ui.sel;
     if (!secondary) {
       if (G.ui.pending && sel && !(piece && piece.side === 'blue')) {
@@ -267,7 +270,8 @@ const UI = {
         G.ui.pending = null; this.refreshOrders();
         if (Plan.planning) {
           const step = { move: 'cp', bound: 'bound', assault: 'obj', suppress: 'trp' }[p];
-          if (step) Plan.addStep(sel, w, step); else this.toast('That order is given by radio after step-off.');
+          if (p === 'face') Plan.faceSelAt(sel, w);
+          else if (step) Plan.addStep(sel, w, step); else this.toast('That order is given by radio after step-off.');
         } else if (p === 'move') issueOrder(sel, 'move', { x: w.x, y: w.y, mode: G.ui.moveMode });
         else issueOrder(sel, p, enemy && p !== 'face' ? { x: enemy.x, y: enemy.y } : w);
         return;
@@ -283,10 +287,64 @@ const UI = {
       if (G.ui.pending) { G.ui.pending = null; this.refreshOrders(); }
       return;
     }
+    // Right-click on one of our units (or a ghost): that unit's own menu.
+    const gh = ghost3d !== undefined ? ghost3d : ghostAt(sx, sy);
+    if (gh && !gh.aim && !gh.live) { this.ghostTap(gh, false); this.unitMenu(sx, sy, G.ui.sel); return; }
+    if (piece && piece.side === 'blue') {
+      const s0 = piece.kind === 'man' ? piece.soldier : null;
+      let us = sel;
+      if (piece.kind === 'team' && piece.team.num) us = { level: 'team', team: piece.team, squad: piece.team.squad };
+      else if (piece.kind !== 'man') us = { level: 'squad', squad: G.squads.blue };
+      else if (!sel || !selMembers(sel).includes(s0)) us = s0.team.num ? { level: 'team', team: s0.team, squad: s0.squad } : { level: 'squad', squad: s0.squad };
+      if (us !== sel) this.select(us);
+      this.unitMenu(sx, sy, us);
+      return;
+    }
     if (!sel) { this.toast('Select a unit first: left-click it.'); return; }
     if (Plan.planning) { this.planMenu(sx, sy, w, sel); return; }
     if (G.ui.shift) { issueOrder(sel, enemy ? 'engage' : 'move', enemy || { x: w.x, y: w.y, mode: G.ui.moveMode }); return; }
     this.actionMenu(sx, sy, w, sel, enemy);
+  },
+
+  // A unit's own menu (right-click the unit or its ghost): which way to face, formation,
+  // posture, fire control, interval. Face: the next click (or Q/E) sets the direction.
+  unitMenu(sx, sy, sel) {
+    this.closePlanMenu();
+    if (!sel) return;
+    const m = el('div', 'planmenu');
+    m.id = 'planMenu';
+    m.appendChild(el('div', 'pmhead', selName(sel) + (Plan.planning ? ' · plan' : '')));
+    const face = el('button', 'pmitem');
+    face.appendChild(el('b', null, 'Face a direction')); face.appendChild(el('span', null, 'then click the way to face · Q/E turn'));
+    face.addEventListener('click', () => {
+      this.closePlanMenu(); G.ui.pending = 'face'; this.refreshOrders();
+      this.toast('Click the direction for ' + selName(sel) + ' to face' + (Plan.planning ? ' at its ghost' : '') + '. Q and E turn it 15° at a time.');
+    });
+    m.appendChild(face);
+    const row = (title, items) => {
+      m.appendChild(el('div', 'pmsub', title));
+      const r = el('div', 'pmkinds');
+      for (const [kind, val, label] of items) {
+        const b = el('button', 'obtn mini', label);
+        b.addEventListener('click', () => { this.closePlanMenu(); this.onOrderButton(kind, val); });
+        r.appendChild(b);
+      }
+      m.appendChild(r);
+    };
+    row('Formation', FORMATION_KEYS.map(k => ['formation', k, FORMATIONS[k].label]));
+    row('Interval', [['spacing', 'closer', 'Closer (Z)'], ['spacing', 'wider', 'Wider (X)']]);
+    if (!Plan.planning) {
+      row('Posture', [['posture', 'stand', 'Stand'], ['posture', 'kneel', 'Kneel'], ['posture', 'prone', 'Prone']]);
+      row('Fire', [['fire', 'free', 'At will'], ['fire', 'return', 'Return'], ['fire', 'hold', 'Hold']]);
+      row('Act', [['now', 'halt', 'Halt'], ['now', 'cover', 'Take cover'], ['now', 'fallback', 'Fall back']]);
+    }
+    const x = el('button', 'pmitem pmcancel', 'Cancel');
+    x.addEventListener('click', () => this.closePlanMenu());
+    m.appendChild(x);
+    document.body.appendChild(m);
+    const r = m.getBoundingClientRect(), vw = window.innerWidth, vh = window.innerHeight;
+    m.style.left = clamp(sx + 10, 8, vw - r.width - 8) + 'px';
+    m.style.top = clamp(sy - r.height / 2, 8, vh - r.height - 8) + 'px';
   },
 
   // The orders that can be given at a spot (or on an enemy man) to the selected unit.
