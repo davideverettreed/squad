@@ -482,7 +482,9 @@ const View3D = {
       const r = (gh.unit === 'squad' ? 9 : 6) * k, h = (gh.aim ? 3 : 7) * k;
       m.g.visible = true;
       // An aim point (suppression) is a low amber marker; a team's place a blue peg.
-      m.body.material.color.setHex(gh.aim ? 0xffa040 : 0x80e0ff);
+      // The selected unit's ghosts glow gold, as on the flat map.
+      const mine = selUnits(), picked = gh.group ? gh.members.every(x => mine.has(x.unit)) : mine.has(gh.unit);
+      m.body.material.color.setHex(gh.aim ? 0xffa040 : picked ? 0xffd60a : 0x80e0ff);
       // Beside the control measure it ends on, so each can be tapped on its own.
       // (the squad ghost on the other side, so the two never stand together)
       const gx = gh.x + (gh.group ? -14 : 12) * k, gy = gh.y + (gh.group ? 14 : -12) * k;

@@ -140,6 +140,7 @@ const UI = {
   select(sel) {
     G.ui.sel = sel; G.ui.pending = null; G.ui.ghostSel = null;
     this.refreshOrders(); this.refreshRosterSel();
+    if (View3D.active) View3D.markDirty(); // its halos on the sand table
   },
   selectTeam(n) {
     const t = G.squads.blue.teams[n - 1];

@@ -6160,8 +6160,35 @@ function drawObjects(ctx) {
 
 // While planning: a dashed arrow for each planned move, and a dashed ghost counter of each
 // unit where its last move ends. Tapping a ghost picks that unit to plan its next step.
+// The plan units the selection stands for: its fire teams ('t1'...), and 'squad' for the
+// whole squad. A man stands for his team.
+function selUnits() {
+  const sel = G.ui.sel;
+  if (!sel || !G.squads.blue) return new Set();
+  if (sel.level === 'squad') return new Set(['squad', ...G.squads.blue.teams.map(t => 't' + t.num)]);
+  if (sel.level === 'group') return new Set(sel.teams.map(t => 't' + t.num));
+  const t = sel.level === 'team' ? sel.team : sel.soldier.team;
+  return new Set(t.num ? ['t' + t.num] : ['squad']);
+}
+// The selection's gold halo along a path: soft bands, widest and faintest outside (as on
+// a selected unit's route). path(ctx) lays out the path.
+function haloPath(ctx, path, k) {
+  ctx.save();
+  ctx.setLineDash([]); ctx.lineCap = 'round'; ctx.lineJoin = 'round';
+  ctx.beginPath(); path(ctx);
+  for (const [w, a] of [[22, 0.12], [14, 0.2], [7, 0.32]]) { ctx.strokeStyle = 'rgba(255,214,10,' + a + ')'; ctx.lineWidth = w * (k || 1); ctx.stroke(); }
+  ctx.restore();
+}
+// The halo round a piece: a soft gold disc fading out.
+function haloDisc(ctx, x, y, r) {
+  const g = ctx.createRadialGradient(x, y, r * 0.35, x, y, r);
+  g.addColorStop(0, 'rgba(255,214,10,0.75)'); g.addColorStop(0.55, 'rgba(255,214,10,0.35)'); g.addColorStop(1, 'rgba(255,214,10,0)');
+  ctx.fillStyle = g; ctx.beginPath(); ctx.arc(x, y, r, 0, Math.PI * 2); ctx.fill();
+}
+
 function drawPlanGhosts(ctx) {
   if (!G.squads.blue || !G.running) return;
+  const mine = selUnits(), hk = View3D.drawingDrape ? Math.max(1, R.cam.zoom * 0.6) : 1;
   // Planning: the whole plan. After step-off the ghosts stay: the steps still to come, and
   // where each team moving on its own orders is going (its men's own end points as dots).
   const pr = { legs: Plan.planning ? Plan.projection().legs : [], ghosts: Plan.ghosts() };
@@ -6171,6 +6198,11 @@ function drawPlanGhosts(ctx) {
   ctx.strokeStyle = 'rgba(31,79,191,0.75)'; ctx.fillStyle = 'rgba(31,79,191,0.75)'; ctx.lineWidth = lw; ctx.setLineDash([dl, dl * 0.7]);
   for (const lg of pr.legs) {
     const pts = [lg.from, ...(lg.via ? lg.via : [lg.to])].map(p => toScreen(p.x, p.y));
+    // A leg of the selected unit (a squad leg belongs to every team) gets the halo.
+    if (lg.unit === 'squad' ? mine.size > 0 : mine.has(lg.unit)) {
+      haloPath(ctx, (c) => pts.forEach((p, i) => i ? c.lineTo(p.x, p.y) : c.moveTo(p.x, p.y)), hk);
+      ctx.strokeStyle = 'rgba(31,79,191,0.75)'; ctx.lineWidth = lw; ctx.setLineDash([dl, dl * 0.7]);
+    }
     ctx.beginPath(); pts.forEach((p, i) => i ? ctx.lineTo(p.x, p.y) : ctx.moveTo(p.x, p.y)); ctx.stroke();
     const a = pts[pts.length - 2], b = pts[pts.length - 1], ang = Math.atan2(b.y - a.y, b.x - a.x);
     if (Math.hypot(b.x - a.x, b.y - a.y) > 14) {
@@ -6215,9 +6247,10 @@ function drawPlanGhosts(ctx) {
       ctx.beginPath(); ctx.moveTo(at.x + fx * 8, at.y + fy * 8); ctx.lineTo(tip.x, tip.y); ctx.stroke();
       ctx.beginPath(); ctx.moveTo(tip.x, tip.y); ctx.lineTo(tip.x - fx * 6 - fy * 4, tip.y - fy * 6 + fx * 4); ctx.lineTo(tip.x - fx * 6 + fy * 4, tip.y - fy * 6 - fx * 4); ctx.closePath(); ctx.fill();
     }
-    const sl = G.ui.sel;
-    const picked = sl && (sl.level === 'squad' || (sl.level === 'team' && 't' + sl.team.num === gh.unit) || (sl.level === 'group' && sl.teams.some(t => 't' + t.num === gh.unit)));
-    if (picked) { ctx.fillStyle = 'rgba(255,214,10,0.35)'; ctx.beginPath(); ctx.arc(q.x, q.y, 22, 0, Math.PI * 2); ctx.fill(); }
+    // The selected unit's ghosts (a man's: his team's) wear its halo; the squad ghost when
+    // all its teams are selected.
+    const picked = gh.group ? gh.members.every(m => mine.has(m.unit)) : mine.has(gh.unit);
+    if (picked) { const a0 = ctx.globalAlpha; ctx.globalAlpha = 1; haloDisc(ctx, q.x, q.y, gh.group ? 34 : 28); ctx.globalAlpha = a0; }
     drawUnitSymbol(ctx, q.x, q.y, gh.group ? 19 : 15, 'blue', gh.unit === 'squad' ? 'squad' : 'team', { fill: gh.group ? 'rgba(128,224,255,0.45)' : 'rgba(128,224,255,0.3)', ink: OVL.blue, dashed: true });
     if (gh.group) {
       // The squad ghost: thin lines to its teams' ghosts, and its tag.
@@ -6281,8 +6314,11 @@ function drawBeatenZones(ctx) {
   if (!zs.length) return;
   const k = R.cam.zoom, big = View3D.drawingDrape;
   ctx.save();
+  const mine = selUnits();
   for (const z of zs) {
     const q = toScreen(z.x, z.y), sel = G.ui.zoneSel === z.key;
+    // The selected unit's beaten zones wear its halo.
+    if (mine.has(z.unit)) haloPath(ctx, (c) => c.ellipse(q.x, q.y, Math.max(4, z.len / 2 * k), Math.max(3, z.wid / 2 * k), z.ang, 0, Math.PI * 2), big ? Math.max(1, k * 0.6) : 1);
     if (!z.live && z.from) {
       const f = toScreen(z.from.x, z.from.y);
       ctx.strokeStyle = 'rgba(214,96,24,0.7)'; ctx.lineWidth = big ? Math.max(2, k) : 1.4; ctx.setLineDash([5, 5]);
@@ -7034,6 +7070,7 @@ const UI = {
   select(sel) {
     G.ui.sel = sel; G.ui.pending = null; G.ui.ghostSel = null;
     this.refreshOrders(); this.refreshRosterSel();
+    if (View3D.active) View3D.markDirty(); // its halos on the sand table
   },
   selectTeam(n) {
     const t = G.squads.blue.teams[n - 1];
@@ -10244,7 +10281,9 @@ const View3D = {
       const r = (gh.unit === 'squad' ? 9 : 6) * k, h = (gh.aim ? 3 : 7) * k;
       m.g.visible = true;
       // An aim point (suppression) is a low amber marker; a team's place a blue peg.
-      m.body.material.color.setHex(gh.aim ? 0xffa040 : 0x80e0ff);
+      // The selected unit's ghosts glow gold, as on the flat map.
+      const mine = selUnits(), picked = gh.group ? gh.members.every(x => mine.has(x.unit)) : mine.has(gh.unit);
+      m.body.material.color.setHex(gh.aim ? 0xffa040 : picked ? 0xffd60a : 0x80e0ff);
       // Beside the control measure it ends on, so each can be tapped on its own.
       // (the squad ghost on the other side, so the two never stand together)
       const gx = gh.x + (gh.group ? -14 : 12) * k, gy = gh.y + (gh.group ? 14 : -12) * k;
