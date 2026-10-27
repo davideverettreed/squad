@@ -484,7 +484,8 @@ const View3D = {
       // An aim point (suppression) is a low amber marker; a team's place a blue peg.
       m.body.material.color.setHex(gh.aim ? 0xffa040 : 0x80e0ff);
       // Beside the control measure it ends on, so each can be tapped on its own.
-      const gx = gh.x + 12 * k, gy = gh.y - 12 * k;
+      // (the squad ghost on the other side, so the two never stand together)
+      const gx = gh.x + (gh.group ? -14 : 12) * k, gy = gh.y + (gh.group ? 14 : -12) * k;
       m.g.position.set(gx - MAP_W / 2, this.height(gx, gy), gy - MAP_H / 2);
       m.body.scale.set(r, h, r); m.body.position.y = h / 2;
       m.label.scale.set(5 * k * m.aspect, 5 * k, 1); m.label.position.y = h + 4 * k;
@@ -494,7 +495,7 @@ const View3D = {
   ghostAt(sx, sy) {
     let best = null, bd = 30;
     for (const gh of this.ghostList || []) {
-      const k = this.pegScale(), q = this.screenOf(gh.x + 12 * k, gh.y - 12 * k, 3 * k);
+      const k = this.pegScale(), q = this.screenOf(gh.x + (gh.group ? -14 : 12) * k, gh.y + (gh.group ? 14 : -12) * k, 3 * k);
       const d = Math.hypot(q.x - sx, q.y - sy);
       if (q.z <= 1 && d < bd) { bd = d; best = gh; }
     }
@@ -636,7 +637,10 @@ const View3D = {
       } else if (this.pointers.size === 1 && this.moved && this.dragGh) {
         const w0 = this.groundAt(p.x, p.y), o = this.dragGh.offW, l = this.dragGh.line;
         const w = w0 && o ? { x: w0.x + o.x, y: w0.y + o.y } : w0;
-        if (w && this.dragGh.live) { this.dragGh.to = w; G.ui.liveDrag = this.dragGh; this.markDirty(); }
+        if (w0 && this.dragGh.group) {
+          const g = this.dragGh; g.lastW = g.lastW || this.groundAt(p.sx, p.sy) || w0;
+          Plan.shiftGroup(g, w0.x - g.lastW.x, w0.y - g.lastW.y); g.lastW = w0; this.markDirty();
+        } else if (w && this.dragGh.live) { this.dragGh.to = w; G.ui.liveDrag = this.dragGh; this.markDirty(); }
         else if (w && SPOT_TASKS.includes(l.task)) {
           const a = Plan.anchor(Plan.graphic(l.task === 'assault' || l.task === 'suppress' ? l.target : l.where));
           l.spots = l.spots || {}; l.spots[this.dragGh.unit] = Object.assign({}, l.spots[this.dragGh.unit], { dx: w.x - a.x, dy: w.y - a.y });

@@ -47,7 +47,11 @@ const Input = {
           dragZone(this.dragZ, toWorld(p.x, p.y));
         } else if (this.moved && this.dragGh) {
           const g = this.dragGh, l = g.line;
-          if (g.live) { g.to = toWorld(p.x - g.off.x, p.y - g.off.y); G.ui.liveDrag = g; }
+          if (g.group) {
+            // The squad ghost: all its teams move with the pointer.
+            const w = toWorld(p.x, p.y); g.lastW = g.lastW || toWorld(p.sx, p.sy);
+            Plan.shiftGroup(g, w.x - g.lastW.x, w.y - g.lastW.y); g.lastW = w;
+          } else if (g.live) { g.to = toWorld(p.x - g.off.x, p.y - g.off.y); G.ui.liveDrag = g; }
           else if (SPOT_TASKS.includes(l.task)) {
             // Kept as an offset from the checkpoint (or objective), so the spot moves with it.
             const w = toWorld(p.x - g.off.x, p.y - g.off.y), a = Plan.anchor(Plan.graphic(l.task === 'assault' || l.task === 'suppress' ? l.target : l.where));
@@ -207,6 +211,11 @@ function ghostDropped(g) {
     issueOrder({ level: 'team', team: t, squad: t.squad }, 'move', { x: at.x, y: at.y, mode: g.mode || 'walk', face });
     return;
   }
+  if (g.group) {
+    if (!Plan.planning) for (const m of g.members) if (m.line.status === 'active') Plan.reissueTeam(m.line, m.unit);
+    OPORD.refresh();
+    return;
+  }
   if (!SPOT_TASKS.includes(g.line.task)) { UI.toast('Team spots can be given on a move, a bound, an assault, a fighting position, a support by fire position or a suppress line.'); return; }
   if (!Plan.planning && g.line.status === 'active') Plan.reissueTeam(g.line, g.unit);
   OPORD.refresh();
@@ -218,7 +227,7 @@ function pivotHeld(delta) {
   const in3d = !!View3D.dragGh, g = in3d ? View3D.dragGh : Input.dragGh;
   if (!g) return;
   const at = Plan.pivotGhosts(g, delta);
-  if (at) {
+  if (at && !g.group) {
     if (in3d) {
       const p = [...View3D.pointers.values()][0], w = p && View3D.groundAt(p.x, p.y);
       if (w) View3D.dragGh.offW = { x: at.x - w.x, y: at.y - w.y };

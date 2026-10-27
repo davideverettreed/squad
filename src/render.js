@@ -1240,7 +1240,16 @@ function drawPlanGhosts(ctx) {
     const sl = G.ui.sel;
     const picked = sl && (sl.level === 'squad' || (sl.level === 'team' && 't' + sl.team.num === gh.unit) || (sl.level === 'group' && sl.teams.some(t => 't' + t.num === gh.unit)));
     if (picked) { ctx.fillStyle = 'rgba(255,214,10,0.35)'; ctx.beginPath(); ctx.arc(q.x, q.y, 22, 0, Math.PI * 2); ctx.fill(); }
-    drawUnitSymbol(ctx, q.x, q.y, 15, 'blue', gh.unit === 'squad' ? 'squad' : 'team', { fill: 'rgba(128,224,255,0.3)', ink: OVL.blue, dashed: true });
+    drawUnitSymbol(ctx, q.x, q.y, gh.group ? 19 : 15, 'blue', gh.unit === 'squad' ? 'squad' : 'team', { fill: gh.group ? 'rgba(128,224,255,0.45)' : 'rgba(128,224,255,0.3)', ink: OVL.blue, dashed: true });
+    if (gh.group) {
+      // The squad ghost: thin lines to its teams' ghosts, and its tag.
+      ctx.strokeStyle = 'rgba(31,79,191,0.35)'; ctx.lineWidth = 1;
+      for (const m of gh.members) { const mq = ghostScreen(m); ctx.beginPath(); ctx.moveTo(q.x, q.y); ctx.lineTo(mq.x, mq.y); ctx.stroke(); }
+      ctx.globalAlpha = 1;
+      ctx.font = '700 12px "Saira Condensed", "Arial Narrow", sans-serif'; ctx.textAlign = 'left'; ctx.textBaseline = 'middle';
+      ctx.lineWidth = 3; ctx.strokeStyle = 'rgba(247,245,236,0.95)'; ctx.strokeText(gh.members.length === sq.teams.filter(t => t.members.some(s => s.active)).length ? 'SQD' : gh.members.map(m => m.unit[1]).join('+'), q.x + 18, q.y - 10);
+      ctx.fillStyle = OVL.blue; ctx.fillText(gh.members.length === sq.teams.filter(t => t.members.some(s => s.active)).length ? 'SQD' : gh.members.map(m => m.unit[1]).join('+'), q.x + 18, q.y - 10);
+    }
     ctx.globalAlpha = 1;
     if (gh.unit !== 'squad') {
       ctx.font = '700 12px "Saira Condensed", "Arial Narrow", sans-serif'; ctx.textAlign = 'left'; ctx.textBaseline = 'middle';
@@ -1255,7 +1264,8 @@ function drawPlanGhosts(ctx) {
 function ghostScreen(gh) {
   const q = toScreen(gh.x, gh.y);
   const onMark = Plan.graphics.some(g => { const a = toScreen(Plan.anchor(g).x, Plan.anchor(g).y); return Math.hypot(a.x - q.x, a.y - q.y) < 16; });
-  return onMark ? { x: q.x + 24, y: q.y - 24 } : q;
+  // The squad ghost goes the other way, so it never covers a team's.
+  return onMark ? (gh.group ? { x: q.x - 26, y: q.y + 26 } : { x: q.x + 24, y: q.y - 24 }) : q;
 }
 // Beaten zones: each team's ground under fire, amber, with its line of fire while planning
 // and, for the one selected, handles: the ends to lengthen or turn it, the sides to widen it.

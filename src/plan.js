@@ -583,6 +583,20 @@ const Plan = {
   // come, and where each team moving on an order of its own (not a plan line) is going.
   ghosts() {
     const out = this.projection().ghosts;
+    // Where two or more teams go to the same point at a step, a squad ghost at their middle
+    // stands for all of them: tap it to take them together, drag it to move them together.
+    const by = new Map();
+    for (const g of out) {
+      if (g.aim || !g.line || !SPOT_TASKS.includes(g.line.task)) continue;
+      const id = g.line.task === 'assault' ? g.line.target : g.line.where;
+      if (!by.has(id)) by.set(id, []);
+      by.get(id).push(g);
+    }
+    for (const members of by.values()) {
+      if (members.length < 2) continue;
+      const c = centroid(members);
+      out.push({ unit: 'squad', group: true, members, x: c.x, y: c.y, name: members[0].name, line: members[0].line, final: members.some(m => m.final) });
+    }
     if (this.planning || !G.squads.blue) return out;
     for (const t of G.squads.blue.teams) {
       const movers = t.members.filter(s => commandable(s) && s.path.length);
@@ -607,6 +621,7 @@ const Plan = {
   // destination (after step-off) turns its formation there. Returns the held ghost's new
   // place, so the drag can carry on from it.
   pivotGhosts(gh, delta) {
+    if (gh.group) { this.pivotGhosts(gh.members[0], delta); return null; }
     if (gh.live) { gh.rot = (gh.rot || 0) + delta; G.ui.liveDrag = gh; return null; }
     const gid = (l) => l.task === 'assault' || l.task === 'suppress' ? l.target : l.where, id = gid(gh.line), a = this.anchor(this.graphic(id));
     const set = this.ghosts().filter(g => !g.live && !g.aim && g.line && SPOT_TASKS.includes(g.line.task) && gid(g.line) === id
@@ -623,6 +638,17 @@ const Plan = {
       if (!this.planning && l.status === 'active') this.reissueTeam(l, g.unit);
     }
     return held;
+  },
+
+  // A squad ghost dragged: every team at that step shifts by the same amount.
+  shiftGroup(g, dx, dy) {
+    for (const m of g.members) {
+      const l = m.line, a = this.anchor(this.graphic(l.task === 'assault' ? l.target : l.where));
+      m.x += dx; m.y += dy;
+      l.spots = l.spots || {};
+      l.spots[m.unit] = Object.assign({}, l.spots[m.unit], { dx: m.x - a.x, dy: m.y - a.y });
+    }
+    g.x += dx; g.y += dy;
   },
 
   // A ghost of a line under way dragged to a new spot: the team goes there now.

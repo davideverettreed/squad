@@ -148,6 +148,14 @@ const UI = {
   // A plan ghost tapped: that team, where the plan leaves it. With Shift, add it to (or take
   // it from) the teams already picked; tapped twice, every team at that spot.
   ghostTap(gh, add) {
+    // The squad ghost: every team at that point (the whole squad if it is all of them).
+    if (gh.group) {
+      const sq = G.squads.blue, teams = gh.members.map(m => sq.teams[Number(m.unit[1]) - 1]).sort((a, b) => a.num - b.num);
+      const live = sq.teams.filter(t => t.members.some(s => s.active));
+      this.select(teams.length >= live.length ? { level: 'squad', squad: sq } : { level: 'group', squad: sq, teams, except: null });
+      this.toast(selName(G.ui.sel) + ' at ' + gh.name + (Plan.planning ? ': tap the map for the next step, or drag the squad ghost to move them all.' : ' selected. Drag the squad ghost to move them all.'));
+      return;
+    }
     const sq = G.squads.blue, t = sq.teams[Number(gh.unit[1]) - 1], now = performance.now(), last = this.lastGhostTap;
     this.lastGhostTap = { unit: gh.unit, t: now };
     let teams;
