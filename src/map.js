@@ -741,10 +741,27 @@ class GameMap {
 
   // A* over the grid; cost is travel time. Long routes use a weighted heuristic,
   // which finds a good route much faster than the strictly shortest one.
-  findPath(sx, sy, tx, ty) {
+  // The search's estimate of the time left, scaled by how slow this sheet's ground is on the
+  // whole (paddy, swamp, snow, brush): an estimate far too hopeful makes the search look
+  // everywhere. Long routes are found much faster for a route a little short of the best.
+  hScale() {
+    if (this._hs) return this._hs;
+    let sum = 0, n = 0;
+    for (let i = 0; i < this.ter.length; i += 37) { const sp = TERRAIN[this.ter[i]].speed; if (sp > 0) { sum += 1 / sp; n++; } }
+    return (this._hs = clamp(1.2 * (n ? sum / n : 1) * 0.8, 1, 2.5));
+  }
+
+  // maxExpand: how many cells it may search (a short detour needs few). A search that found
+  // no way is remembered for a few seconds, so asking again (a man retrying every half
+  // second) costs nothing instead of searching the whole sheet again.
+  findPath(sx, sy, tx, ty, maxExpand, greedy) {
     tx = clamp(tx, 1, MAP_W - 1); ty = clamp(ty, 1, MAP_H - 1);
     const s = this.cellOf(sx, sy), t0 = this.cellOf(tx, ty);
     const t = this.nearestPassable(t0.cx, t0.cy);
+    const failKey = (s.cy * GW + s.cx) * 7 + (t.cy * GW + t.cx) * 131071;
+    this._fails = this._fails || new Map();
+    const failedAt = this._fails.get(failKey);
+    if (failedAt && performance.now() - failedAt < 4000) return null;
     const exact = t.cx === t0.cx && t.cy === t0.cy;
     const goal = exact ? { x: tx, y: ty } : { x: (t.cx + 0.5) * CELL, y: (t.cy + 0.5) * CELL };
     if (s.cx === t.cx && s.cy === t.cy) return [goal];
@@ -757,15 +774,16 @@ class GameMap {
     const closed = this._closed || (this._closed = new Uint8Array(N));
     g.fill(Infinity); came.fill(-1); closed.fill(0);
     const heap = new MinHeap();
-    const wgt = straight > 150 ? 1.6 : 1;
+    const wgt = greedy ? 4 : straight > 150 ? 1.6 : 1;
     const h = (i) => {
       const dx = Math.abs((i % GW) - t.cx), dy = Math.abs(Math.floor(i / GW) - t.cy);
-      return (Math.max(dx, dy) + 0.414 * Math.min(dx, dy)) * CELL / 1.2 * wgt;
+      return (Math.max(dx, dy) + 0.414 * Math.min(dx, dy)) * CELL / 1.2 * wgt * this.hScale();
     };
     g[start] = 0;
     heap.push(start, h(start));
     let found = false, expanded = 0;
-    while (heap.size && expanded < 600000) {
+    const cap = maxExpand || 150000;
+    while (heap.size && expanded < cap) {
       const cur = heap.pop();
       if (cur === end) { found = true; break; }
       if (closed[cur]) continue;
@@ -783,7 +801,13 @@ class GameMap {
         if (cost < g[ni]) { g[ni] = cost; came[ni] = cur; heap.push(ni, cost + h(ni)); }
       }
     }
-    if (!found) return null;
+    // Out of search before the end: once more, heading straighter for it, before giving up.
+    if (!found && expanded >= cap && !greedy && !maxExpand) return this.findPath(sx, sy, tx, ty, null, true);
+    if (!found) {
+      if (this._fails.size > 400) this._fails.clear();
+      this._fails.set(failKey, performance.now());
+      return null;
+    }
     const cells = [];
     for (let i = end; i !== -1; i = came[i]) cells.push({ x: (i % GW + 0.5) * CELL, y: (Math.floor(i / GW) + 0.5) * CELL });
     cells.reverse();
@@ -814,7 +838,7 @@ class GameMap {
       const q = k === lead.length - 1 && TERRAIN[this.terAt(cur.x + w.x, cur.y + w.y)].speed > 0 && this.terAt(cur.x + w.x, cur.y + w.y) !== TER.WALL
         ? { x: cur.x + w.x, y: cur.y + w.y } : { x: (c.cx + 0.5) * CELL, y: (c.cy + 0.5) * CELL };
       if (this.straightWalkable(px, py, q.x, q.y)) pts.push(q);
-      else { const d = this.findPath(px, py, q.x, q.y); if (d) pts.push(...d); else pts.push(q); }
+      else { const d = this.findPath(px, py, q.x, q.y, 6000); if (d) pts.push(...d); else pts.push(q); }
       px = q.x; py = q.y;
     }
     return pts;

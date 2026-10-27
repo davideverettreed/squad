@@ -106,13 +106,17 @@ function routePoint(s) {
 function startRouting(team, reason) {
   if (team.routing) return;
   team.routing = true; team.routeReason = reason;
-  for (const s of team.members) {
-    if (!s.active) continue;
+  // One route for the team to its fall-back point; each man keeps his own place along it.
+  const men = team.members.filter(s => s.active);
+  if (!men.length) return;
+  const c = centroid(men), to = routePoint(men[0]), route = G.map.findPath(c.x, c.y, to.x, to.y);
+  men.forEach((s, i) => {
     s.routing = true; s.assault = false; s.suppressPt = null; s.launchQueue = null;
-    s.routeTo = routePoint(s);
-    s.path = G.map.findPath(s.x, s.y, s.routeTo.x, s.routeTo.y) || [];
+    const lat = (i - (men.length - 1) / 2) * 5;
+    s.routeTo = { x: to.x + gauss() * 6, y: to.y + gauss() * 6 };
+    s.path = route ? G.map.offsetPath(s.x, s.y, route, lat, 0) : [];
     s.moveMode = 'rush';
-  }
+  });
   releaseControllers(team.members);
   if (team.side === 'blue' && reason !== 'ammo' && team.members.some(s => s.active)) G.log(team.name + ' has broken and is falling back!', 'loss');
 }
@@ -155,6 +159,7 @@ function reactToContact(t) {
 }
 
 function updateTeams(dt) {
+  G.routeBudget = 4;
   for (const t of [G.squads.blue.hq, ...G.squads.blue.teams]) reactToContact(t);
   for (const sq of [G.squads.blue, G.squads.red]) {
     for (const t of [sq.hq, ...sq.teams]) {
@@ -169,7 +174,13 @@ function updateTeams(dt) {
           s.routed = true; s.path = [];
           if (s.side === 'red' && AI.escape) s.escaped = true;
         }
-        else if (!s.moving) { s.path = G.map.findPath(s.x, s.y, s.routeTo.x, s.routeTo.y) || []; s.moveMode = 'rush'; }
+        else if (!s.moving && (G.routeBudget = (G.routeBudget || 0) - 1) >= 0) {
+          // No way to where he was falling back to: he picks another place to go. (A few such
+          // searches each half second; the rest wait their turn.)
+          const p = G.map.findPath(s.x, s.y, s.routeTo.x, s.routeTo.y);
+          if (p) { s.path = p; s.moveMode = 'rush'; }
+          else { s.routeFails = (s.routeFails || 0) + 1; s.routeTo = s.routeFails > 3 ? { x: s.x, y: s.y } : routePoint(s); if (s.routeFails > 3) s.routed = true; }
+        }
       }
     }
   }
