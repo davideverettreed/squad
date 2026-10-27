@@ -624,7 +624,7 @@ const Plan = {
     if (gh.group) { this.pivotGhosts(gh.members[0], delta); return null; }
     if (gh.live) { gh.rot = (gh.rot || 0) + delta; G.ui.liveDrag = gh; return null; }
     const gid = (l) => l.task === 'assault' || l.task === 'suppress' ? l.target : l.where, id = gid(gh.line), a = this.anchor(this.graphic(id));
-    const set = this.ghosts().filter(g => !g.live && !g.aim && g.line && SPOT_TASKS.includes(g.line.task) && gid(g.line) === id
+    const set = this.ghosts().filter(g => !g.live && !g.aim && !g.group && g.line && SPOT_TASKS.includes(g.line.task) && gid(g.line) === id
       && (!this.planning || ['pending', 'active', 'stalled'].includes(g.line.status)));
     if (!set.length) return null;
     const c = centroid(set), cs = Math.cos(delta), sn = Math.sin(delta);
