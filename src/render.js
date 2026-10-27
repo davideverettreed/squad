@@ -1230,6 +1230,13 @@ function drawPlanGhosts(ctx) {
     // An earlier step is fainter than where the plan leaves the team.
     ctx.globalAlpha = gh.final ? 0.85 : 0.45;
     if (q.x !== at.x) { ctx.strokeStyle = 'rgba(31,79,191,0.5)'; ctx.lineWidth = 1; ctx.beginPath(); ctx.moveTo(at.x, at.y); ctx.lineTo(q.x, q.y); ctx.stroke(); }
+    // Its front: a short arrow from where it will stand, the way it will face.
+    if (gh.h != null) {
+      const fx = Math.cos(gh.h), fy = Math.sin(gh.h), tip = { x: at.x + fx * 22, y: at.y + fy * 22 };
+      ctx.strokeStyle = OVL.blue; ctx.fillStyle = OVL.blue; ctx.lineWidth = 1.6;
+      ctx.beginPath(); ctx.moveTo(at.x + fx * 8, at.y + fy * 8); ctx.lineTo(tip.x, tip.y); ctx.stroke();
+      ctx.beginPath(); ctx.moveTo(tip.x, tip.y); ctx.lineTo(tip.x - fx * 6 - fy * 4, tip.y - fy * 6 + fx * 4); ctx.lineTo(tip.x - fx * 6 + fy * 4, tip.y - fy * 6 - fx * 4); ctx.closePath(); ctx.fill();
+    }
     const sl = G.ui.sel;
     const picked = sl && (sl.level === 'squad' || (sl.level === 'team' && 't' + sl.team.num === gh.unit) || (sl.level === 'group' && sl.teams.some(t => 't' + t.num === gh.unit)));
     if (picked) { ctx.fillStyle = 'rgba(255,214,10,0.35)'; ctx.beginPath(); ctx.arc(q.x, q.y, 22, 0, Math.PI * 2); ctx.fill(); }

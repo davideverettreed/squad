@@ -55,7 +55,7 @@ function releaseControllers(members) {
 
 function orderMove(s, x, y, mode) {
   if (!commandable(s)) return false;
-  s.nudging = false; s.resume = null; s.holdFacing = null;
+  s.nudging = false; s.resume = null; s.holdFacing = null; s.arriveFace = null;
   const p = G.map.findPath(s.x, s.y, x, y);
   s.path = p || [];
   s.moveMode = mode;
@@ -127,6 +127,15 @@ function squadMove(sq, x, y, mode, face) {
     const w = rotateOffset(so.x + (i ? (i % 2 ? -4 : 4) * Math.ceil(i / 2) : 0), so.y, heading);
     orderMove(s, x + w.x, y + w.y, mode);
   });
+}
+
+// A team to its spot in a plan line; with a facing kept in the spot (turned with Q/E on its
+// ghost), its formation is set across that facing and the men watch that way on arrival.
+function faceMove(team, at, sp, mode) {
+  if (sp && sp.h != null) {
+    teamMove(team, at.x, at.y, mode, sp.h);
+    for (const s of team.members.filter(commandable)) s.arriveFace = sp.h;
+  } else teamMove(team, at.x, at.y, mode);
 }
 
 // Move along a route: one route is plotted through the waypoints and every man keeps his
@@ -468,6 +477,7 @@ function updateMovement(s, dt) {
   }
   if (!s.path.length) {
     s.assault = false;
+    if (s.arriveFace != null) { s.faceAngle = s.arriveFace; s.arriveFace = null; }
     let want = s.homePosture;
     // A man ordered prone rises to a knee if that is the only way to see the enemy.
     if (want === 'prone') {

@@ -51,7 +51,7 @@ const Input = {
           else if (SPOT_TASKS.includes(l.task)) {
             // Kept as an offset from the checkpoint (or objective), so the spot moves with it.
             const w = toWorld(p.x - g.off.x, p.y - g.off.y), a = Plan.anchor(Plan.graphic(l.task === 'assault' || l.task === 'suppress' ? l.target : l.where));
-            l.spots = l.spots || {}; l.spots[g.unit] = { dx: w.x - a.x, dy: w.y - a.y };
+            l.spots = l.spots || {}; l.spots[g.unit] = Object.assign({}, l.spots[g.unit], { dx: w.x - a.x, dy: w.y - a.y });
             g.x = w.x; g.y = w.y;
           }
         } else if (this.moved && this.faceDrag) {
@@ -155,6 +155,12 @@ const Input = {
       const k = e.key;
       const lk = k.length === 1 ? k.toLowerCase() : k;
       // W A S D shift the selected unit, Q E turn it (after step-off).
+      // Q and E with a ghost held (being dragged): pivot that step's ghosts about their middle.
+      if ((lk === 'q' || lk === 'e') && !e.ctrlKey && !e.metaKey && !e.altKey && (this.dragGh || View3D.dragGh)) {
+        e.preventDefault();
+        pivotHeld(lk === 'q' ? -NUDGE_TURN : NUDGE_TURN);
+        return;
+      }
       if ('wasdqe'.includes(lk) && lk.length === 1 && !e.ctrlKey && !e.metaKey && !e.altKey) { if (Nudge.key(lk)) e.preventDefault(); return; }
       if (k === ' ') { e.preventDefault(); if (!G.ui.showDest) { G.ui.showDest = true; View3D.markDirty(); } }
       else if (lk === 'p' && !e.ctrlKey && !e.metaKey) togglePause();
@@ -194,10 +200,33 @@ function ghostDropped(g) {
   G.ui.liveDrag = null;
   if (g.live) {
     const t = G.squads.blue.teams[Number(g.unit[1]) - 1];
-    if (g.to && t) issueOrder({ level: 'team', team: t, squad: t.squad }, 'move', { x: g.to.x, y: g.to.y, mode: g.mode || 'walk' });
+    if (!t || (!g.to && !g.rot)) return;
+    // To the new place, the formation set across the way it was turned (Q/E), if it was.
+    const at = g.to || { x: g.x, y: g.y }, c = centroid(t.members.filter(commandable));
+    const face = g.rot ? angleTo(c.x, c.y, at.x, at.y) + g.rot : undefined;
+    issueOrder({ level: 'team', team: t, squad: t.squad }, 'move', { x: at.x, y: at.y, mode: g.mode || 'walk', face });
     return;
   }
   if (!SPOT_TASKS.includes(g.line.task)) { UI.toast('Team spots can be given on a move, a bound, an assault, a fighting position, a support by fire position or a suppress line.'); return; }
   if (!Plan.planning && g.line.status === 'active') Plan.reissueTeam(g.line, g.unit);
   OPORD.refresh();
+}
+
+// Pivot the ghost being dragged (2D or 3D) and the others at its step; the drag carries on
+// from where the held ghost now stands.
+function pivotHeld(delta) {
+  const in3d = !!View3D.dragGh, g = in3d ? View3D.dragGh : Input.dragGh;
+  if (!g) return;
+  const at = Plan.pivotGhosts(g, delta);
+  if (at) {
+    if (in3d) {
+      const p = [...View3D.pointers.values()][0], w = p && View3D.groundAt(p.x, p.y);
+      if (w) View3D.dragGh.offW = { x: at.x - w.x, y: at.y - w.y };
+    } else {
+      const p = [...Input.pointers.values()][0];
+      if (p) { const q = toScreen(at.x, at.y); g.off = { x: p.x - q.x, y: p.y - q.y }; }
+    }
+  }
+  View3D.markDirty();
+  if (!g.live) OPORD.refresh();
 }

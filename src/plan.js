@@ -254,7 +254,7 @@ const Plan = {
     releaseControllers(members);
     const units = l.unit === 'squad' ? sq.teams.filter(t => t.members.some(commandable)).map(t => 't' + t.num) : [l.unit];
     const spots = this.spotsFor(l, dest, centroid(members.filter(commandable)), units);
-    for (const u of units) teamMove(sq.teams[Number(u[1]) - 1], spots[u].x, spots[u].y, l.mode);
+    for (const u of units) faceMove(sq.teams[Number(u[1]) - 1], spots[u], l.spots && l.spots[u], l.mode);
   },
   // The teams of a line and each one's end point.
   teamSpots(l, sel, dest) {
@@ -281,7 +281,7 @@ const Plan = {
     const members = selMembers(sel);
     Plan.override(members, 'assault');
     releaseControllers(members);
-    for (const u of units) teamMove(sq.teams[Number(u[1]) - 1], spots[u].x, spots[u].y, 'walk');
+    for (const u of units) faceMove(sq.teams[Number(u[1]) - 1], spots[u], l.spots && l.spots[u], 'walk');
     for (const s of members.filter(commandable)) { s.assault = true; s.fireControl = 'free'; s.homePosture = 'kneel'; }
     G.log(selName(sel) + ': Assault through!', 'fire');
   },
@@ -544,7 +544,9 @@ const Plan = {
       for (const u of units) {
         pos[u] = spots[u];
         if (mark[u]) mark[u].final = false;
-        mark[u] = { unit: u, x: spots[u].x, y: spots[u].y, name: g.name, line: l, h, final: true };
+        // Facing: as turned with Q/E while its ghost was held, else the way it came.
+        const sp = l.spots && l.spots[u];
+        mark[u] = { unit: u, x: spots[u].x, y: spots[u].y, name: g.name, line: l, h: sp && sp.h != null ? sp.h : h, final: true };
         ghosts.push(mark[u]);
       }
     }
@@ -589,10 +591,38 @@ const Plan = {
       const g = { unit: 't' + t.num, x: c.x, y: c.y, name: 'its destination', live: true, ends, mode: movers[0].moveMode, final: true };
       // Being dragged: shown where the pointer has it.
       const d = G.ui.liveDrag;
-      if (d && d.unit === g.unit && d.to) { const dx = d.to.x - c.x, dy = d.to.y - c.y; g.x = d.to.x; g.y = d.to.y; g.ends = ends.map(e => ({ x: e.x + dx, y: e.y + dy })); }
+      if (d && d.unit === g.unit) {
+        const to = d.to || c, dx = to.x - c.x, dy = to.y - c.y, r = d.rot || 0, cs = Math.cos(r), sn = Math.sin(r);
+        g.x = to.x; g.y = to.y;
+        // Turned with Q/E: the men's spots pivot about the middle.
+        g.ends = ends.map(e => { const rx = e.x - c.x, ry = e.y - c.y; return { x: to.x + rx * cs - ry * sn, y: to.y + rx * sn + ry * cs }; });
+      }
       out.push(g);
     }
     return out;
+  },
+
+  // Q or E with a ghost held: the group of ghosts at that step (the teams sent to the same
+  // point) pivots about its middle, each team's formation turning with it. A team's own
+  // destination (after step-off) turns its formation there. Returns the held ghost's new
+  // place, so the drag can carry on from it.
+  pivotGhosts(gh, delta) {
+    if (gh.live) { gh.rot = (gh.rot || 0) + delta; G.ui.liveDrag = gh; return null; }
+    const gid = (l) => l.task === 'assault' || l.task === 'suppress' ? l.target : l.where, id = gid(gh.line), a = this.anchor(this.graphic(id));
+    const set = this.ghosts().filter(g => !g.live && !g.aim && g.line && SPOT_TASKS.includes(g.line.task) && gid(g.line) === id
+      && (!this.planning || ['pending', 'active', 'stalled'].includes(g.line.status)));
+    if (!set.length) return null;
+    const c = centroid(set), cs = Math.cos(delta), sn = Math.sin(delta);
+    let held = null;
+    for (const g of set) {
+      const rx = g.x - c.x, ry = g.y - c.y, nx = c.x + rx * cs - ry * sn, ny = c.y + rx * sn + ry * cs, l = g.line;
+      l.spots = l.spots || {};
+      const old = l.spots[g.unit] || {};
+      l.spots[g.unit] = Object.assign({}, old, { dx: nx - a.x, dy: ny - a.y, h: (old.h != null ? old.h : g.h) + delta });
+      if (g.unit === gh.unit && g.line === gh.line) held = { x: nx, y: ny };
+      if (!this.planning && l.status === 'active') this.reissueTeam(l, g.unit);
+    }
+    return held;
   },
 
   // A ghost of a line under way dragged to a new spot: the team goes there now.
@@ -604,9 +634,9 @@ const Plan = {
     const spot = this.teamSpots(l, this.unitSel(l.unit), this.anchor(dg)).spots[u];
     if (!spot) return;
     switch (l.task) {
-      case 'move': case 'sbf': case 'route': teamMove(team, spot.x, spot.y, l.mode); break;
+      case 'move': case 'sbf': case 'route': faceMove(team, spot, l.spots && l.spots[u], l.mode); break;
       case 'assault':
-        teamMove(team, spot.x, spot.y, 'walk');
+        faceMove(team, spot, l.spots && l.spots[u], 'walk');
         for (const s of team.members.filter(commandable)) { s.assault = true; s.fireControl = 'free'; }
         break;
       case 'occupy': occupyPosition({ level: 'team', team, squad: sq }, dg, { [u]: spot }); break;

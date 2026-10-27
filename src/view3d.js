@@ -634,11 +634,12 @@ const View3D = {
         const w = this.groundAt(p.x, p.y);
         if (w) { dragZone(this.dragZ, w); this.markDirty(); }
       } else if (this.pointers.size === 1 && this.moved && this.dragGh) {
-        const w = this.groundAt(p.x, p.y), l = this.dragGh.line;
+        const w0 = this.groundAt(p.x, p.y), o = this.dragGh.offW, l = this.dragGh.line;
+        const w = w0 && o ? { x: w0.x + o.x, y: w0.y + o.y } : w0;
         if (w && this.dragGh.live) { this.dragGh.to = w; G.ui.liveDrag = this.dragGh; this.markDirty(); }
         else if (w && SPOT_TASKS.includes(l.task)) {
           const a = Plan.anchor(Plan.graphic(l.task === 'assault' || l.task === 'suppress' ? l.target : l.where));
-          l.spots = l.spots || {}; l.spots[this.dragGh.unit] = { dx: w.x - a.x, dy: w.y - a.y };
+          l.spots = l.spots || {}; l.spots[this.dragGh.unit] = Object.assign({}, l.spots[this.dragGh.unit], { dx: w.x - a.x, dy: w.y - a.y });
           this.markDirty();
         }
       } else if (this.pointers.size === 1 && this.moved && this.dragU) {
